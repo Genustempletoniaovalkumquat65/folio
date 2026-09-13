@@ -1,5 +1,5 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:configure="com.jake.duolauncher.test.widgetfixture.WidgetFixtureConfigActivity"
+    android:configure="com.mccal.folio.test.widgetfixture.WidgetFixtureConfigActivity"
     android:description="@string/fixture_required_description"
     android:initialLayout="@layout/widget_fixture_live"
     android:minWidth="110dp"

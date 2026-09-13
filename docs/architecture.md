@@ -4,7 +4,7 @@ Duo is a Kotlin/Jetpack Compose Android Home application with one normal app mod
 
 ## Where to start
 
-All paths below are relative to `app/src/main/java/com/jake/duolauncher/`.
+All paths below are relative to `app/src/main/java/com/mccal/folio/`.
 
 | Area | Entry points | Responsibility |
 | --- | --- | --- |

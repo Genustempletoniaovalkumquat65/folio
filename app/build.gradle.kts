@@ -32,14 +32,14 @@ val releaseStoreFile = releaseSigningValues["DUO_RELEASE_STORE_FILE"]?.let { con
 }
 
 android {
-    namespace = "com.jake.duolauncher"
+    namespace = "com.mccal.folio"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.jake.duolauncher"
+        applicationId = "com.mccal.folio"
         minSdk = 31
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.15.0-beta01"
+        versionCode = 1
+        versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

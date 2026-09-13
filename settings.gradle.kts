@@ -5,7 +5,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories { google(); mavenCentral() }
 }
-rootProject.name = "DuoLauncher"
+rootProject.name = "Folio"
 include(":app")
 
 // Optional isolated experiment; excluded from ordinary launcher builds.

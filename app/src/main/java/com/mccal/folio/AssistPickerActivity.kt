@@ -1,0 +1,137 @@
+package com.mccal.folio
+
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
+
+/**
+ * Side-key assistant picker. Folio appears in Settings › Default apps › Digital assistant app
+ * because this activity handles ACTION_ASSIST; holding the side key (set to Digital assistant)
+ * then opens this small chooser instead of a single fixed assistant.
+ */
+class AssistPickerActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val targets = AssistTarget.entries.mapNotNull { target ->
+            val launch = packageManager.getLaunchIntentForPackage(target.packageName) ?: return@mapNotNull null
+            val icon = runCatching { packageManager.getApplicationIcon(target.packageName).toBitmap(144, 144) }.getOrNull()
+            Triple(target, launch, icon)
+        }
+        setContent {
+            var shown by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { shown = true }
+            var query by remember { mutableStateOf("") }
+            val focus = remember { FocusRequester() }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .35f))
+                .clickable(remember { MutableInteractionSource() }, null) { finish() }, contentAlignment = Alignment.BottomCenter) {
+                AnimatedVisibility(shown, enter = fadeIn() + slideInVertically(spring(dampingRatio = .82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 }) {
+                    Column(Modifier.navigationBarsPadding().imePadding().padding(16.dp).widthIn(max = 520.dp).fillMaxWidth()
+                        .clip(RoundedCornerShape(30.dp)).background(Color(0xFF1C1C1E).copy(alpha = .94f))
+                        .clickable(remember { MutableInteractionSource() }, null) {}.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            targets.forEach { (target, launch, icon) ->
+                                Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable { start(launch) }.padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally) {
+                                    icon?.let { Image(it.asImageBitmap(), target.label, Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))) }
+                                    Text(target.label, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = .1f))
+                            .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Search, null, tint = Color.White.copy(alpha = .7f))
+                            Spacer(Modifier.width(10.dp))
+                            Box(Modifier.weight(1f)) {
+                                if (query.isEmpty()) Text("Search Google without AI", color = Color.White.copy(alpha = .5f), fontSize = 17.sp)
+                                BasicTextField(query, { query = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true,
+                                    textStyle = TextStyle(color = Color.White, fontSize = 17.sp), cursorBrush = SolidColor(Color.White),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = {
+                                        if (query.isNotBlank()) { openWebSearch(this@AssistPickerActivity, WebSearchTarget.GOOGLE, query); finish() }
+                                    }))
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PickerPill("Spotlight", Modifier.weight(1f)) {
+                                startActivity(Intent(this@AssistPickerActivity, MainActivity::class.java)
+                                    .putExtra("duo_destination", "spotlight").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                finish()
+                            }
+                            PickerPill("DuckDuckGo", Modifier.weight(1f)) {
+                                if (query.isNotBlank()) { openWebSearch(this@AssistPickerActivity, WebSearchTarget.DUCKDUCKGO, query); finish() }
+                                else focus.requestFocus()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun start(intent: Intent) {
+        runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        finish()
+    }
+
+    companion object {
+        fun isDefaultAssistant(context: Context): Boolean =
+            runCatching { context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_ASSISTANT) }.getOrDefault(false)
+
+        fun settingsIntent() = Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+}
+
+internal enum class AssistTarget(val label: String, val packageName: String) {
+    CHATGPT("ChatGPT", "com.openai.chatgpt"),
+    CLAUDE("Claude", "com.anthropic.claude"),
+    PERPLEXITY("Perplexity", "ai.perplexity.app.android"),
+    GEMINI("Gemini", "com.google.android.apps.bard"),
+}
+
+@Composable
+private fun PickerPill(label: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .1f)).clickable(onClick = onClick)
+        .padding(vertical = 11.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Public, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}

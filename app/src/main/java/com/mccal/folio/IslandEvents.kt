@@ -1,0 +1,81 @@
+package com.mccal.folio
+
+import android.Manifest
+import android.app.NotificationManager
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.os.BatteryManager
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/** Listens for brief system moments (charging, silent, focus, Bluetooth) and publishes them for the island. */
+class IslandEvents(private val context: Context) : DefaultLifecycleObserver {
+    private var registered = false
+    private var lastCharging: Boolean? = null
+    private var lastRinger: Int? = null
+    private var lastFocus: Boolean? = null
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_BATTERY_CHANGED -> {
+                    val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                    val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+                    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 }
+                        ?.let { it * 100 / intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1) }
+                    if (lastCharging == false && charging) emit(IslandEvent.Charging(level))
+                    lastCharging = charging
+                }
+                AudioManager.RINGER_MODE_CHANGED_ACTION -> {
+                    val mode = intent.getIntExtra(AudioManager.EXTRA_RINGER_MODE, AudioManager.RINGER_MODE_NORMAL)
+                    if (lastRinger != null && mode != lastRinger) emit(IslandEvent.Silent(mode != AudioManager.RINGER_MODE_NORMAL))
+                    lastRinger = mode
+                }
+                NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> {
+                    val on = c.getSystemService(NotificationManager::class.java).currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL
+                    if (lastFocus != null && on != lastFocus) emit(IslandEvent.Focus(on))
+                    lastFocus = on
+                }
+                BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                    val name = if (ContextCompat.checkSelfPermission(c, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
+                        runCatching { intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)?.name }.getOrNull() else null
+                    emit(IslandEvent.Bluetooth(name))
+                }
+            }
+        }
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        if (registered) return
+        lastRinger = context.getSystemService(AudioManager::class.java).ringerMode
+        lastFocus = context.getSystemService(NotificationManager::class.java).currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL
+        ContextCompat.registerReceiver(context, receiver, IntentFilter().apply {
+            addAction(Intent.ACTION_BATTERY_CHANGED); addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
+            addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED); addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+        }, ContextCompat.RECEIVER_EXPORTED)
+        registered = true
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        if (registered) runCatching { context.unregisterReceiver(receiver) }
+        registered = false
+        lastCharging = null
+    }
+
+    private fun emit(event: IslandEvent) { mutable.value = event to System.currentTimeMillis() }
+
+    companion object {
+        private val mutable = MutableStateFlow<Pair<IslandEvent, Long>?>(null)
+        val latest: StateFlow<Pair<IslandEvent, Long>?> = mutable.asStateFlow()
+        const val SHOW_MS = 2_600L
+    }
+}

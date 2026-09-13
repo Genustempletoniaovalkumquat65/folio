@@ -1,22 +1,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:label="Widget Fixture Application">
-        <provider android:name="com.jake.duolauncher.test.BlockingContentProvider"
-            android:authorities="com.jake.duolauncher.test.blocking"
+        <provider android:name="com.mccal.folio.test.BlockingContentProvider"
+            android:authorities="com.mccal.folio.test.blocking"
             android:exported="true" />
-        <provider android:name="com.jake.duolauncher.test.BackupDocumentsProvider"
-            android:authorities="com.jake.duolauncher.test.documents"
+        <provider android:name="com.mccal.folio.test.BackupDocumentsProvider"
+            android:authorities="com.mccal.folio.test.documents"
             android:exported="true" android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">
             <intent-filter>
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
-        <receiver android:name="com.jake.duolauncher.test.ProfileAdminReceiver"
+        <receiver android:name="com.mccal.folio.test.ProfileAdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
             <meta-data android:name="android.app.device_admin" android:resource="@xml/profile_admin" />
             <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
         </receiver>
-        <activity android:name="com.jake.duolauncher.test.ProfileFixtureActivity"
+        <activity android:name="com.mccal.folio.test.ProfileFixtureActivity"
             android:exported="true" android:label="Duo Profile Fixture">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

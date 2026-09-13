@@ -7,6 +7,12 @@
         <item name="android:windowBackground">#567587</item>
         <item name="android:colorAccent">#30596D</item>
     </style>
+    <style name="Theme.Folio.FoldBridge" parent="android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
     <style name="Theme.Duo.Discover" parent="Theme.Duo">
         <item name="android:windowDisablePreview">true</item>
     </style>
