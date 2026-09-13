@@ -24,6 +24,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -207,20 +210,41 @@ private fun StackedNotification(group: List<NotificationItem>, modifier: Modifie
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCount: Int = 0, onOpen: () -> Unit) {
-    val dismissState = rememberSwipeToDismissBoxState(confirmValueChange = {
-        if (it != SwipeToDismissBoxValue.Settled && item.clearable) { IslandListenerService.dismiss(item.key); true } else false
-    })
-    SwipeToDismissBox(dismissState, modifier = modifier, backgroundContent = {}, enableDismissFromStartToEnd = item.clearable,
-        enableDismissFromEndToStart = item.clearable) {
+    // iOS: swipe left to reveal Options and Clear; a long swipe clears; tapping the card closes the buttons.
+    val scope = rememberCoroutineScope()
+    val swipe = remember(item.key) { androidx.compose.animation.core.Animatable(0f) }
+    val density = LocalDensity.current
+    val reveal = with(density) { (if (item.clearable) 176.dp else 92.dp).toPx() }
+    var options by remember(item.key) { mutableStateOf(false) }
+    fun settle(to: Float) = scope.launch { swipe.animateTo(to, spring(dampingRatio = .85f, stiffness = Spring.StiffnessMediumLow)) }
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(22.dp))) {
+        val widthPx = constraints.maxWidth.toFloat()
+        if (swipe.value < -1f) Row(Modifier.matchParentSize().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically) {
+            SwipeAction("Options") { settle(0f); options = true }
+            if (item.clearable) SwipeAction("Clear") { scope.launch { swipe.animateTo(-widthPx); IslandListenerService.dismiss(item.key) } }
+        }
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(swipe.value.roundToInt(), 0) }
+            .pointerInput(item.key, widthPx) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        when {
+                            item.clearable && swipe.value < -widthPx * .55f -> scope.launch { swipe.animateTo(-widthPx); IslandListenerService.dismiss(item.key) }
+                            swipe.value < -reveal / 2 -> settle(-reveal)
+                            else -> settle(0f)
+                        }
+                    },
+                    onDragCancel = { settle(0f) },
+                ) { change, amount -> change.consume(); scope.launch { swipe.snapTo((swipe.value + amount).coerceIn(-widthPx, 0f)) } }
+            }) {
         val context = LocalContext.current
-        var options by remember(item.key) { mutableStateOf(false) }
         val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
         var cardBounds by remember { mutableStateOf(android.graphics.Rect()) }
         Box(Modifier.onGloballyPositioned { cardBounds = it.boundsInWindow().let { b -> android.graphics.Rect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt()) } }) {
         if (options) NotificationOptions(item, cardBounds) { options = false }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(NotifGlass)
             .border(FolioGlass.edge, RoundedCornerShape(22.dp))
-            .combinedClickable(onClick = onOpen, onLongClick = {
+            .combinedClickable(onClick = { if (swipe.value < -1f) settle(0f) else onOpen() }, onLongClick = {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); options = true
             }, onLongClickLabel = "Notification options")
             .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -249,6 +273,15 @@ private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCo
             }
         }
         }
+    }
+}
+}
+
+@Composable
+private fun SwipeAction(label: String, onClick: () -> Unit) {
+    Box(Modifier.fillMaxHeight().width(80.dp).clip(RoundedCornerShape(22.dp)).background(NotifGlass)
+        .border(FolioGlass.edge, RoundedCornerShape(22.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 

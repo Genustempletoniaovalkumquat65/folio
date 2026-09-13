@@ -2236,7 +2236,7 @@ private fun WidgetActions(
                     Text("Switch to the next widget every 30 minutes", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(stackRotate, onStackRotate)
+                IosSwitch(stackRotate, onStackRotate)
             }
             Text("Swipe up or down on the stack to flip between widgets.", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

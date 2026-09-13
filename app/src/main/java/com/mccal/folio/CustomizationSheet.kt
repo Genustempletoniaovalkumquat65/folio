@@ -142,7 +142,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         Text("Control Center size", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PanelSize.entries.forEach { size ->
-                                FilterChip(selected = state.ccSize == size, onClick = { model.setCcSize(size) }, label = { Text(size.label) })
+                                IosChip(selected = state.ccSize == size, onClick = { model.setCcSize(size) }, label = { Text(size.label) })
                             }
                         }
                         SettingsSwitch("Unfolded: Control Center in the middle", state.ccCentered, model::setCcCentered, "cc-centered-switch")
@@ -165,7 +165,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         Text("Search with Enter", style = MaterialTheme.typography.labelLarge)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(WebSearchTarget.GOOGLE to "Google (no AI)", WebSearchTarget.DUCKDUCKGO to "DuckDuckGo").forEach { (target, label) ->
-                                FilterChip(selected = state.searchEngine == target.name, onClick = { model.setSearchEngine(target.name) }, label = { Text(label) })
+                                IosChip(selected = state.searchEngine == target.name, onClick = { model.setSearchEngine(target.name) }, label = { Text(label) })
                             }
                         }
                         SpotlightSection.entries.forEach { section ->
@@ -177,9 +177,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         if (iMessageApps.isNotEmpty()) {
                             Text("Message contacts with", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text("Texting app") })
+                                IosChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text("Texting app") })
                                 iMessageApps.forEach { (pkg, label) ->
-                                    FilterChip(selected = state.messagesApp == pkg, onClick = { model.setMessagesApp(pkg) }, label = { Text(label) })
+                                    IosChip(selected = state.messagesApp == pkg, onClick = { model.setMessagesApp(pkg) }, label = { Text(label) })
                                 }
                             }
                         }
@@ -188,7 +188,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         val leftContext = androidx.compose.ui.platform.LocalContext.current
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover").forEach { (value, label) ->
-                                FilterChip(selected = state.leftPage == value, onClick = {
+                                IosChip(selected = state.leftPage == value, onClick = {
                                     if (state.leftPage != value) {
                                         model.setLeftPage(value)
                                         // The Home pager's page count changes; rebuild the screen once.
@@ -203,7 +203,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             Text("When unfolded", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf("PAGE" to "Swipe to it", "BESIDE" to "Beside Home", "OFF" to "Off").forEach { (value, label) ->
-                                    FilterChip(selected = state.todayUnfolded == value, onClick = { model.setTodayUnfolded(value) }, label = { Text(label) })
+                                    IosChip(selected = state.todayUnfolded == value, onClick = { model.setTodayUnfolded(value) }, label = { Text(label) })
                                 }
                             }
                             Text(when (state.todayUnfolded) {
@@ -231,9 +231,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         val packs = remember { IconPacks.installed(iconContext) }
                         Text("Icon pack", style = MaterialTheme.typography.labelLarge)
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text("App icons") })
+                            IosChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text("App icons") })
                             packs.forEach { pack ->
-                                FilterChip(selected = state.iconPack == pack.packageName, onClick = { IconPacks.clear(); model.setIconPack(pack.packageName) },
+                                IosChip(selected = state.iconPack == pack.packageName, onClick = { IconPacks.clear(); model.setIconPack(pack.packageName) },
                                     label = { Text(pack.label) })
                             }
                         }
@@ -242,24 +242,25 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         Text("Shape", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconShape.entries.forEach { shape ->
-                                FilterChip(selected = state.iconShape == shape, onClick = { model.setIconShape(shape) }, label = { Text(shape.label) })
+                                IosChip(selected = state.iconShape == shape, onClick = { model.setIconShape(shape) }, label = { Text(shape.label) })
                             }
                         }
                         Text("Notification badges", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BadgeStyle.entries.forEach { style ->
-                                FilterChip(selected = state.badgeStyle == style, onClick = { model.setBadgeStyle(style) }, label = { Text(style.label) })
+                                IosChip(selected = state.badgeStyle == style, onClick = { model.setBadgeStyle(style) }, label = { Text(style.label) })
                             }
                         }
+                        if (state.badgeStyle != BadgeStyle.OFF) Text("Badge color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         if (state.badgeStyle != BadgeStyle.OFF) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BadgeColor.entries.forEach { color ->
-                                FilterChip(selected = state.badgeColor == color, onClick = { model.setBadgeColor(color) }, label = { Text(color.label) })
+                                IosChip(selected = state.badgeColor == color, onClick = { model.setBadgeColor(color) }, label = { Text(color.label) })
                             }
                         }
                         Text("Style", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconStyle.entries.forEach { style ->
-                                FilterChip(selected = state.iconStyle == style, onClick = { model.setIconStyle(style, state.iconTint) },
+                                IosChip(selected = state.iconStyle == style, onClick = { model.setIconStyle(style, state.iconTint) },
                                     label = { Text(style.label) }, modifier = Modifier.testTag("icon-style-${style.name.lowercase()}"))
                             }
                         }
@@ -285,7 +286,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             Text("Icon style", style = MaterialTheme.typography.labelLarge)
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 StatusGlyph.entries.forEach { g ->
-                                    FilterChip(selected = st.glyph == g, onClick = { model.setStatusStyle(st.copy(glyph = g)) }, label = { Text(g.label) },
+                                    IosChip(selected = st.glyph == g, onClick = { model.setStatusStyle(st.copy(glyph = g)) }, label = { Text(g.label) },
                                         modifier = Modifier.testTag("status-glyph-${g.name.lowercase()}"))
                                 }
                             }
@@ -333,8 +334,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     SettingsCard("Fold animation") {
                         SettingsSwitch("Fold animation", state.foldEffect, model::setFoldEffect, "fold-effect-switch")
                         if (state.foldEffect) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("Duo blur") })
-                            FilterChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text("Screenshot morph") })
+                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("Duo blur") })
+                            IosChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text("Screenshot morph") })
                         }
                         if (state.foldEffect && state.foldSnapshot) Text("Takes a quick in-memory snapshot of Folio’s screen as the hinge starts moving and melts it into the other display. Nothing is saved.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -469,8 +470,8 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
     onAddWidget: (Int) -> Unit, onRemoveWidget: (Int) -> Unit) {
     val p = if (wide) state.expanded else state.compact
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(!wide, { onWide(false) }, label = { Text("Cover") })
-        FilterChip(wide, { onWide(true) }, label = { Text("Inner") })
+        IosChip(!wide, { onWide(false) }, label = { Text("Cover") })
+        IosChip(wide, { onWide(true) }, label = { Text("Inner") })
     }
     OutlinedButton(onClick = onEditPins, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Choose Home apps") }
     CustomizationSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
@@ -518,14 +519,14 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
 
 @Composable private fun SettingsSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit, tag: String? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f)); Switch(checked, onChecked, Modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier))
+        Text(label, Modifier.weight(1f)); IosSwitch(checked, onChecked, Modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier))
     }
 }
 
 @Composable private fun CustomizationSlider(label: String, valueLabel: String, value: Float,
     range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-    Column { Row { Text(label, Modifier.weight(1f)); Text(valueLabel, color = MaterialTheme.colorScheme.primary) }
-        Slider(value, onChange, valueRange = range, modifier = Modifier.semantics { contentDescription = label }) }
+    Column { Row { Text(label, Modifier.weight(1f)); Text(valueLabel, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .6f)) }
+        IosSlider(value, onChange, valueRange = range, modifier = Modifier.semantics { contentDescription = label }) }
 }
 
 @Composable private fun SettingsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
