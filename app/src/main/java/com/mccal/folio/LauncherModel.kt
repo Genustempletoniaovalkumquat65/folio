@@ -108,6 +108,11 @@ data class LauncherState(
     val widgetStacks: Map<Int, List<Int>> = emptyMap(),
     /** Smart Rotate: stacks flip to their next widget every so often. */
     val stackRotate: Boolean = true,
+    /** The page left of Home: "TODAY" (Folio's Today View) or "DISCOVER" (Google Discover). */
+    val leftPage: String = "TODAY",
+    val todayWidgets: List<TodayWidget> = DEFAULT_TODAY_WIDGETS,
+    /** Unfolded: "PAGE" (swipe left of Home), "BESIDE" (always next to Home, iPad-style) or "OFF". */
+    val todayUnfolded: String = "PAGE",
     /** Optional tint per folder id (ARGB). */
     val folderColors: Map<String, Long> = emptyMap(),
     val islandEverywhere: Boolean = false,
@@ -476,6 +481,15 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
+    fun setLeftPage(value: String) = updateSettings(soon = false) { it.copy(leftPage = value) }
+    fun setTodayUnfolded(value: String) = updateSettings(soon = false) { it.copy(todayUnfolded = value) }
+    fun addTodayWidget(id: Int, size: TodaySize): Boolean {
+        if (statePayloadInvalid) return false
+        updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.add(it.todayWidgets, TodayWidget(id, size))) }
+        return true
+    }
+    fun removeTodayWidget(id: Int) = updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.remove(it.todayWidgets, id)) }
+    fun moveTodayWidget(id: Int, delta: Int) = updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.move(it.todayWidgets, id, delta)) }
     fun removePlacement(source: DropTarget) = commitLayout(removePlacement(mutable.value.layout, source))
     private fun commitLayout(next: HomeLayout): Boolean {
         if (statePayloadInvalid) return false
@@ -570,7 +584,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val undoPlacements = if (state.canUndoEdit) undoLayout?.first?.widgetPlacements.orEmpty() else emptyList()
         val placements = state.widgetPlacements + undoPlacements
         // Stacked widgets are retained exactly as long as their placement (or its undoable copy) exists.
-        return (placements.map { it.id }.filter { it >= 0 } + WidgetStacks.retained(state.widgetStacks, placements.map { it.slot }.toSet())).toSet()
+        return (placements.map { it.id }.filter { it >= 0 } + WidgetStacks.retained(state.widgetStacks, placements.map { it.slot }.toSet()) +
+            TodayWidgets.retained(state.todayWidgets)).toSet()
     }
     val canPruneWidgetIds get() = !statePayloadInvalid
     fun setWidget(slot: Int, id: Int) {
@@ -651,7 +666,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("iconShape", s.iconShape.name).put("iconPack", s.iconPack ?: JSONObject.NULL).put("badgeStyle", s.badgeStyle.name).put("badgeColor", s.badgeColor.name).put("searchPill", s.searchPill).put("swipeDownSearch", s.swipeDownSearch).put("messagesApp", s.messagesApp ?: JSONObject.NULL).put(SettingKeys.MESSAGES_AVOID_DOUBLE, s.messagesAvoidDouble).put("ccControls", JSONArray(s.ccControls))
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
-            .put("stackRotate", s.stackRotate)
+            .put("stackRotate", s.stackRotate).put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded)
+            .put("todayWidgets", JSONArray().apply { s.todayWidgets.forEach { put(JSONObject().put("id", it.id).put("size", it.size.name)) } })
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
             .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
@@ -825,6 +841,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 key.toIntOrNull()?.let { slot -> slot to (0 until ids.length()).map(ids::getInt) }
             }.toMap() } ?: emptyMap(),
             stackRotate = j.optBoolean("stackRotate", true),
+            leftPage = j.optString("leftPage", "TODAY").takeIf { it == "TODAY" || it == "DISCOVER" } ?: "TODAY",
+            todayUnfolded = j.optString("todayUnfolded", "PAGE").takeIf { it in setOf("PAGE", "BESIDE", "OFF") } ?: "PAGE",
+            todayWidgets = j.optJSONArray("todayWidgets")?.let { a -> (0 until a.length()).mapNotNull { i ->
+                a.optJSONObject(i)?.let { o -> runCatching { TodayWidget(o.getInt("id"), TodaySize.valueOf(o.getString("size"))) }.getOrNull() }
+            } } ?: DEFAULT_TODAY_WIDGETS,
             folderColors = j.optJSONObject("folderColors")?.let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } ?: emptyMap(),
             dockEverywhere = j.optBoolean("dockEverywhere", false), islandEverywhere = j.optBoolean("islandEverywhere", false))
     }.getOrElse {

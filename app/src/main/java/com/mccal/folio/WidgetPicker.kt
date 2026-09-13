@@ -1,6 +1,16 @@
 package com.mccal.folio
 
 import android.appwidget.AppWidgetProviderInfo
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.Widgets
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items
 import android.content.Context
 import android.content.pm.LauncherApps
 import android.os.Process
@@ -9,16 +19,13 @@ import android.graphics.drawable.Drawable
 import android.widget.RemoteViews
 import android.appwidget.AppWidgetManager
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -160,7 +167,7 @@ internal fun WidgetProviderPreview(entry: WidgetCatalogEntry, span: WidgetSpan, 
     val preview by produceState<CatalogPreview?>(null, entry.provider, span, context.resources.displayMetrics.densityDpi) {
         value = loadWidgetPreview(context, entry.provider, span)
     }
-    Box(modifier.background(Glass.copy(alpha = .38f)), contentAlignment = Alignment.Center) {
+    Box(modifier.background(Color.White.copy(alpha = .1f)), contentAlignment = Alignment.Center) {
         when (val value = preview) {
             is CatalogPreview.Remote -> AndroidView(factory = { previewContext ->
                 object : android.widget.FrameLayout(previewContext) {
@@ -176,10 +183,10 @@ internal fun WidgetProviderPreview(entry: WidgetCatalogEntry, span: WidgetSpan, 
             is CatalogPreview.Picture -> Image(value.bitmap.asImageBitmap(), null, Modifier.fillMaxSize().padding(8.dp),
                 contentScale = ContentScale.Fit)
             CatalogPreview.Missing -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(entry.providerLabel, style = MaterialTheme.typography.bodySmall)
-                Text("${span.width} × ${span.height}", style = MaterialTheme.typography.labelSmall)
+                Text(entry.providerLabel, style = MaterialTheme.typography.bodySmall, color = Color.White)
+                Text("${span.width} × ${span.height}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .6f))
             }
-            null -> CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 3.dp)
+            null -> CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 3.dp, color = Color.White)
         }
     }
 }
@@ -213,109 +220,117 @@ internal fun VisualWidgetPicker(
         words.isEmpty() || listOf(entry.appLabel, entry.providerLabel, entry.description,
             entry.provider.provider.packageName).any { it.lowercase().contains(words) }
     } }
+    // iOS widget gallery: dark glass, large title, search capsule, grid of preview cards grouped by app.
+    val ink = Color.White
+    val secondary = Color.White.copy(alpha = .6f)
     Surface(Modifier.fillMaxSize().alpha(if (hiddenForDrag) 0f else 1f)
         .then(if (hiddenForDrag) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false } else Modifier)
         .testTag("visual-widget-picker"),
-        color = Glass.copy(alpha = .96f)) {
+        color = Color(0xFF111114).copy(alpha = .97f), contentColor = ink) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(horizontal = 18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") }
-                Text("Widgets", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Widgets", color = ink, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Box(Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = .14f)).clickable(onClickLabel = "Close", onClick = onBack),
+                    contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, "Back", tint = ink, modifier = Modifier.size(20.dp)) }
             }
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 10.dp)
-                .testTag("widget-catalog-search"), singleLine = true, placeholder = { Text("Search widgets") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) })
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = .12f))
+                .padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Search, null, tint = secondary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) Text("Search Widgets", color = secondary, fontSize = 17.sp)
+                    androidx.compose.foundation.text.BasicTextField(query, { query = it }, Modifier.fillMaxWidth().testTag("widget-catalog-search"),
+                        singleLine = true, textStyle = androidx.compose.ui.text.TextStyle(color = ink, fontSize = 17.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ink))
+                }
+            }
             if (profiles.any { it.isWork }) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 profiles.forEach { profile ->
-                    FilterChip(selected = profile.userSerial == selectedProfile.userSerial,
-                        onClick = { onSelectProfile(profile) }, label = { Text(profile.label) })
+                    val selected = profile.userSerial == selectedProfile.userSerial
+                    Text(profile.label, color = if (selected) Color.Black else ink, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(CircleShape).background(if (selected) Color.White else Color.White.copy(alpha = .14f))
+                            .clickable { onSelectProfile(profile) }.padding(horizontal = 14.dp, vertical = 8.dp))
                 }
             }
             if (!selectedProfile.available || !selectedProfile.unlocked || selectedProfile.quiet) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (selectedProfile.quiet) "${selectedProfile.label} apps are paused"
-                        else "${selectedProfile.label} profile is unavailable")
+                        else "${selectedProfile.label} profile is unavailable", color = secondary)
                     if (selectedProfile.isWork) Button(onClick = { onTurnOnWork(selectedProfile.userSerial) },
                         modifier = Modifier.padding(top = 12.dp)) { Text("Turn on") }
                 }
             }
-            LazyColumn(Modifier.fillMaxSize().testTag("widget-catalog-list"), verticalArrangement = Arrangement.spacedBy(12.dp),
+            LazyVerticalGrid(GridCells.Adaptive(168.dp), Modifier.fillMaxSize().testTag("widget-catalog-list"),
+                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)) {
-                if (entries == null) item("catalog-loading") {
-                    Box(Modifier.fillParentMaxSize().padding(40.dp), contentAlignment = Alignment.TopCenter) {
-                        CircularProgressIndicator()
-                    }
+                fun header(key: String, title: String) = item(key, span = { GridItemSpan(maxLineSpan) }) {
+                    Text(title, color = ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp, start = 2.dp))
+                }
+                if (entries == null) item("catalog-loading", span = { GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.TopCenter) { CircularProgressIndicator(color = ink) }
                 }
                 if (words.isEmpty() && selectedProfile.isPersonal) {
-                    item("duo-widgets") { Text("Folio", style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 10.dp, start = 4.dp)) }
-                    items(listOf(CLOCK_WIDGET to "Clock", DATE_WIDGET to "Date", INFO_WIDGET to "Widget panel"),
-                        key = { "builtin-${it.first}" }) { (id, label) ->
-                        Surface(Modifier.fillMaxWidth().testTag("widget-builtin-$id")
-                            .clickable { focusManager.clearFocus(); keyboard?.hide(); onBuiltin(id) },
-                            color = Glass.copy(alpha = .55f), border = BorderStroke(1.dp, Color.White.copy(alpha = .55f)),
-                            shape = RoundedCornerShape(22.dp)) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(label, style = MaterialTheme.typography.titleMedium)
-                                Text("2 × 2 · Tap to place", style = MaterialTheme.typography.labelMedium)
+                    header("duo-widgets", "Folio")
+                    items(listOf(Triple(CLOCK_WIDGET, "Clock", Icons.Rounded.Schedule), Triple(DATE_WIDGET, "Date", Icons.Rounded.CalendarToday),
+                        Triple(INFO_WIDGET, "Widget Panel", Icons.Rounded.Widgets)), key = { "builtin-${it.first}" }) { (id, label, icon) ->
+                        GalleryCard(label, "Folio", "Small", Modifier.testTag("widget-builtin-$id")
+                            .clickable { focusManager.clearFocus(); keyboard?.hide(); onBuiltin(id) }) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(22.dp))
+                                .background(Color.White.copy(alpha = .1f)), contentAlignment = Alignment.Center) {
+                                Icon(icon, null, tint = ink, modifier = Modifier.size(44.dp))
                             }
                         }
                     }
                 }
                 filtered.groupBy { it.appLabel }.forEach { (app, group) ->
-                    item("header-$app") { Text(app, style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 10.dp, start = 4.dp)) }
+                    header("header-$app", app)
                     items(group, key = { it.provider.provider.flattenToString() }) { entry ->
                         val span = footprint(entry.provider)
                         var origin by remember { mutableStateOf(Offset.Zero) }
-                        Surface(modifier = Modifier.fillMaxWidth()
-                            .testTag("widget-provider-${entry.provider.provider.flattenToString()}${if (entry.isWork) "-profile-${entry.userSerial}" else ""}")
-                            .onGloballyPositioned { origin = it.boundsInRoot().topLeft }
-                            .pointerInput(entry.provider) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { point ->
-                                        focusManager.clearFocus(); keyboard?.hide()
-                                        latestDragStart(entry.provider, origin + point)
-                                    },
-                                    onDrag = { change, _ -> change.consume(); latestDrag(origin + change.position) },
-                                    onDragEnd = { latestDrop() }, onDragCancel = { latestCancelDrag() })
-                            }.clickable(enabled = span != null, onClick = {
-                                focusManager.clearFocus(); keyboard?.hide(); onTap(entry.provider)
-                            }),
-                            color = Glass.copy(alpha = .55f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = .55f)),
-                            shape = RoundedCornerShape(22.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Column(Modifier.padding(bottom = 12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(entry.providerLabel, style = MaterialTheme.typography.titleMedium)
-                                        if (entry.isWork) AssistChip(onClick = {}, label = { Text(entry.profileLabel) },
-                                            modifier = Modifier.padding(start = 8.dp))
-                                    }
-                                    if (entry.description.isNotBlank()) Text(entry.description, style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 2)
-                                    Text(span?.let { "${it.width} × ${it.height}" } ?: "Doesn’t fit this layout",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (span == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                                    Text("Tap to place · Hold to drag", style = MaterialTheme.typography.bodySmall)
-                                }
-                                val ratio = span?.let { it.width.toFloat() / it.height } ?: 1.5f
-                                BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    val boundedWidth = minOf(maxWidth, 220.dp * ratio)
-                                    val boundedHeight = boundedWidth / ratio
-                                    val previewTag = "widget-preview-${entry.provider.provider.flattenToString()}${if (entry.isWork) "-profile-${entry.userSerial}" else ""}"
-                                    Box(Modifier.width(boundedWidth).height(boundedHeight).clip(RoundedCornerShape(16.dp))
-                                        .testTag(previewTag)) {
-                                        WidgetProviderPreview(entry, span ?: WidgetSpan(2, 2), Modifier.fillMaxSize())
-                                    }
-                                }
+                        val sizeName = span?.let { when { it.width <= 2 && it.height <= 2 -> "Small"; it.height <= 2 -> "Medium"; else -> "Large" } }
+                        GalleryCard(entry.providerLabel, if (entry.isWork) "${entry.appLabel} · ${entry.profileLabel}" else entry.appLabel,
+                            span?.let { "$sizeName · ${it.width} × ${it.height}" } ?: "Doesn’t fit this layout",
+                            Modifier.testTag("widget-provider-${entry.provider.provider.flattenToString()}${if (entry.isWork) "-profile-${entry.userSerial}" else ""}")
+                                .onGloballyPositioned { origin = it.boundsInRoot().topLeft }
+                                .pointerInput(entry.provider) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { point ->
+                                            focusManager.clearFocus(); keyboard?.hide()
+                                            latestDragStart(entry.provider, origin + point)
+                                        },
+                                        onDrag = { change, _ -> change.consume(); latestDrag(origin + change.position) },
+                                        onDragEnd = { latestDrop() }, onDragCancel = { latestCancelDrag() })
+                                }.clickable(enabled = span != null, onClick = {
+                                    focusManager.clearFocus(); keyboard?.hide(); onTap(entry.provider)
+                                }),
+                            dimmed = span == null) {
+                            val ratio = span?.let { it.width.toFloat() / it.height } ?: 1f
+                            val previewTag = "widget-preview-${entry.provider.provider.flattenToString()}${if (entry.isWork) "-profile-${entry.userSerial}" else ""}"
+                            Box(Modifier.fillMaxWidth().aspectRatio(ratio.coerceIn(.7f, 2.2f)).clip(RoundedCornerShape(22.dp)).testTag(previewTag)) {
+                                WidgetProviderPreview(entry, span ?: WidgetSpan(2, 2), Modifier.fillMaxSize())
                             }
                         }
                     }
                 }
-                if (entries != null && filtered.isEmpty()) item { Text("No widgets found", Modifier.padding(20.dp)) }
+                if (entries != null && filtered.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("No Widgets Found", color = secondary, modifier = Modifier.padding(20.dp))
+                }
             }
         }
+    }
+}
+
+/** One widget in the gallery: preview on top, name and app underneath (iOS style). */
+@Composable
+private fun GalleryCard(title: String, subtitle: String, detail: String, modifier: Modifier, dimmed: Boolean = false,
+    preview: @Composable () -> Unit) {
+    Column(modifier.alpha(if (dimmed) .45f else 1f).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = .06f)).padding(10.dp)) {
+        preview()
+        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp, start = 2.dp))
+        Text(subtitle, color = Color.White.copy(alpha = .6f), fontSize = 13.sp, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
+        Text(detail, color = Color.White.copy(alpha = .45f), fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp))
     }
 }

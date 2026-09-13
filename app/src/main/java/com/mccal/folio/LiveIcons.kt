@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -76,7 +77,7 @@ enum class IconStyle(val label: String) { DEFAULT("Default"), DARK("Dark"), TINT
 
 enum class IconShape(val label: String) { DEFAULT("Default"), SQUIRCLE("Squircle"), CIRCLE("Circle"), ROUNDED("Rounded square") }
 enum class BadgeStyle(val label: String) { OFF("Off"), DOT("Dot"), COUNT("Count") }
-enum class BadgeColor(val label: String) { RED("Red"), APP("Match icon") }
+enum class BadgeColor(val label: String) { RED("Red"), APP("Match icon"), SOFT("Soft") }
 
 /** Icon look for the whole launcher, provided from the saved settings. */
 internal data class IconLook(val style: IconStyle = IconStyle.DEFAULT, val tint: Color = Color(0xFFFFB340),
@@ -162,15 +163,16 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
         if (badgeCount > 0) {
             val color = when {
                 look.badgeColor == BadgeColor.RED -> BadgeRed
-                look.style == IconStyle.TINTED -> look.tint
-                kind == LiveIcons.Kind.CALENDAR -> IconRed
-                kind == LiveIcons.Kind.CLOCK -> IconOrange
+                look.style == IconStyle.TINTED -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(look.tint.toArgb())) else look.tint
+                kind == LiveIcons.Kind.CALENDAR -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconRed.toArgb())) else IconRed
+                kind == LiveIcons.Kind.CLOCK -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconOrange.toArgb())) else IconOrange
                 else -> {
                     val source = packIcon ?: app.icon
-                    val accent by produceState(BadgeAccents.cached(source), source) {
-                        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { BadgeAccents.of(source) }
+                    val soft = look.badgeColor == BadgeColor.SOFT
+                    val accent by produceState(BadgeAccents.cached(source, soft), source, soft) {
+                        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { BadgeAccents.of(source, soft) }
                     }
-                    accent?.let { Color(it) } ?: BadgeRed
+                    accent?.let { Color(it) } ?: if (soft) SoftNeutral else BadgeRed
                 }
             }
             IconBadge(badgeCount, look.badges, color)
@@ -233,6 +235,7 @@ private val IconRed = Color(0xFFFF453A)
 private val IconOrange = Color(0xFFFF9F0A)
 
 private val BadgeRed = Color(0xFFFF3B30)
+private val SoftNeutral = Color(0xFFE5E5EA)
 
 /** iOS-style badge: sits over the icon's top-right corner, a dot or a pill that widens for 2+ digits. */
 @Composable
@@ -265,21 +268,82 @@ private fun androidx.compose.foundation.layout.BoxScope.IconBadge(count: Int, st
 /** Main color of an icon for "Match icon" badges, cached per bitmap. */
 internal object BadgeAccents {
     private val cache = android.util.LruCache<android.graphics.Bitmap, Int>(256)
-    private const val NONE = 0 // grayscale icons fall back to red
+    private val softCache = android.util.LruCache<android.graphics.Bitmap, Int>(256)
+    private const val NONE = 0 // grayscale icons fall back to red (or a soft neutral)
 
-    fun cached(bitmap: android.graphics.Bitmap): Int? = cache.get(bitmap)?.takeIf { it != NONE }
+    fun cached(bitmap: android.graphics.Bitmap, soft: Boolean = false): Int? =
+        (if (soft) softCache else cache).get(bitmap)?.takeIf { it != NONE }
 
-    fun of(bitmap: android.graphics.Bitmap): Int? {
+    fun of(bitmap: android.graphics.Bitmap, soft: Boolean = false): Int? {
+        if (soft) {
+            softCache.get(bitmap)?.let { return it.takeIf { c -> c != NONE } }
+            val color = pixels(bitmap)?.let(::softBadgeColor)
+            softCache.put(bitmap, color ?: NONE)
+            return color
+        }
         cache.get(bitmap)?.let { return it.takeIf { c -> c != NONE } }
-        val accent = runCatching {
-            val soft = if (bitmap.config == android.graphics.Bitmap.Config.HARDWARE) bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false) else bitmap
-            val small = android.graphics.Bitmap.createScaledBitmap(soft, 24, 24, true)
-            val pixels = IntArray(24 * 24).also { small.getPixels(it, 0, 24, 0, 0, 24, 24) }
-            dominantAccent(pixels)
-        }.getOrNull()
+        val accent = pixels(bitmap)?.let(::dominantAccent)
         cache.put(bitmap, accent ?: NONE)
         return accent
     }
+
+    /** A 24×24 sample of the icon: enough to find its main colors without reading every pixel. */
+    private fun pixels(bitmap: android.graphics.Bitmap): IntArray? = runCatching {
+        val readable = if (bitmap.config == android.graphics.Bitmap.Config.HARDWARE) bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false) else bitmap
+        val small = android.graphics.Bitmap.createScaledBitmap(readable, 24, 24, true)
+        IntArray(24 * 24).also { small.getPixels(it, 0, 24, 0, 0, 24, 24) }
+    }.getOrNull()
+}
+
+/**
+ * Soft pastel badge: the icon's three most prominent color groups (transparent, white, black and gray
+ * pixels ignored) blended by how much of the icon each covers, then softened like iOS pastels —
+ * saturation capped at 40%, brightness raised to at least 90%. Null for icons with no real color.
+ */
+internal fun softBadgeColor(pixels: IntArray): Int? {
+    val weight = FloatArray(12); val rs = FloatArray(12); val gs = FloatArray(12); val bs = FloatArray(12)
+    var opaque = 0
+    for (p in pixels) {
+        if ((p ushr 24) < 160) continue
+        opaque++
+        val r = (p shr 16 and 255) / 255f; val g = (p shr 8 and 255) / 255f; val b = (p and 255) / 255f
+        val max = maxOf(r, g, b); val delta = max - minOf(r, g, b)
+        val sat = if (max == 0f) 0f else delta / max
+        if (sat < .2f || max < .2f) continue
+        val hue = when (max) { r -> ((g - b) / delta).mod(6f); g -> (b - r) / delta + 2f; else -> (r - g) / delta + 4f }
+        val bucket = (hue * 2f).toInt().coerceIn(0, 11)
+        weight[bucket] += 1f; rs[bucket] += r; gs[bucket] += g; bs[bucket] += b
+    }
+    val top = weight.indices.sortedByDescending { weight[it] }.take(3).filter { weight[it] >= maxOf(1f, opaque * .04f) }
+    if (top.isEmpty()) return null
+    val total = top.sumOf { weight[it].toDouble() }.toFloat()
+    val r = top.sumOf { rs[it].toDouble() }.toFloat() / total
+    val g = top.sumOf { gs[it].toDouble() }.toFloat() / total
+    val b = top.sumOf { bs[it].toDouble() }.toFloat() / total
+    return softened((0xFF shl 24) or ((r * 255).toInt() shl 16) or ((g * 255).toInt() shl 8) or (b * 255).toInt())
+}
+
+/** Caps saturation at 40% and lifts brightness to at least 90% (HSV), keeping the hue. */
+internal fun softened(argb: Int): Int {
+    val r = (argb shr 16 and 255) / 255f; val g = (argb shr 8 and 255) / 255f; val b = (argb and 255) / 255f
+    val max = maxOf(r, g, b); val min = minOf(r, g, b); val delta = max - min
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> 60f * (((g - b) / delta).mod(6f))
+        max == g -> 60f * ((b - r) / delta + 2f)
+        else -> 60f * ((r - g) / delta + 4f)
+    }
+    val s = (if (max == 0f) 0f else delta / max).coerceAtMost(.40f)
+    val v = max.coerceAtLeast(.90f)
+    val c = v * s
+    val x = c * (1 - kotlin.math.abs((hue / 60f).mod(2f) - 1))
+    val m = v - c
+    val (r1, g1, b1) = when ((hue / 60f).toInt().coerceIn(0, 5)) {
+        0 -> Triple(c, x, 0f); 1 -> Triple(x, c, 0f); 2 -> Triple(0f, c, x)
+        3 -> Triple(0f, x, c); 4 -> Triple(x, 0f, c); else -> Triple(c, 0f, x)
+    }
+    fun ch(v: Float) = kotlin.math.round((v + m) * 255f).toInt().coerceIn(0, 255)
+    return (0xFF shl 24) or (ch(r1) shl 16) or (ch(g1) shl 8) or ch(b1)
 }
 
 /**

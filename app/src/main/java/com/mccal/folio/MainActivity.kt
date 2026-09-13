@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
         private set
     private val homeRequests = mutableIntStateOf(0)
     private val searchRequests = mutableIntStateOf(0)
+    /** Opened from Android Settings (Home app gear / "Additional settings in the app"). */
+    private val settingsRequests = mutableIntStateOf(0)
     private val defaultHome = mutableStateOf(false)
     private val showFirstRun = mutableStateOf(false)
     private lateinit var setupExperience: SetupExperience
@@ -94,6 +96,7 @@ class MainActivity : ComponentActivity() {
         lifecycle.addObserver(IslandEvents.Observer(this))
         updateDefaultHome()
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
+        if (savedInstanceState == null && intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
         intent.removeExtra("duo_destination")
         setContent {
             val state = model.state.collectAsStateWithLifecycle().value
@@ -139,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 LauncherScreen(state, model, widgets, homeRequests.intValue,
                     onLaunch = { launchApp(it) }, onMakeDefault = ::makeDefault, onAppInfo = ::appInfo,
                     isDefaultHome = defaultHome.value, deviceStatus = deviceStatus, onStatusMode = ::setStatusMode, onWallpaperPreview = ::previewWallpaper,
-                    onDiscover = ::openDiscover, searchRequests = searchRequests.intValue,
+                    onDiscover = ::openDiscover, searchRequests = searchRequests.intValue, settingsRequests = settingsRequests.intValue,
                     onLaunchFrom = ::launchApp, onGoogleSearch = ::openGoogleSearch,
                     appearance = appearance.state,
                     onAppearanceMode = { cancelAppearanceLocation(); appearance.setMode(it, systemDark()) },
@@ -292,6 +295,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         FoldRenderExperiment.onNewIntent(this, intent)
         if (intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
+        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
         else if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getStringExtra("duo_destination") == "home") {
             closeOverlays(); homeRequests.intValue++
         }

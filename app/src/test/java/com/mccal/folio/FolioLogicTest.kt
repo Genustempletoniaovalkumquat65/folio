@@ -202,3 +202,51 @@ class WidgetStacksTest {
         assertNull(WidgetStacks.showFirst(5, listOf(7), 5))
     }
 }
+
+class TodayViewTest {
+    private fun w(id: Int, size: TodaySize) = TodayWidget(id, size)
+
+    @Test fun rowsPackSmallWidgetsInPairs() {
+        val rows = todayRows(listOf(w(1, TodaySize.SMALL), w(2, TodaySize.SMALL), w(3, TodaySize.MEDIUM), w(4, TodaySize.SMALL)))
+        assertEquals(listOf(listOf(1, 2), listOf(3), listOf(4)), rows.map { r -> r.map { it.id } })
+    }
+
+    @Test fun largeNeverSharesARow() {
+        val rows = todayRows(listOf(w(1, TodaySize.SMALL), w(2, TodaySize.LARGE), w(3, TodaySize.SMALL)))
+        assertEquals(listOf(listOf(1), listOf(2), listOf(3)), rows.map { r -> r.map { it.id } })
+    }
+
+    @Test fun sizeFromHomeFootprint() {
+        assertEquals(TodaySize.SMALL, TodaySize.forSpan(2, 2))
+        assertEquals(TodaySize.MEDIUM, TodaySize.forSpan(4, 2))
+        assertEquals(TodaySize.LARGE, TodaySize.forSpan(4, 4))
+    }
+
+    @Test fun editsKeepOrderAndIgnoreDuplicates() {
+        val list = listOf(w(1, TodaySize.SMALL), w(2, TodaySize.SMALL), w(3, TodaySize.MEDIUM))
+        assertEquals(list, TodayWidgets.add(list, w(2, TodaySize.LARGE)))
+        assertEquals(listOf(2, 1, 3), TodayWidgets.move(list, 1, 1).map { it.id })
+        assertEquals(list, TodayWidgets.move(list, 1, -1))
+        assertEquals(setOf(1, 2, 3), TodayWidgets.retained(list + w(CLOCK_WIDGET, TodaySize.SMALL)))
+    }
+}
+
+class SoftBadgeTest {
+    private fun hsv(argb: Int): Pair<Float, Float> {
+        val r = (argb shr 16 and 255) / 255f; val g = (argb shr 8 and 255) / 255f; val b = (argb and 255) / 255f
+        val max = maxOf(r, g, b); val min = minOf(r, g, b)
+        return (if (max == 0f) 0f else (max - min) / max) to max
+    }
+
+    @Test fun softColorsArePastel() {
+        val icon = IntArray(576) { if (it % 3 == 0) 0xFF1E88E5.toInt() else if (it % 3 == 1) 0xFFE53935.toInt() else 0xFFFFFFFF.toInt() }
+        val (s, v) = hsv(softBadgeColor(icon)!!)
+        assertTrue(s <= .41f); assertTrue(v >= .89f)
+    }
+
+    @Test fun softenKeepsHueFamily() {
+        val soft = softened(0xFF0000FF.toInt())
+        assertTrue((soft and 255) > (soft shr 16 and 255)) // still bluer than red
+        assertNull(softBadgeColor(IntArray(576) { 0xFF808080.toInt() }))
+    }
+}

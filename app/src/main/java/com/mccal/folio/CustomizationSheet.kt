@@ -184,6 +184,35 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
+                    SettingsCard("Left of Home") {
+                        val leftContext = androidx.compose.ui.platform.LocalContext.current
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover").forEach { (value, label) ->
+                                FilterChip(selected = state.leftPage == value, onClick = {
+                                    if (state.leftPage != value) {
+                                        model.setLeftPage(value)
+                                        // The Home pager's page count changes; rebuild the screen once.
+                                        (leftContext as? android.app.Activity)?.recreate()
+                                    }
+                                }, label = { Text(label) })
+                            }
+                        }
+                        Text("Today View is iPhone's widget page: search, suggestions and your widgets. Google Discover needs the Google app.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (state.leftPage == "TODAY") {
+                            Text("When unfolded", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("PAGE" to "Swipe to it", "BESIDE" to "Beside Home", "OFF" to "Off").forEach { (value, label) ->
+                                    FilterChip(selected = state.todayUnfolded == value, onClick = { model.setTodayUnfolded(value) }, label = { Text(label) })
+                                }
+                            }
+                            Text(when (state.todayUnfolded) {
+                                "BESIDE" -> "Like iPad: Today View stays on the left of the open screen, next to your first Home page. It takes the place of the unfolded-only page."
+                                "OFF" -> "No Today View while unfolded; it's still there on the cover screen."
+                                else -> "Swipe right from your first Home page to open it, folded or unfolded."
+                            }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     SettingsCard("App Library") {
                         SettingsSwitch("Group apps into categories", state.libraryCategories, model::setLibraryCategories, "library-categories-switch")
                     }

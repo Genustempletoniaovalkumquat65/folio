@@ -44,3 +44,36 @@ internal object WidgetStacks {
 /** Stacks and Smart Rotate for Home's widget drawing (provided by LauncherScreen). */
 internal val LocalWidgetStacks = androidx.compose.runtime.compositionLocalOf { emptyMap<Int, List<Int>>() }
 internal val LocalStackRotate = androidx.compose.runtime.compositionLocalOf { true }
+
+/** Size of a widget on the Today View's two-column grid. */
+enum class TodaySize(val label: String, val columns: Int, val rows: Int) {
+    SMALL("Small", 1, 1), MEDIUM("Medium", 2, 1), LARGE("Large", 2, 2);
+
+    companion object {
+        /** iOS-style size for a widget's preferred Home footprint (in 4×6 grid cells). */
+        fun forSpan(width: Int, height: Int): TodaySize = when {
+            width <= 2 && height <= 2 -> SMALL
+            height <= 2 -> MEDIUM
+            else -> LARGE
+        }
+    }
+}
+
+/** One widget on the Today View: a bound app widget id (>= 0) or a Folio built-in card id (< 0). */
+data class TodayWidget(val id: Int, val size: TodaySize)
+
+internal val DEFAULT_TODAY_WIDGETS = listOf(TodayWidget(CLOCK_WIDGET, TodaySize.SMALL), TodayWidget(DATE_WIDGET, TodaySize.SMALL))
+
+/** Pure edits for the Today View's widget list. */
+internal object TodayWidgets {
+    fun add(list: List<TodayWidget>, widget: TodayWidget) = if (list.any { it.id == widget.id }) list else list + widget
+    fun remove(list: List<TodayWidget>, id: Int) = list.filterNot { it.id == id }
+    /** Moves a widget up (-1) or down (+1) one place. */
+    fun move(list: List<TodayWidget>, id: Int, delta: Int): List<TodayWidget> {
+        val from = list.indexOfFirst { it.id == id }
+        val to = from + delta
+        if (from < 0 || to !in list.indices) return list
+        return list.toMutableList().apply { add(to, removeAt(from)) }
+    }
+    fun retained(list: List<TodayWidget>): Set<Int> = list.map { it.id }.filter { it >= 0 }.toSet()
+}
