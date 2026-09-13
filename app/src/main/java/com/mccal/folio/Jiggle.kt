@@ -118,11 +118,12 @@ internal fun JigglePill(label: String, icon: ImageVector? = null, description: S
 /** iOS 16+ Home "Search" capsule that sits where the page dots are. */
 @Composable
 internal fun HomeSearchPill(onClick: () -> Unit) {
-    Row(Modifier.height(30.dp).clip(CircleShape).background(Color.White.copy(alpha = .2f))
+    val ink = LocalHomeInk.current
+    Row(Modifier.height(30.dp).clip(CircleShape).background(if (ink.dark) Color.White.copy(alpha = .45f) else Color.White.copy(alpha = .2f))
         .clickable(role = Role.Button, onClickLabel = "Search", onClick = onClick)
         .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.Search, null, tint = Color.White, modifier = Modifier.size(15.dp))
+        Icon(Icons.Rounded.Search, null, tint = ink.primary, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text("Search", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text("Search", color = ink.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

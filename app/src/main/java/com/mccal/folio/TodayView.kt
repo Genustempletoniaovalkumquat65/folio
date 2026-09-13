@@ -65,17 +65,18 @@ internal fun TodayView(state: LauncherState, widgets: WidgetController, modifier
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap)) {
                 Column(Modifier.width(columnsWidth), verticalArrangement = Arrangement.spacedBy(gap)) {
                     // Search capsule
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .16f))
+                    val ink = LocalHomeInk.current
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = if (ink.dark) .5f else .16f))
                         .clickable(onClickLabel = "Search", onClick = onSearch).padding(horizontal = 14.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Search, null, tint = Color.White.copy(alpha = .75f), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Rounded.Search, null, tint = ink.secondary, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Search", color = Color.White.copy(alpha = .75f), fontSize = 17.sp)
+                        Text("Search", color = ink.secondary, fontSize = 17.sp)
                     }
                     Column(Modifier.padding(start = 4.dp, top = 6.dp)) {
                         Text(today.format(DateTimeFormatter.ofPattern("EEEE")).uppercase(), color = Color(0xFFFF453A), fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp)
-                        Text(today.format(DateTimeFormatter.ofPattern("MMMM d")), color = Color.White, fontSize = if (wide) 40.sp else 34.sp,
+                        Text(today.format(DateTimeFormatter.ofPattern("MMMM d")), color = LocalHomeInk.current.primary, fontSize = if (wide) 40.sp else 34.sp,
                             fontWeight = FontWeight.Bold)
                     }
                     if (suggestions.isNotEmpty() && !edit.active) TodaySuggestions(suggestions, 4, onLaunch)
@@ -92,7 +93,7 @@ internal fun TodayView(state: LauncherState, widgets: WidgetController, modifier
                             }
                         }
                     }
-                    if (state.todayWidgets.isEmpty()) Text("Add widgets for the things you check most.", color = Color.White.copy(alpha = .7f),
+                    if (state.todayWidgets.isEmpty()) Text("Add widgets for the things you check most.", color = LocalHomeInk.current.secondary,
                         fontSize = 15.sp, modifier = Modifier.padding(4.dp))
 
                     // Edit / Add / Done, like the bottom of iOS's Today View
@@ -123,16 +124,17 @@ internal fun todayRows(list: List<TodayWidget>): List<List<TodayWidget>> {
 
 @Composable
 private fun TodaySuggestions(apps: List<AppEntry>, columns: Int, onLaunch: (AppEntry) -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .14f))
+    val ink = LocalHomeInk.current
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = if (ink.dark) .45f else .14f))
         .border(FolioGlass.edge, RoundedCornerShape(22.dp)).padding(horizontal = 10.dp, vertical = 12.dp)) {
-        Text("Suggestions", color = Color.White.copy(alpha = .75f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        Text("Suggestions", color = ink.secondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 6.dp, bottom = 8.dp))
         Row(Modifier.fillMaxWidth()) {
             apps.take(columns).forEach { app ->
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable { onLaunch(app) }.padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     AppIcon(app, app.label, Modifier.size(52.dp), shape = RoundedCornerShape(13.dp), badge = false)
-                    Text(app.label, color = Color.White, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Text(app.label, color = ink.primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp))
                 }
             }

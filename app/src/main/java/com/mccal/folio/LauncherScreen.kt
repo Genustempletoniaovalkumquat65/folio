@@ -470,7 +470,9 @@ fun LauncherScreen(
             if (drag.source?.folderId != null) openFolderId = null
         },
         onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
-        CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate) {
+        val homeInk = homeInkFor(state.homeInk, rememberWallpaperPrefersDarkText(state.systemWallpaper))
+        CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate,
+            LocalHomeInk provides homeInk) {
         if (!state.systemWallpaper) DuneWallpaper()
         else SystemWallpaperParallax(nativePager)
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
@@ -708,7 +710,7 @@ fun LauncherScreen(
                             Box(Modifier.size(28.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(index) } }
                                 .semantics { contentDescription = if (index == homePages) "New home page" else "Home page ${index + 1}" }, contentAlignment = Alignment.Center) {
                                 if (index == homePages) Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                else Box(Modifier.size(if (index == pager.currentPage) 6.dp else 4.dp).background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else .4f), CircleShape))
+                                else Box(Modifier.size(if (index == pager.currentPage) 6.dp else 4.dp).background(if (index == pager.currentPage) LocalHomeInk.current.primary else LocalHomeInk.current.faint, CircleShape))
                             }
                         } else Text("${minOf(pager.currentPage + 1, homePages)} / $homePages", color = Color.White, fontSize = 12.sp)
                         }
@@ -1840,7 +1842,7 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
                 }
             }
         }
-        if (labels) Text(folder.title, color = Color.White, fontSize = 11.sp, maxLines = 1,
+        if (labels) Text(folder.title, color = LocalHomeInk.current.primary, fontSize = 11.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -1866,9 +1868,10 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
                 .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (pressed) .82f else 1f }, shape = RoundedCornerShape((size * .24f).dp))
             if (onRemove != null) JiggleRemoveButton("Remove ${app.label} from Home", onRemove)
         }
-        if (labels) Text(app.label, color = Color.White, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
+        val ink = LocalHomeInk.current
+        if (labels) Text(app.label, color = ink.primary, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-            style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = .55f), Offset(0f, 1f), 3f)), modifier = Modifier.padding(top = 4.dp))
+            style = TextStyle(shadow = ink.labelShadow), modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -1891,11 +1894,11 @@ private fun ClockCard(onClick: () -> Unit) {
     val time = currentTime()
     val format = if (android.text.format.DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm"
     GlassCard(onClick = onClick) {
-        Text("LOCAL TIME", color = Color.White.copy(alpha = .75f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp,
+        Text("LOCAL TIME", color = LocalHomeInk.current.secondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp,
             modifier = Modifier.semantics { contentDescription = "Clock widget; tap to replace" })
-        Text(time.format(DateTimeFormatter.ofPattern(format)), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, maxLines = 1,
+        Text(time.format(DateTimeFormatter.ofPattern(format)), color = LocalHomeInk.current.primary, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, maxLines = 1,
             style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
-        Text(time.format(DateTimeFormatter.ofPattern(if (format == "HH:mm") "EEE" else "a · EEE")), color = Color.White.copy(alpha = .75f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(time.format(DateTimeFormatter.ofPattern(if (format == "HH:mm") "EEE" else "a · EEE")), color = LocalHomeInk.current.secondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1903,10 +1906,10 @@ private fun ClockCard(onClick: () -> Unit) {
 private fun DateCard(onClick: () -> Unit) {
     val date = currentTime()
     GlassCard(onClick = onClick) {
-        Text(date.format(DateTimeFormatter.ofPattern("EEEE")).uppercase(), color = Color.White.copy(alpha = .75f), fontSize = 11.sp,
+        Text(date.format(DateTimeFormatter.ofPattern("EEEE")).uppercase(), color = LocalHomeInk.current.secondary, fontSize = 11.sp,
             fontWeight = FontWeight.Bold, letterSpacing = .6.sp, maxLines = 1)
-        Text(date.dayOfMonth.toString(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 44.sp, lineHeight = 46.sp)
-        Text(date.format(DateTimeFormatter.ofPattern("MMMM")), color = Color.White.copy(alpha = .75f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(date.dayOfMonth.toString(), color = LocalHomeInk.current.primary, fontWeight = FontWeight.SemiBold, fontSize = 44.sp, lineHeight = 46.sp)
+        Text(date.format(DateTimeFormatter.ofPattern("MMMM")), color = LocalHomeInk.current.secondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1915,15 +1918,15 @@ private fun ExpandedCard(onClick: () -> Unit) {
     val date = currentTime()
     GlassCard(onClick = onClick) {
         Column {
-            Text(date.format(DateTimeFormatter.ofPattern("EEEE")), color = Color.White, fontSize = 22.sp)
-            Text(date.format(DateTimeFormatter.ofPattern("MMMM d")), color = Color.White.copy(alpha = .8f), fontSize = 16.sp)
+            Text(date.format(DateTimeFormatter.ofPattern("EEEE")), color = LocalHomeInk.current.primary, fontSize = 22.sp)
+            Text(date.format(DateTimeFormatter.ofPattern("MMMM d")), color = LocalHomeInk.current.secondary, fontSize = 16.sp)
         }
         Column {
-            Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(32.dp))
+            Icon(Icons.Rounded.Widgets, null, tint = LocalHomeInk.current.primary, modifier = Modifier.size(32.dp))
             Spacer(Modifier.height(16.dp))
-            Text("A little more room.", color = Color.White, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
+            Text("A little more room.", color = LocalHomeInk.current.primary, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
             Spacer(Modifier.height(12.dp))
-            Text("Add a calendar, photos, or another widget.", color = Color.White.copy(alpha = .85f), fontSize = 14.sp)
+            Text("Add a calendar, photos, or another widget.", color = LocalHomeInk.current.secondary, fontSize = 14.sp)
             Spacer(Modifier.height(20.dp))
             FilledTonalButton(onClick = onClick) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add widget") }
         }

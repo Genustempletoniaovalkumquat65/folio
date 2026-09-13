@@ -117,6 +117,16 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
                         }, modifier = Modifier.testTag("background-change-system")) { Text("Change Android wallpaper") }
                     }
+                    SettingsCard("Text on Home") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("AUTO" to "Automatic", "LIGHT" to "Light", "DARK" to "Dark").forEach { (value, label) ->
+                                IosChip(selected = state.homeInk == value, onClick = { model.setHomeInk(value) }, label = { Text(label) },
+                                    modifier = Modifier.weight(1f))
+                            }
+                        }
+                        Text("Labels, status, page dots and widget text on the wallpaper. Automatic uses dark text over light wallpapers, like iPhone.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
                     Text("Launcher background", style = MaterialTheme.typography.titleMedium)

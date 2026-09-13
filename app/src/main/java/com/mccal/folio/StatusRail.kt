@@ -70,6 +70,7 @@ fun StatusRail(
     island: (@Composable () -> Unit)? = null,
     style: StatusStyle = StatusStyle(),
 ) {
+    val ink = LocalHomeInk.current.primary
     val now by produceState(LocalDateTime.now()) {
         while (true) {
             value = LocalDateTime.now()
@@ -91,10 +92,10 @@ fun StatusRail(
     val cellularVisual = cellularSignalVisual(status.cellularLevel, status.airplane)
     val activeDots = (cellularVisual as? CellularSignalVisual.Available)?.activeDots ?: 0
     val batteryColor = when {
-        !style.colorfulBattery -> Color.White
+        !style.colorfulBattery -> ink
         status.charging -> BatteryCharging
         (status.battery ?: 100) <= 20 -> BatteryLow
-        else -> Color.White
+        else -> ink
     }
     val capsule = RoundedCornerShape(30.dp)
     BoxWithConstraints(modifier.testTag("status-rail").semantics(mergeDescendants = true) { contentDescription = description }) {
@@ -107,7 +108,7 @@ fun StatusRail(
             // Compact windows omit the reserve so status stays clear of the fixed dock.
             if (!compact) Box(Modifier.fillMaxWidth().height(20.dp), contentAlignment = Alignment.Center) {
                 // Callers currently leave this false; the slot waits for a truthful activity signal.
-                if (locationInUse) Icon(Icons.Rounded.LocationOn, null, tint = Color.White,
+                if (locationInUse) Icon(Icons.Rounded.LocationOn, null, tint = ink,
                     modifier = Modifier.size(18.dp))
             }
             val hasContent = style.showTime || (!compact && style.showDate) || style.glyph != StatusGlyph.NONE ||
@@ -117,9 +118,9 @@ fun StatusRail(
                 .border(1.dp, RailBorder, capsule)
                 .padding(vertical = if (compact) 8.dp else 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (style.showTime) Text(now.format(timeFormatter), color = Color.White, fontSize = timeSize, fontWeight = FontWeight.SemiBold,
+                if (style.showTime) Text(now.format(timeFormatter), color = ink, fontSize = timeSize, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
-                if (!compact && style.showDate) Text(now.format(dateFormatter), color = Color.White.copy(alpha = .7f), fontSize = detailSize,
+                if (!compact && style.showDate) Text(now.format(dateFormatter), color = ink.copy(alpha = .7f), fontSize = detailSize,
                     fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
                 when (style.glyph) {
                     StatusGlyph.RING, StatusGlyph.MINIMAL -> Canvas(Modifier.padding(top = 2.dp).size(visualSize)) {
@@ -127,15 +128,15 @@ fun StatusRail(
                         val center = Offset(w / 2, w / 2)
                         // Battery: one thin full ring, filled clockwise from the top.
                         val radius = w * .44f
-                        drawCircle(Color.White.copy(alpha = .22f), radius, center, style = Stroke(w * .06f))
+                        drawCircle(ink.copy(alpha = .22f), radius, center, style = Stroke(w * .06f))
                         status.battery?.let { level ->
                             drawArc(batteryColor, -90f, 360f * level / 100, false, Offset(center.x - radius, center.y - radius),
                                 Size(radius * 2, radius * 2), style = Stroke(width = w * .06f, cap = StrokeCap.Round))
                         }
                         if (style.glyph == StatusGlyph.RING) {
-                            drawWifiFan(w, wifiVisual)
+                            drawWifiFan(w, wifiVisual, ink = ink)
                             // Cellular: a short row of dots under the fan.
-                            for (i in 0..4) drawCircle(Color.White.copy(alpha = if (i < activeDots) 1f else .28f), w * .026f,
+                            for (i in 0..4) drawCircle(ink.copy(alpha = if (i < activeDots) 1f else .28f), w * .026f,
                                 Offset(center.x + (i - 2) * w * .085f, w * .74f))
                         } else status.battery?.let { level ->
                             // Minimal: nothing inside the ring but a small charge dot when charging.
@@ -149,16 +150,16 @@ fun StatusRail(
                             val bar = size.width / 7
                             for (i in 0 until 5) {
                                 val h = size.height * (.3f + .7f * i / 4)
-                                drawRoundRect(Color.White.copy(alpha = if (i < activeDots) 1f else .28f),
+                                drawRoundRect(ink.copy(alpha = if (i < activeDots) 1f else .28f),
                                     Offset(i * bar * 1.5f, size.height - h), Size(bar, h),
                                     androidx.compose.ui.geometry.CornerRadius(bar / 2))
                             }
                         }
                         Canvas(Modifier.size(width = 26.dp, height = 12.dp)) {
                             val body = Size(size.width * .86f, size.height)
-                            drawRoundRect(Color.White.copy(alpha = .55f), Offset.Zero, body, androidx.compose.ui.geometry.CornerRadius(size.height * .3f),
+                            drawRoundRect(ink.copy(alpha = .55f), Offset.Zero, body, androidx.compose.ui.geometry.CornerRadius(size.height * .3f),
                                 style = Stroke(size.height * .1f))
-                            drawRoundRect(Color.White.copy(alpha = .55f), Offset(body.width + size.width * .03f, size.height * .3f),
+                            drawRoundRect(ink.copy(alpha = .55f), Offset(body.width + size.width * .03f, size.height * .3f),
                                 Size(size.width * .08f, size.height * .4f), androidx.compose.ui.geometry.CornerRadius(size.height * .1f))
                             status.battery?.let { level ->
                                 val inset = size.height * .18f
@@ -170,7 +171,7 @@ fun StatusRail(
                     StatusGlyph.NONE -> Unit
                 }
                 if (!compact && style.showBatteryPercent) Text(if (status.airplane) "Airplane" else status.battery?.let { "$it%" } ?: "—",
-                    color = if (status.charging && style.colorfulBattery) BatteryCharging else Color.White.copy(alpha = .85f),
+                    color = if (status.charging && style.colorfulBattery) BatteryCharging else ink.copy(alpha = .85f),
                     fontSize = detailSize, fontWeight = FontWeight.Medium,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
             }
@@ -179,19 +180,19 @@ fun StatusRail(
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Float, wifiVisual: WifiSignalVisual, centered: Boolean = false) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Float, wifiVisual: WifiSignalVisual, centered: Boolean = false, ink: Color = Color.White) {
     val cx = size.width / 2
     val fanY = if (centered) size.height * .95f else w * .56f
     val scale = if (centered) size.height / (w * .325f + w * .04f) * .9f else 1f
     if (wifiVisual is WifiSignalVisual.Connected) {
         for (i in 1..3) {
             val r = w * (.07f + i * .075f) * scale
-            drawArc(Color.White.copy(alpha = signalAlpha(wifiVisual.elements[i])), 225f, 90f, false,
+            drawArc(ink.copy(alpha = signalAlpha(wifiVisual.elements[i])), 225f, 90f, false,
                 Offset(cx - r, fanY - r), Size(r * 2, r * 2), style = Stroke(w * .05f * scale, cap = StrokeCap.Round))
         }
-        drawCircle(Color.White.copy(alpha = signalAlpha(wifiVisual.elements[0])), w * .04f * scale, Offset(cx, fanY))
+        drawCircle(ink.copy(alpha = signalAlpha(wifiVisual.elements[0])), w * .04f * scale, Offset(cx, fanY))
     } else {
-        drawLine(Color.White.copy(alpha = .7f), Offset(cx - w * .1f, fanY - w * .2f), Offset(cx + w * .1f, fanY), w * .05f, StrokeCap.Round)
+        drawLine(ink.copy(alpha = .7f), Offset(cx - w * .1f, fanY - w * .2f), Offset(cx + w * .1f, fanY), w * .05f, StrokeCap.Round)
     }
 }
 

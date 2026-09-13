@@ -258,3 +258,12 @@ class PageBoundsTest {
         assertEquals(1, releasePage(0.6f, 1, 5, velocity = 9999f, threshold = 250f, minPage = 1))
     }
 }
+
+class HomeInkTest {
+    @Test fun settingOverridesWallpaper() {
+        assertTrue(homeInkFor("AUTO", wallpaperPrefersDarkText = true).dark)
+        assertTrue(!homeInkFor("AUTO", wallpaperPrefersDarkText = false).dark)
+        assertTrue(homeInkFor("DARK", wallpaperPrefersDarkText = false).dark)
+        assertTrue(!homeInkFor("LIGHT", wallpaperPrefersDarkText = true).dark)
+    }
+}
