@@ -250,3 +250,11 @@ class SoftBadgeTest {
         assertNull(softBadgeColor(IntArray(576) { 0xFF808080.toInt() }))
     }
 }
+
+class PageBoundsTest {
+    @Test fun minPageBlocksSwipingPastIt() {
+        assertEquals(1f, boundedPagePosition(0.4f, 1, 5, minPage = 1))
+        assertEquals(0.4f, boundedPagePosition(0.4f, 1, 5))
+        assertEquals(1, releasePage(0.6f, 1, 5, velocity = 9999f, threshold = 250f, minPage = 1))
+    }
+}

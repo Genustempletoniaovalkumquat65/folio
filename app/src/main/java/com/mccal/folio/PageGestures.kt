@@ -39,25 +39,30 @@ internal class PageGestureLimits(private val pager: PagerState) : NestedScrollCo
     var anchor: Int? = null
     var pointerDown = false
     var editing = false
+    /** Lowest physical page a swipe may reach (e.g. no Today View page while it's shown beside Home). */
+    var minPage = 0
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
         val start = anchor ?: return Offset.Zero
         if (!pointerDown || editing || source != NestedScrollSource.UserInput || available.x == 0f) return Offset.Zero
         val stride = pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing
         if (stride <= 0) return Offset.Zero
         val position = pager.currentPage + pager.currentPageOffsetFraction
-        val allowed = boundedPagePosition(position - available.x / stride, start, pager.pageCount)
+        val allowed = boundedPagePosition(position - available.x / stride, start, pager.pageCount, minPage)
         return Offset(available.x + (allowed - position) * stride, 0f)
     }
     override fun calculateTargetPage(startPage: Int, suggestedTargetPage: Int, velocity: Float,
         pageSize: Int, pageSpacing: Int): Int =
-        if (editing) suggestedTargetPage else boundedPagePosition(suggestedTargetPage.toFloat(), anchor ?: startPage, pager.pageCount).toInt()
+        if (editing) suggestedTargetPage else boundedPagePosition(suggestedTargetPage.toFloat(), anchor ?: startPage, pager.pageCount, minPage).toInt()
 }
 
-internal fun boundedPagePosition(position: Float, anchor: Int, count: Int): Float =
-    position.coerceIn((anchor - 1).coerceAtLeast(0).toFloat(), (anchor + 1).coerceAtMost(count - 1).coerceAtLeast(0).toFloat())
+internal fun boundedPagePosition(position: Float, anchor: Int, count: Int, minPage: Int = 0): Float {
+    val low = maxOf(anchor - 1, minPage, 0).coerceAtMost(count - 1).coerceAtLeast(0)
+    val high = (anchor + 1).coerceAtMost(count - 1).coerceAtLeast(low)
+    return position.coerceIn(low.toFloat(), high.toFloat())
+}
 
 internal fun releasePage(position: Float, anchor: Int, count: Int, velocity: Float, threshold: Float,
-    distanceThreshold: Float = .2f): Int {
+    distanceThreshold: Float = .2f, minPage: Int = 0): Int {
     val displacement = position - anchor
     val candidate = when {
         velocity < -threshold -> floor(position + .0001f).toInt() + 1
@@ -65,7 +70,7 @@ internal fun releasePage(position: Float, anchor: Int, count: Int, velocity: Flo
         abs(displacement) >= distanceThreshold -> anchor + sign(displacement).toInt()
         else -> anchor
     }
-    return boundedPagePosition(candidate.toFloat(), anchor, count).toInt()
+    return boundedPagePosition(candidate.toFloat(), anchor, count, minPage).toInt()
 }
 
 /** iOS-style: pull down from the top-left for notifications, top-right for quick settings;
@@ -167,17 +172,17 @@ internal fun Modifier.onePageGestures(
                                     fun visualOffset() = motion?.offset(position()) ?: position() * stride()
                                     try {
                                         pager.scroll(MutatePriority.UserInput) {
-                                            with(pager) { updateTargetPage((anchor - sign(distance.x).toInt()).coerceIn(0, pager.pageCount - 1)) }
+                                            with(pager) { updateTargetPage((anchor - sign(distance.x).toInt()).coerceIn(limits.minPage.coerceAtMost(pager.pageCount - 1), pager.pageCount - 1)) }
                                             fun moveBy(pixels: Float) {
                                                 val current = position()
                                                 val requested = motion?.positionAfterVisualDelta(current, pixels)
                                                     ?: (current + pixels / stride())
-                                                val allowed = boundedPagePosition(requested, anchor, pager.pageCount)
+                                                val allowed = boundedPagePosition(requested, anchor, pager.pageCount, limits.minPage)
                                                 scrollBy((allowed - current) * stride())
                                             }
                                             val dragStartVisualOffset = visualOffset()
                                             for (dragPosition in channel) {
-                                                if (dragPosition != 0f) with(pager) { updateTargetPage((anchor - sign(dragPosition).toInt()).coerceIn(0, pager.pageCount - 1)) }
+                                                if (dragPosition != 0f) with(pager) { updateTargetPage((anchor - sign(dragPosition).toInt()).coerceIn(limits.minPage.coerceAtMost(pager.pageCount - 1), pager.pageCount - 1)) }
                                                 moveBy(dragStartVisualOffset - dragPosition - visualOffset())
                                             }
                                             val velocity = if (canceled) 0f else releaseVelocity
@@ -191,12 +196,12 @@ internal fun Modifier.onePageGestures(
                                                 velocity > 0f -> -1
                                                 else -> 0
                                             }
-                                            val adjacent = (anchor + releaseDirection).coerceIn(0, pager.pageCount - 1)
+                                            val adjacent = (anchor + releaseDirection).coerceIn(limits.minPage.coerceAtMost(pager.pageCount - 1), pager.pageCount - 1)
                                             val releaseStride = motion?.stride(anchor, adjacent)
                                                 ?.takeIf { it > 0f } ?: stride()
                                             val target = if (canceled) position().roundToInt() else releasePage(
                                                 position(), anchor, pager.pageCount, velocity, 250f * density,
-                                                distanceThreshold = minOf(.2f, 72f * density / releaseStride)
+                                                distanceThreshold = minOf(.2f, 72f * density / releaseStride), minPage = limits.minPage
                                             )
                                             trace?.release(position(), velocity, target, canceled)
                                             with(pager) { updateTargetPage(target) }

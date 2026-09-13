@@ -493,6 +493,8 @@ fun LauncherScreen(
             SideEffect { expandedWorkspace = geometry.expanded }
             // Unfolded with Today View beside Home (or off), there's nothing to the left of Home: spring back.
             val noLeftPageUnfolded = todayMode && geometry.expanded && state.todayUnfolded != "PAGE"
+            // Stop the swipe itself (not just spring back): the Today View is already on screen beside Home.
+            SideEffect { pageGestures.minPage = if (noLeftPageUnfolded) firstHome else 0 }
             LaunchedEffect(noLeftPageUnfolded, pager.settledPage) {
                 if (noLeftPageUnfolded && pager.settledPage < 0) pager.animateScrollToPage(0)
             }

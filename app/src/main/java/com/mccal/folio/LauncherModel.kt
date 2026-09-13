@@ -174,7 +174,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    init { launcherApps.registerCallback(callback); refresh() }
+    init { launcherApps.registerCallback(callback); refresh(); FolioSettingsBridge.liveModel = java.lang.ref.WeakReference(this) }
 
     fun refresh(invalidatedPackage: String? = null, user: UserHandle = Process.myUserHandle()) {
         invalidatedPackage?.let { invalidatedPackages += userManager.getSerialNumberForUser(user) to it }
@@ -853,7 +853,10 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         LauncherState(loading = false, error = "Saved Home layout could not be read; it was left unchanged.")
     }
 
-    override fun onCleared() { launcherApps.unregisterCallback(callback) }
+    override fun onCleared() {
+        launcherApps.unregisterCallback(callback)
+        if (FolioSettingsBridge.liveModel?.get() === this) FolioSettingsBridge.liveModel = null
+    }
 }
 
 /** Render adaptive layers through our rounded-square mask, preserving original app artwork. */
