@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -470,7 +471,8 @@ fun LauncherScreen(
         },
         onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
         CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate) {
-        DuneWallpaper()
+        if (!state.systemWallpaper) DuneWallpaper()
+        else SystemWallpaperParallax(nativePager)
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
         BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets()))) {
@@ -532,6 +534,7 @@ fun LauncherScreen(
             val dockScroll = rememberScrollState()
             var gestureOriginInRoot by remember { mutableStateOf(Offset.Zero) }
             var gestureOriginInWindow by remember { mutableStateOf(Offset.Zero) }
+            var scrubberBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
             val pagerInputEnabled = pager.currentPage in -firstHome..visibleHomePages && !drag.active &&
                 widgetSession == null && resizeSlot == null && sheet.isEmpty() && !showFirstRun && selectedId == null &&
                 openFolderId == null && emptyCellIndex == null && createFolderFirstId == null &&
@@ -560,6 +563,7 @@ fun LauncherScreen(
                             !nativeWidgetConsumesVerticalGesture(launcherRootView, screenPoint)
                     }
                 },
+                canStartGesture = { point -> geometry.expanded || homePages < 2 || !scrubberBounds.contains(point + gestureOriginInRoot) },
                 onDownwardSwipe = { panel ->
                     if (panel == ShadePanel.SEARCH) { if (state.swipeDownSearch) launcherActivity.openSpotlight() }
                     else launcherActivity.openSystemShade(panel)
@@ -671,14 +675,35 @@ fun LauncherScreen(
                         Icon(Icons.Rounded.Explore, "Discover", tint = Color.White.copy(alpha = .65f), modifier = Modifier.size(17.dp))
                     }
                     // iOS: a "Search" capsule where the page dots are; the dots come back while paging or editing.
-                    val showSearchPill = state.searchPill && !homeEdit.active && !drag.active &&
+                    // iOS: drag sideways along the Search pill or the dots to scrub through Home pages, a tick per page.
+                    var scrubbing by remember { mutableStateOf(false) }
+                    val scrubStep = with(density) { 34.dp.toPx() }
+                    val showSearchPill = state.searchPill && !homeEdit.active && !drag.active && !scrubbing &&
                         !nativePager.isScrollInProgress && pager.currentPage in 0 until homePages
                     androidx.compose.animation.AnimatedContent(showSearchPill, label = "search pill",
+                        // Cover screen only: unfolded, Home already shows two pages side by side.
+                        modifier = if (geometry.expanded || homePages < 2) Modifier else Modifier.onGloballyPositioned { scrubberBounds = it.boundsInRoot() }.pointerInput(homePages) {
+                            var startPage = 0
+                            var travel = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { scrubbing = true; travel = 0f; startPage = pager.currentPage.coerceIn(0, homePages - 1) },
+                                onDragEnd = { scrubbing = false }, onDragCancel = { scrubbing = false },
+                            ) { change, amount ->
+                                change.consume()
+                                travel += amount
+                                val page = (startPage + (travel / scrubStep).roundToInt()).coerceIn(0, homePages - 1)
+                                if (page != pager.currentPage) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    scope.launch { pager.scrollToPage(page) }
+                                }
+                            }
+                        }.semantics { contentDescription = "Page scrubber" },
                         transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) togetherWith
                             androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) },
                         contentAlignment = Alignment.Center) { pill ->
                         if (pill) HomeSearchPill { if (!state.googleSearch || !onGoogleSearch(null)) launcherActivity.openSpotlight() }
-                        else Row(Modifier.height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                        else Row(Modifier.height(30.dp).background(if (scrubbing) Color.White.copy(alpha = .18f) else Color.Transparent, CircleShape)
+                            .padding(horizontal = if (scrubbing) 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (visibleHomePages <= 6) repeat(visibleHomePages) { index ->
                             Box(Modifier.size(28.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(index) } }
                                 .semantics { contentDescription = if (index == homePages) "New home page" else "Home page ${index + 1}" }, contentAlignment = Alignment.Center) {
@@ -2201,6 +2226,7 @@ private fun WidgetActions(
     }
     var width by remember(placement.slot, placement.spanX) { mutableIntStateOf(placement.spanX) }
     var height by remember(placement.slot, placement.spanY) { mutableIntStateOf(placement.spanY) }
+    var customSize by remember(placement.slot) { mutableStateOf(false) }
     val minWidth = constraints?.minimum?.width ?: 2
     val minHeight = constraints?.minimum?.height ?: 2
     val maxWidth = minOf(GRID_COLUMNS - placement.column, constraints?.maximum?.width ?: GRID_COLUMNS)
@@ -2208,79 +2234,119 @@ private fun WidgetActions(
     val feasible = placement.page >= -1 && placement.row in 0 until GRID_ROWS &&
         !(placement.id >= 0 && constraints == null) && minWidth <= maxWidth && minHeight <= maxHeight
     val valid = feasible && isValid(width, height)
+    fun fits(w: Int, h: Int) = feasible && w in minWidth..maxWidth && h in minHeight..maxHeight && isValid(w, h)
+    val secondary = Color.White.copy(alpha = .6f)
+
+    // iOS-style widget menu: quick sizes, widget actions, Smart Stack, and a red Remove at the bottom.
     Column(Modifier.fillMaxWidth().heightIn(max = sheetMaxHeight).verticalScroll(rememberScrollState())
-        .padding(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Widget options", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close widget options") }
+        .padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (stackCards.size > 1) "Smart Stack" else "Widget", Modifier.weight(1f), color = Color.White,
+                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = .14f)).clickable(onClickLabel = "Close widget options", onClick = onClose),
+                contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, "Close widget options", tint = Color.White, modifier = Modifier.size(18.dp)) }
         }
-        if (canConfigure) ActionRow(Icons.Rounded.Settings, "Widget settings", onConfigure,
-            Modifier.testTag("widget-settings-${placement.slot}"))
-        // Smart Stack
-        Text("Smart Stack", style = MaterialTheme.typography.titleMedium)
-        ActionRow(Icons.Rounded.Layers, if (stackCards.size > 1) "Add Widget to Stack" else "Make a Stack (add another widget)", onAddToStack,
-            Modifier.testTag("widget-stack-add-${placement.slot}"))
-        if (stackCards.size > 1) {
-            stackCards.forEachIndexed { index, card ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${index + 1}. ${stackLabel(card)}", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (index > 0) TextButton(onClick = { onShowFirstInStack(card) }) { Text("Show first") }
-                    IconButton(onClick = { onRemoveFromStack(card) }) { Icon(Icons.Rounded.RemoveCircleOutline, "Remove ${stackLabel(card)} from stack",
-                        tint = MaterialTheme.colorScheme.error) }
+
+        SheetGroupLabel("Size")
+        SheetGroup {
+            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(Triple("Small", 2, 2), Triple("Medium", 4, 2), Triple("Large", 4, 4)).forEach { (label, w, h) ->
+                    val ok = fits(w, h) || (placement.spanX == w && placement.spanY == h)
+                    IosChip(selected = placement.spanX == w && placement.spanY == h,
+                        onClick = { if (ok && (placement.spanX != w || placement.spanY != h)) { onResize(w, h); onClose() } },
+                        label = { Text(label, color = if (ok) Color.Unspecified else Color.White.copy(alpha = .3f)) },
+                        modifier = Modifier.weight(1f).testTag("widget-size-${label.lowercase()}-${placement.slot}"))
                 }
             }
-            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Smart Rotate")
-                    Text("Switch to the next widget every 30 minutes", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+            MenuDivider()
+            MenuRow("Resize on Home", Icons.Rounded.OpenInFull) { if (feasible) onStartResize(width, height) }
+            MenuDivider()
+            MenuRow(if (customSize) "Hide Custom Size" else "Custom Size", Icons.Rounded.Tune) { customSize = !customSize }
+            if (customSize) Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!feasible) Text("Move this widget into the six-row grid before resizing.", color = Color(0xFFFF453A), fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Width", Modifier.weight(1f), color = Color.White)
+                    IconButton(enabled = constraints?.canResizeHorizontally != false,
+                        onClick = { if (feasible) width = (width - 1).coerceAtLeast(minWidth) }) { Icon(Icons.Rounded.Remove, "Decrease widget width", tint = Color.White) }
+                    Text("$width columns", Modifier.width(88.dp), textAlign = TextAlign.Center, color = Color.White)
+                    IconButton(enabled = constraints?.canResizeHorizontally != false,
+                        onClick = { if (feasible) width = (width + 1).coerceAtMost(maxWidth) }) { Icon(Icons.Rounded.Add, "Increase widget width", tint = Color.White) }
                 }
-                IosSwitch(stackRotate, onStackRotate)
-            }
-            Text("Swipe up or down on the stack to flip between widgets.", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text("Resize", style = MaterialTheme.typography.titleMedium)
-        Button(enabled = feasible, onClick = { onStartResize(width, height) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Resize on Home") }
-        if (!feasible) Text("Move this widget into the six-row grid before resizing.", color = MaterialTheme.colorScheme.error)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            repeat(homePages) { page -> TextButton(onClick = { onMoveToPage(page) },
-                modifier = Modifier.testTag("widget-move-${placement.slot}-page-$page")) { Text("Move to page ${page + 1}") } }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Width", Modifier.weight(1f))
-            IconButton(enabled = constraints?.canResizeHorizontally != false,
-                onClick = { if (feasible) width = (width - 1).coerceAtLeast(minWidth) }) {
-                Icon(Icons.Rounded.Remove, "Decrease widget width")
-            }
-            Text("$width columns", Modifier.width(88.dp), textAlign = TextAlign.Center)
-            IconButton(enabled = constraints?.canResizeHorizontally != false,
-                onClick = { if (feasible) width = (width + 1).coerceAtMost(maxWidth) }) {
-                Icon(Icons.Rounded.Add, "Increase widget width")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Height", Modifier.weight(1f), color = Color.White)
+                    IconButton(enabled = constraints?.canResizeVertically != false,
+                        onClick = { if (feasible) height = (height - 1).coerceAtLeast(minHeight) }) { Icon(Icons.Rounded.Remove, "Decrease widget height", tint = Color.White) }
+                    Text("$height rows", Modifier.width(88.dp), textAlign = TextAlign.Center, color = Color.White)
+                    IconButton(enabled = constraints?.canResizeVertically != false,
+                        onClick = { if (feasible) height = (height + 1).coerceAtMost(maxHeight) }) { Icon(Icons.Rounded.Add, "Increase widget height", tint = Color.White) }
+                }
+                if (!valid) Text("That size overlaps another item or extends beyond the page.", color = secondary, fontSize = 13.sp)
+                IosChip(selected = valid, onClick = { if (valid) { onResize(width, height); onClose() } }, label = { Text("Apply Size") },
+                    modifier = Modifier.fillMaxWidth())
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Height", Modifier.weight(1f))
-            IconButton(enabled = constraints?.canResizeVertically != false,
-                onClick = { if (feasible) height = (height - 1).coerceAtLeast(minHeight) }) {
-                Icon(Icons.Rounded.Remove, "Decrease widget height")
-            }
-            Text("$height rows", Modifier.width(88.dp), textAlign = TextAlign.Center)
-            IconButton(enabled = constraints?.canResizeVertically != false,
-                onClick = { if (feasible) height = (height + 1).coerceAtMost(maxHeight) }) {
-                Icon(Icons.Rounded.Add, "Increase widget height")
+
+        SheetGroupLabel("Widget")
+        SheetGroup {
+            if (canConfigure) { MenuRow("Edit Widget", Icons.Rounded.Settings) { onConfigure() }; MenuDivider() }
+            MenuRow("Replace Widget", Icons.Rounded.FindReplace) { onReplace() }
+            if (homePages > 1) {
+                MenuDivider()
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(homePages) { page ->
+                        IosChip(selected = placement.page == page, onClick = { onMoveToPage(page) },
+                            label = { Text("Page ${page + 1}") }, modifier = Modifier.testTag("widget-move-${placement.slot}-page-$page"))
+                    }
+                }
             }
         }
-        Text("Sizes that overlap another item are ignored.", style = MaterialTheme.typography.bodySmall)
-        if (!valid) Text("That size overlaps another item or extends beyond the page.", color = MaterialTheme.colorScheme.error)
-        Button(enabled = valid, onClick = { onResize(width, height); onClose() },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Apply size") }
-        ActionRow(Icons.Rounded.FindReplace, "Replace", onReplace)
-        HorizontalDivider()
-        ActionRow(Icons.Rounded.DeleteOutline, "Remove", onRemove, tint = MaterialTheme.colorScheme.error)
-        Spacer(Modifier.height(12.dp))
+
+        SheetGroupLabel("Smart Stack")
+        SheetGroup {
+            MenuRow(if (stackCards.size > 1) "Add Widget to Stack" else "Make a Stack", Icons.Rounded.Layers) { onAddToStack() }
+            if (stackCards.size > 1) {
+                stackCards.forEachIndexed { index, card ->
+                    MenuDivider()
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${index + 1}. ${stackLabel(card)}", Modifier.weight(1f), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (index > 0) TextButton(onClick = { onShowFirstInStack(card) }) { Text("Show First") }
+                        IconButton(onClick = { onRemoveFromStack(card) }) {
+                            Icon(Icons.Rounded.RemoveCircleOutline, "Remove ${stackLabel(card)} from stack", tint = Color(0xFFFF453A))
+                        }
+                    }
+                }
+                MenuDivider()
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Smart Rotate", color = Color.White)
+                        Text("Show the next widget every 30 minutes", color = secondary, fontSize = 13.sp)
+                    }
+                    IosSwitch(stackRotate, onStackRotate)
+                }
+            }
+        }
+        if (stackCards.size > 1) Text("Swipe up or down on the stack to flip between widgets.", color = secondary, fontSize = 13.sp,
+            modifier = Modifier.padding(start = 4.dp))
+
+        SheetGroup(Modifier.padding(top = 8.dp)) {
+            MenuRow(if (stackCards.size > 1) "Remove Stack" else "Remove Widget", Icons.Rounded.RemoveCircleOutline, destructive = true) { onRemove() }
+        }
+        Spacer(Modifier.height(16.dp))
     }
+}
+
+/** iOS grouped-list section header inside Folio's dark sheets. */
+@Composable
+internal fun SheetGroupLabel(text: String) {
+    Text(text.uppercase(), color = Color.White.copy(alpha = .55f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+        letterSpacing = .4.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+}
+
+/** iOS inset grouped list: rounded dark card holding rows separated by thin dividers. */
+@Composable
+internal fun SheetGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF2C2C2E)), content = content)
 }
 
 /** Side-rail placement; the rail sits on the right unless the left-handed layout is on. */

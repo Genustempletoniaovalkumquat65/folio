@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
     private var recreatingShadeSetup = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The wallpaper theme must be chosen before the window exists (switching it later recreates the activity).
+        if (usesSystemWallpaper(this)) setTheme(R.style.Theme_Duo_Wallpaper)
         super.onCreate(savedInstanceState)
         setupExperience = SetupExperience(this)
         showFirstRun.value = setupExperience.entryDecision(SetupExperience.hadLauncherState(this)) ==

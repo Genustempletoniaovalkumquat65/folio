@@ -68,7 +68,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         .testTag("default-home-settings")) { Text("Set as home app") }
                     if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
                         Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Undo last layout change") }
-                    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp)
+                    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
                     val setupLeft = setupSteps.count { it.required && !it.done }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
                         "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.SETUP) }
@@ -95,8 +95,29 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     if (isDefaultHome) TextButton(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .testTag("default-home-settings")) { Text("Change home app") }
                 }
-                CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp))
+                CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper))
                 CustomizationPage.WALLPAPER -> {
+                    val wallpaperContext = androidx.compose.ui.platform.LocalContext.current
+                    SettingsCard("Background") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IosChip(selected = state.systemWallpaper, onClick = {
+                                if (!state.systemWallpaper) { model.setSystemWallpaper(true); (wallpaperContext as? android.app.Activity)?.recreate() }
+                            },
+                                label = { Text("Android wallpaper") }, modifier = Modifier.weight(1f).testTag("background-system"))
+                            IosChip(selected = !state.systemWallpaper, onClick = {
+                                if (state.systemWallpaper) { model.setSystemWallpaper(false); (wallpaperContext as? android.app.Activity)?.recreate() }
+                            },
+                                label = { Text("Folio background") }, modifier = Modifier.weight(1f).testTag("background-folio"))
+                        }
+                        Text(if (state.systemWallpaper) "Uses the same wallpaper as your phone’s home screen (including live wallpapers), so it matches what you had in Samsung’s or another launcher."
+                            else "Folio’s dunes or a photo you choose, only behind Folio.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (state.systemWallpaper) TextButton(onClick = {
+                            runCatching { wallpaperContext.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SET_WALLPAPER), "Change wallpaper")
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }, modifier = Modifier.testTag("background-change-system")) { Text("Change Android wallpaper") }
+                    }
+                    if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
                     Text("Launcher background", style = MaterialTheme.typography.titleMedium)
                     Text("Changes the image behind Folio’s Home screens.", style = MaterialTheme.typography.bodySmall,
@@ -117,12 +138,15 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
                         TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }
                     }
-                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                    Text("Android wallpaper", style = MaterialTheme.typography.titleMedium)
-                    Text("Opens Android’s preview to change the phone wallpaper. It does not change Folio’s background.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text("Preview Android wallpaper") }
+                    }
+                    if (!state.systemWallpaper) {
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Folio background as phone wallpaper", style = MaterialTheme.typography.titleMedium)
+                        Text("Opens Android’s preview to use Folio’s background as your phone’s wallpaper too (a live wallpaper), so it matches outside Folio.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text("Preview as phone wallpaper") }
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
                 }

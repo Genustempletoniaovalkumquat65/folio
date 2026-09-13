@@ -202,3 +202,30 @@ class DuneWallpaperService : WallpaperService() {
         }
     }
 }
+
+/**
+ * With Android's wallpaper behind Home, tell the wallpaper which page is showing so it can shift a little
+ * as pages change (the parallax iPhone and most launchers have). Draws nothing.
+ */
+@Composable
+internal fun SystemWallpaperParallax(pager: androidx.compose.foundation.pager.PagerState) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val manager = androidx.compose.runtime.remember(view) { android.app.WallpaperManager.getInstance(view.context) }
+    androidx.compose.runtime.LaunchedEffect(pager, view) {
+        androidx.compose.runtime.snapshotFlow { pager.currentPage + pager.currentPageOffsetFraction to pager.pageCount }
+            .collect { (position, count) ->
+                val token = view.windowToken ?: return@collect
+                val steps = (count - 1).coerceAtLeast(1)
+                runCatching {
+                    manager.setWallpaperOffsetSteps(1f / steps, 0f)
+                    manager.setWallpaperOffsets(token, (position / steps).coerceIn(0f, 1f), .5f)
+                }
+            }
+    }
+}
+
+/** Whether Home shows Android's wallpaper (read straight from saved state: needed before the activity's window exists). */
+internal fun usesSystemWallpaper(context: android.content.Context): Boolean = runCatching {
+    org.json.JSONObject(context.getSharedPreferences(SettingKeys.PREFS, 0).getString(SettingKeys.STATE, "{}") ?: "{}")
+        .optBoolean("systemWallpaper", false)
+}.getOrDefault(false)

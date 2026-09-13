@@ -39,7 +39,8 @@ internal data class SetupStep(
 
 @Composable
 internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onShadeSetup: () -> Unit,
-    messagesApp: String? = null, onMessagesApp: (String?) -> Unit = {}): List<SetupStep> {
+    messagesApp: String? = null, onMessagesApp: (String?) -> Unit = {},
+    systemWallpaper: Boolean = false, onSystemWallpaper: (Boolean) -> Unit = {}): List<SetupStep> {
     val context = LocalContext.current
     // Re-check every time Folio comes back from a settings screen.
     var tick by remember { mutableIntStateOf(0) }
@@ -49,7 +50,7 @@ internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Uni
     val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
     fun open(intent: Intent) = runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 
-    return remember(tick, isDefaultHome, messagesApp) {
+    return remember(tick, isDefaultHome, messagesApp, systemWallpaper) {
         val notifications = context.getSystemService(NotificationManager::class.java)
         listOfNotNull(
             SetupStep(Icons.Rounded.Home, "Make Folio your Home app", "So Home, gestures and the fold effect are always Folio.",
@@ -70,6 +71,9 @@ internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Uni
             },
             SetupStep(Icons.Rounded.DarkMode, "Do Not Disturb access", "Lets Control Center turn Do Not Disturb on and off.",
                 notifications.isNotificationPolicyAccessGranted, false, "Allow") { open(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) },
+            SetupStep(Icons.Rounded.Wallpaper, "Keep your wallpaper",
+                "Coming from Samsung’s or another launcher? Show the same wallpaper behind Folio.",
+                systemWallpaper, false, "Use") { onSystemWallpaper(true); (context as? android.app.Activity)?.recreate() },
             SetupStep(Icons.Rounded.Contacts, "Contacts in Spotlight", "Search your contacts from Spotlight.",
                 granted(context, Manifest.permission.READ_CONTACTS), false, "Allow") { contacts.launch(Manifest.permission.READ_CONTACTS) },
             SetupStep(Icons.Rounded.Headphones, "Bluetooth device names", "Shows “Connected to Galaxy Buds” in the island.",

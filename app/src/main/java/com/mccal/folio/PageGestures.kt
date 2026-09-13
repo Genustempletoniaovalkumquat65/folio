@@ -92,11 +92,14 @@ internal fun Modifier.onePageGestures(
     motion: WorkspacePageMotion? = null,
     enabled: Boolean = true,
     canStartDownwardSwipe: (Offset) -> Boolean = { true },
+    /** False for touches that belong to another control (e.g. the page scrubber) and must not page Home. */
+    canStartGesture: (Offset) -> Boolean = { true },
     onDownwardSwipe: ((ShadePanel) -> Unit)? = null,
     onLeadingOverscroll: (() -> Unit)? = null,
 ) : Modifier {
     val currentEnabled by rememberUpdatedState(enabled)
     val currentCanStartDownwardSwipe by rememberUpdatedState(canStartDownwardSwipe)
+    val currentCanStartGesture by rememberUpdatedState(canStartGesture)
     val currentDownwardSwipe by rememberUpdatedState(onDownwardSwipe)
     val currentLeadingOverscroll by rememberUpdatedState(onLeadingOverscroll)
     return nestedScroll(limits).pointerInput(pager, limits, motion) {
@@ -104,7 +107,7 @@ internal fun Modifier.onePageGestures(
             var motionJob: Job? = null
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                val gestureEnabled = currentEnabled
+                val gestureEnabled = currentEnabled && currentCanStartGesture(down.position)
                 val anchor = pager.currentPage
                 val trace = DuoMotionTrace.begin(anchor,
                     pager.currentPage + pager.currentPageOffsetFraction, down.position.x, down.position.y)

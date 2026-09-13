@@ -229,7 +229,7 @@ class IslandListenerService : NotificationListenerService() {
     private fun currentNotifications(): List<NotificationItem> = activeNotifications.orEmpty()
         .filter { sbn ->
             val n = sbn.notification
-            sbn.packageName != packageName && n.flags and Notification.FLAG_GROUP_SUMMARY == 0 &&
+            sbn.packageName != packageName && n.flags and Notification.FLAG_GROUP_SUMMARY == 0 && !isOverflowPlaceholder(sbn) &&
                 (n.extras.getCharSequence(Notification.EXTRA_TITLE) != null || n.extras.getCharSequence(Notification.EXTRA_TEXT) != null)
         }
         .sortedByDescending { it.postTime }
@@ -242,6 +242,13 @@ class IslandListenerService : NotificationListenerService() {
                 canReply = Messaging.replyAction(sbn.notification) != null, canMarkRead = Messaging.markReadAction(sbn.notification) != null,
                 channelId = sbn.notification.channelId)
         }
+
+    /** Samsung's System UI posts a "1 more notification" stand-in for its own overflow; it isn't a real notification. */
+    private fun isOverflowPlaceholder(sbn: StatusBarNotification): Boolean {
+        if (sbn.packageName != "com.android.systemui") return false
+        val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim() ?: return false
+        return OVERFLOW_TITLE.matches(title)
+    }
 
     /** Calls, navigation and timers outrank media, as on iPhone. */
     private fun currentOngoing(): IslandActivity? {
@@ -376,6 +383,7 @@ class IslandListenerService : NotificationListenerService() {
         private const val PUBLISH_COALESCE_MS = 120L
         private val iconCache = android.util.LruCache<String, Bitmap>(64)
         private val artCache = android.util.LruCache<String, Bitmap>(8)
+        private val OVERFLOW_TITLE = Regex("^\\d+ more notifications?$", RegexOption.IGNORE_CASE)
         private val labelCache = android.util.LruCache<String, String>(128)
 
         /** Sends another app's PendingIntent so it may open even though Folio's window isn't in front (Android 14+ rule). */
