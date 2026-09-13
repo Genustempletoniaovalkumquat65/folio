@@ -35,6 +35,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -506,20 +508,39 @@ private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames
                     onClose(); if (!SystemShadeAccessibilityService.global(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)) onSystem()
                 }
             }
-            // Row 1–2: connectivity (2×2) and now playing (2×2)
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                Module(Modifier.size(span(2))) {
-                    Column(Modifier.fillMaxSize().padding(cell * .16f), verticalArrangement = Arrangement.SpaceBetween) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            RoundToggle(Icons.Rounded.AirplanemodeActive, "Airplane mode", status.airplane, AccentOrange, cell * .7f) {
-                                open(Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)) }
-                            RoundToggle(Icons.Rounded.SignalCellularAlt, "Mobile data", !status.airplane && (status.cellularLevel ?: 0) > 0, AccentGreen, cell * .7f) {
-                                open(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)) }
+            // Row 1–2: connectivity (2×2, long-press to expand like iOS) and now playing (2×2)
+            var connectivityOpen by remember { mutableStateOf(false) }
+            val connectivity = listOf(
+                ConnectivityItem(Icons.Rounded.AirplanemodeActive, "Airplane Mode", status.airplane, AccentOrange) { open(Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)) },
+                ConnectivityItem(Icons.Rounded.SignalCellularAlt, "Cellular Data", !status.airplane && (status.cellularLevel ?: 0) > 0, AccentGreen) { open(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)) },
+                ConnectivityItem(Icons.Rounded.Wifi, "Wi-Fi", status.wifiConnected, AccentBlue) { open(Intent(Settings.Panel.ACTION_WIFI)) },
+                ConnectivityItem(Icons.Rounded.Bluetooth, "Bluetooth", controls.bluetoothOn, AccentBlue) { open(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+            )
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            if (connectivityOpen) Module(Modifier.width(span(4)).combinedClickable(onClick = { connectivityOpen = false }, onLongClick = { connectivityOpen = false })) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    connectivity.forEach { item ->
+                        Row(Modifier.fillMaxWidth().clickable(onClick = item.onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            RoundToggle(item.icon, item.label, item.on, item.accent, 44.dp, item.onClick)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (item.on) "On" else "Off", color = FolioGlass.secondary, fontSize = 13.sp)
+                            }
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            RoundToggle(Icons.Rounded.Wifi, "Wi-Fi", status.wifiConnected, AccentBlue, cell * .7f) { open(Intent(Settings.Panel.ACTION_WIFI)) }
-                            RoundToggle(Icons.Rounded.Bluetooth, "Bluetooth", controls.bluetoothOn, AccentBlue, cell * .7f) {
-                                open(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
+                    }
+                }
+            }
+            else Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                Module(Modifier.size(span(2)).combinedClickable(onClick = {}, onLongClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); connectivityOpen = true
+                }, onLongClickLabel = "Show connectivity details")) {
+                    Column(Modifier.fillMaxSize().padding(cell * .16f), verticalArrangement = Arrangement.SpaceBetween) {
+                        connectivity.chunked(2).forEach { pair ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                pair.forEach { RoundToggle(it.icon, it.label, it.on, it.accent, cell * .7f, it.onClick) }
+                            }
                         }
                     }
                 }
@@ -534,10 +555,14 @@ private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames
                         }
                     }
                 }
-                TallSlider(Icons.Rounded.LightMode, "Brightness", controls.brightness, cell, span(2),
+                TallSlider(if (controls.brightness < .35f) Icons.Rounded.BrightnessLow else Icons.Rounded.LightMode, "Brightness", controls.brightness, cell, span(2),
                     onStart = { if (!android.provider.Settings.System.canWrite(context)) open(controls.writeSettingsIntent()) }) { value ->
                     controls.changeBrightness(value) }
-                TallSlider(Icons.AutoMirrored.Rounded.VolumeUp, "Volume", controls.volume, cell, span(2)) { controls.changeVolume(it) }
+                TallSlider(when {
+                    controls.volume <= .01f -> Icons.AutoMirrored.Rounded.VolumeOff
+                    controls.volume < .5f -> Icons.AutoMirrored.Rounded.VolumeDown
+                    else -> Icons.AutoMirrored.Rounded.VolumeUp
+                }, "Volume", controls.volume, cell, span(2)) { controls.changeVolume(it) }
             }
             // The rest, four per row
             chosen.drop(4).chunked(4).forEach { row ->
@@ -580,6 +605,29 @@ private fun EditableControl(control: CcControl, on: Boolean, accent: Color, cell
     }
 }
 
+private data class ConnectivityItem(val icon: ImageVector, val label: String, val on: Boolean, val accent: Color, val onClick: () -> Unit)
+
+/** Thin iOS progress line for the playing track (ticks once a second while playing). */
+@Composable
+private fun MediaProgress(media: IslandActivity.Media) {
+    val tick by rememberSecondTick()
+    val (position, duration) = remember(tick, media) {
+        val controller = runCatching { media.controller }.getOrNull()
+        val state = controller?.playbackState
+        val duration = controller?.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val elapsed = state?.let {
+            if (it.state == android.media.session.PlaybackState.STATE_PLAYING)
+                it.position + ((android.os.SystemClock.elapsedRealtime() - it.lastPositionUpdateTime) * it.playbackSpeed).toLong()
+            else it.position
+        } ?: 0L
+        elapsed.coerceIn(0L, duration.coerceAtLeast(0L)) to duration
+    }
+    if (duration <= 0L) return
+    Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = .22f))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).background(Color.White))
+    }
+}
+
 /** Now Playing (2×2): album art, title and transport controls. */
 @Composable
 private fun MediaModule(media: IslandActivity.Media?, modifier: Modifier, cell: Dp, onOpen: () -> Unit) {
@@ -598,6 +646,7 @@ private fun MediaModule(media: IslandActivity.Media?, modifier: Modifier, cell: 
                 Text(media?.title ?: "Not Playing", color = if (media != null) Color.White else FolioGlass.secondary,
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 media?.subtitle?.let { Text(it, color = FolioGlass.secondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                media?.let { MediaProgress(it) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 val t = media?.controller?.transportControls
