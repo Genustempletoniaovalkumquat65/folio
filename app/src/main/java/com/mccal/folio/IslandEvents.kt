@@ -17,8 +17,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Stable names for settings. */
+internal val IslandEvent.kind: String get() = when (this) {
+    is IslandEvent.Charging -> "CHARGING"
+    is IslandEvent.Silent -> "SILENT"
+    is IslandEvent.Focus -> "FOCUS"
+    is IslandEvent.Bluetooth -> "BLUETOOTH"
+    is IslandEvent.Message -> "MESSAGE"
+}
+
 /** Listens for brief system moments (charging, silent, focus, Bluetooth) and publishes them for the island. */
-class IslandEvents(private val context: Context) : DefaultLifecycleObserver {
+class IslandEvents private constructor(private val context: Context) {
     private var registered = false
     private var lastCharging: Boolean? = null
     private var lastRinger: Int? = null
@@ -47,25 +56,25 @@ class IslandEvents(private val context: Context) : DefaultLifecycleObserver {
                 }
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     val name = if (ContextCompat.checkSelfPermission(c, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
-                        runCatching { intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)?.name }.getOrNull() else null
+                        runCatching { androidx.core.content.IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)?.name }.getOrNull() else null
                     emit(IslandEvent.Bluetooth(name))
                 }
             }
         }
     }
 
-    override fun onStart(owner: LifecycleOwner) {
+    private fun register() {
         if (registered) return
         lastRinger = context.getSystemService(AudioManager::class.java).ringerMode
         lastFocus = context.getSystemService(NotificationManager::class.java).currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL
         ContextCompat.registerReceiver(context, receiver, IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED); addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
             addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED); addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-        }, ContextCompat.RECEIVER_EXPORTED)
+        }, ContextCompat.RECEIVER_NOT_EXPORTED) // all four are protected system broadcasts
         registered = true
     }
 
-    override fun onStop(owner: LifecycleOwner) {
+    private fun unregister() {
         if (registered) runCatching { context.unregisterReceiver(receiver) }
         registered = false
         lastCharging = null
@@ -77,5 +86,26 @@ class IslandEvents(private val context: Context) : DefaultLifecycleObserver {
         private val mutable = MutableStateFlow<Pair<IslandEvent, Long>?>(null)
         val latest: StateFlow<Pair<IslandEvent, Long>?> = mutable.asStateFlow()
         const val SHOW_MS = 2_600L
+        const val MESSAGE_SHOW_MS = 6_000L
+        fun showMs(event: IslandEvent) = if (event is IslandEvent.Message) MESSAGE_SHOW_MS else SHOW_MS
+        /** Posted by the notification listener for new messages. */
+        internal fun post(event: IslandEvent) { mutable.value = event to System.currentTimeMillis() }
+        @android.annotation.SuppressLint("StaticFieldLeak") // holds only the application context
+        private var shared: IslandEvents? = null
+        private var users = 0
+
+        /** Reference-counted so Home and the everywhere overlay share one registration. */
+        @Synchronized fun acquire(context: Context) {
+            if (users++ == 0) shared = IslandEvents(context.applicationContext).also { it.register() }
+        }
+        @Synchronized fun release() {
+            if (users > 0 && --users == 0) { shared?.unregister(); shared = null }
+        }
+    }
+
+    /** Lifecycle-bound acquire/release for an activity. */
+    class Observer(private val context: Context) : DefaultLifecycleObserver {
+        override fun onStart(owner: LifecycleOwner) = acquire(context)
+        override fun onStop(owner: LifecycleOwner) = release()
     }
 }

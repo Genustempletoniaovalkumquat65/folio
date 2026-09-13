@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.boundsInWindow
 
 /** Incremented to focus the All apps search field (e.g. after a middle swipe-down on Home). */
@@ -75,6 +76,23 @@ internal fun AppLibrary(
         state.apps.filter { (!hasWork || it.isWork == showWork) && it.label.contains(query.trim(), true) &&
             (editing || (it.id in state.hiddenApps) == showHidden) }
     }
+    // iOS-style App Library: category tiles while browsing; the A–Z list for search, hidden and editing.
+    var openCategory by remember { mutableStateOf<LibraryCategory?>(null) }
+    val browsing = state.libraryCategories && !editing && query.isBlank() && !showHidden
+    val categorized by produceState(emptyMap<LibraryCategory, List<AppEntry>>(), visibleApps, browsing) {
+        if (!browsing) return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val pm = context.packageManager
+            val byId = visibleApps.associateBy { it.id }
+            val suggestions = RecentApps.load(context).mapNotNull(byId::get).take(8)
+            val grouped = visibleApps.groupBy { LibraryCategory.of(pm, it.component.packageName) }
+                .mapValues { (_, apps) -> apps.sortedBy { it.label.lowercase() } }
+            buildMap {
+                if (suggestions.isNotEmpty()) put(LibraryCategory.SUGGESTIONS, suggestions)
+                grouped.entries.sortedWith(compareBy({ it.key == LibraryCategory.OTHER }, { -it.value.size })).forEach { put(it.key, it.value) }
+            }
+        }
+    }
     val groups = remember(visibleApps) {
         visibleApps.groupBy {
             it.label.firstOrNull()?.takeIf(Char::isLetter)?.uppercaseChar()?.toString() ?: "#"
@@ -88,7 +106,7 @@ internal fun AppLibrary(
             listOf(Color.White.copy(alpha = .09f), Color.Transparent) else listOf(Color.Transparent, Color.Transparent)))
             .padding(horizontal = 16.dp).padding(top = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (editing) "Choose home apps" else "All apps", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
+                Text(if (editing) "Choose home apps" else "App Library", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
                 Text(if (editing) "${pinned.size} pinned" else "${visibleApps.size}", color = ink, fontSize = 12.sp)
             }
             if (hasWork || hiddenCount > 0 || showHidden) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -103,7 +121,8 @@ internal fun AppLibrary(
                 placeholder = { Text(if (editing) "Search apps" else "Search apps, web or ask AI") }, singleLine = true, shape = RoundedCornerShape(16.dp),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
-                    if (!editing && query.isNotBlank()) openWebSearch(context, WebSearchTarget.entries.first(), query)
+                    if (!editing && query.isNotBlank()) openWebSearch(context,
+                        runCatching { WebSearchTarget.valueOf(state.searchEngine) }.getOrDefault(WebSearchTarget.GOOGLE), query)
                 }),
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Clear search") } },
@@ -115,7 +134,9 @@ internal fun AppLibrary(
                     focusedLeadingIconColor = ink, unfocusedLeadingIconColor = ink,
                     focusedTrailingIconColor = ink, unfocusedTrailingIconColor = ink,
                 ) else OutlinedTextFieldDefaults.colors())
-            LazyColumn(Modifier.weight(1f).testTag("all-apps-list"), state = listState,
+            var libraryWidth by remember { mutableStateOf(360.dp) }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            LazyColumn(Modifier.weight(1f).onSizeChanged { libraryWidth = with(density) { it.width.toDp() } }.testTag("all-apps-list"), state = listState,
                 contentPadding = PaddingValues(bottom = 12.dp)) {
                 if (showWork && selectedProfile?.available == false) item("work-paused") {
                     Column(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,8 +148,33 @@ internal fun AppLibrary(
                 if (!editing && query.isNotBlank()) item("web-search") {
                     WebSearchRow(query) { openWebSearch(context, it, query) }
                 }
-                if (groups.isEmpty()) item { Text(if (state.loading) "Loading apps…" else "No apps found", Modifier.padding(vertical = 20.dp)) }
-                groups.forEach { (letter, entries) ->
+                if (browsing && categorized.isNotEmpty()) {
+                    val category = openCategory
+                    if (category != null) {
+                        item("category-header") {
+                            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(category.title, color = ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { openCategory = null }) { Text("All categories") }
+                            }
+                        }
+                        item("category-grid") {
+                            CategoryGrid(categorized[category].orEmpty(), columns = (libraryWidth / 90.dp).toInt().coerceIn(4, 10), labelColor = ink,
+                                onLaunch = { onLaunchFrom(it, null) }, onActions = onActions)
+                        }
+                    } else {
+                        // Tiles stay iPhone-sized (~180dp): more columns on the wide inner screen instead of giant tiles.
+                        val columns = (libraryWidth / 190.dp).toInt().coerceIn(2, 6)
+                        items(categorized.entries.toList().chunked(columns), key = { row -> "cat-" + row.first().key.name }) { row ->
+                            Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                row.forEach { (cat, apps) ->
+                                    CategoryCard(cat.title, apps, Modifier.weight(1f), labelColor = ink, onLaunch = { onLaunchFrom(it, null) }) { openCategory = cat }
+                                }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+                } else if (groups.isEmpty()) item { Text(if (state.loading) "Loading apps…" else "No apps found", Modifier.padding(vertical = 20.dp)) }
+                if (!(browsing && categorized.isNotEmpty())) groups.forEach { (letter, entries) ->
                     stickyHeader(key = "heading-$letter") {
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             // An opaque small chip prevents text from showing through the sticky letter.
@@ -164,25 +210,6 @@ internal fun AppLibrary(
                 }
             }
         }
-    }
-}
-
-/** Where a typed query can go. Google uses the "Web" filter (udm=14), which omits AI Overviews. */
-internal enum class WebSearchTarget(val label: String, private val prefix: String) {
-    GOOGLE("Google", "https://www.google.com/search?udm=14&q="),
-    DUCKDUCKGO("DuckDuckGo", "https://noai.duckduckgo.com/?q="),
-    CHATGPT("Ask ChatGPT", "https://chatgpt.com/?q="),
-    CLAUDE("Ask Claude", "https://claude.ai/new?q="),
-    PERPLEXITY("Perplexity", "https://www.perplexity.ai/search?q=");
-
-    fun uri(query: String): android.net.Uri = android.net.Uri.parse(prefix + android.net.Uri.encode(query.trim()))
-}
-
-internal fun openWebSearch(context: android.content.Context, target: WebSearchTarget, query: String) {
-    // A plain https link: the matching app opens it if installed and verified, otherwise the browser.
-    runCatching {
-        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, target.uri(query))
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 

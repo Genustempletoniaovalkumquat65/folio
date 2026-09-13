@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -155,9 +156,7 @@ fun LauncherScreen(
     var resizeTopPitch by remember { mutableFloatStateOf(1f) }
     var resizeAppPitch by remember { mutableFloatStateOf(1f) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var appMoveMenu by rememberSaveable { mutableStateOf(false) }
     var customizationPage by rememberSaveable { mutableStateOf(CustomizationPage.OVERVIEW) }
-    LaunchedEffect(selectedId) { if (selectedId == null) appMoveMenu = false }
     LaunchedEffect(sheet) { if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var createFolderFirstId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -180,6 +179,13 @@ fun LauncherScreen(
         onDispose { if (folderOwnsInput) LiveDiscover.setExternalResultPending(launcherActivity, "main", "folder-panel", false) }
     }
     val haptic = LocalHapticFeedback.current
+    val homeEdit = remember { HomeEditMode() }
+    homeEdit.onRemove = { target -> if (target is DropTarget.Widget) widgets.remove(target.index) else model.removePlacement(target) }
+    // Long-press on empty Home starts jiggle mode (iPhone); a second long-press opens the Home options.
+    val onEmptyLongPress: (Int) -> Unit = { index ->
+        if (homeEdit.active) emptyCellIndex = index
+        else { homeEdit.lastEmptyIndex = index; haptic.performHapticFeedback(HapticFeedbackType.LongPress); homeEdit.start() }
+    }
     val homePages = state.homePages
     val pendingNewPage = widgets.pendingPlacement?.page == homePages
     val visibleHomePages = homePages + if (drag.active || widgetSession != null || pendingNewPage) 1 else 0
@@ -268,14 +274,15 @@ fun LauncherScreen(
         previousEditRevision = state.editRevision
     }
     LaunchedEffect(pager.settledPage) { if (pager.settledPage != homePages) focus.clearFocus() }
+    LaunchedEffect(pager.settledPage, visibleHomePages) { if (pager.settledPage !in 0 until visibleHomePages) homeEdit.stop() }
     LaunchedEffect(state.verticalStatus) { onStatusMode(state.verticalStatus) }
     LaunchedEffect(homeRequests) { if (homeRequests > 0) {
         // An app can pause Home after the destination is visible but before its settle completes.
         val page = pager.currentPage.takeIf { it in 0 until homePages }
             ?: lastHomePage.coerceIn(0, homePages - 1)
         drag.clear(); widgetSession = null; resizeSlot = null; sheet = ""; widgetPackage = null
-        widgetExactTarget = false; widgetPlacementMessage = null; selectedId = null; appMoveMenu = false
-        openFolderId = null; createFolderFirstId = null; emptyCellIndex = null
+        widgetExactTarget = false; widgetPlacementMessage = null; selectedId = null
+        openFolderId = null; createFolderFirstId = null; emptyCellIndex = null; homeEdit.stop()
         focus.clearFocus(); keyboard?.hide()
         pager.animateScrollToPage(page)
     } }
@@ -293,7 +300,7 @@ fun LauncherScreen(
     BackHandler(enabled = sheet.isEmpty()) { if (resizeSlot != null) resizeSlot = null else if (drag.active) {
         val destination = if (drag.source?.target is DropTarget.Library) homePages else drag.originPage.coerceAtMost(homePages - 1)
         drag.clear(); scope.launch { pager.scrollToPage(destination) }
-    } else if (selectedId != null) selectedId = null else { focus.clearFocus(); scope.launch { pager.animateScrollToPage(0) } } }
+    } else if (selectedId != null) selectedId = null else if (homeEdit.active) homeEdit.stop() else { focus.clearFocus(); scope.launch { pager.animateScrollToPage(0) } } }
     val openDiscover = { if (firstHome > 0) scope.launch { pager.animateScrollToPage(-1) } else onDiscover(); Unit }
     val openLibrary = { scope.launch { pager.animateScrollToPage(homePages) }; Unit }
 
@@ -314,6 +321,18 @@ fun LauncherScreen(
         if (drag.source?.folderId != null) state.dock.none { it == null }
         else drag.source?.appId?.let { !canPlaceInDock(state.layout, it) } == true
     val insertionTarget = target.takeIf { drag.moved && !blockedDock }
+    LaunchedEffect(drag.active, drag.moved) {
+        val source = drag.source
+        val id = source?.appId
+        if (drag.active && drag.moved && id != null && selectedId == id) { selectedId = null; homeEdit.start() }
+        // Dragging out of the App Library heads to Home only once the app actually moves (holding just shows the menu).
+        if (drag.active && drag.moved && source?.target is DropTarget.Library) {
+            withFrameNanos { }
+            pager.scrollToPage(lastHomePage.coerceIn(0, homePages - 1))
+        }
+    }
+    // A light tick each time the dragged item snaps to a new spot.
+    LaunchedEffect(insertionTarget) { if (insertionTarget != null && drag.moved) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
     val widgetRawTarget = widgetSession?.let { session -> drag.regions.values.firstOrNull {
         it.target is DropTarget.Home && it.page in eligibleDragPages && it.bounds.contains(session.pointer)
     }?.target as? DropTarget.Home }
@@ -368,6 +387,9 @@ fun LauncherScreen(
             destination != null && source.appId != null -> model.applyDrop(source.appId, destination)
             else -> false
         }
+        if (moved && !cancelled && changed) haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+        // Like iPhone, dragging something on Home leaves Home in jiggle mode.
+        if (moved && !cancelled && source.target !is DropTarget.Library && source.folderId == null) homeEdit.start()
         val returnToLibrary = source.target is DropTarget.Library && source.folderId == null && !changed
         val destinationHomePage = (destination as? DropTarget.Home)?.index?.let(::homeCellPage)
         val currentWindow = pager.settledPage.coerceIn(0, visibleHomePages - 1)
@@ -384,7 +406,8 @@ fun LauncherScreen(
             withFrameNanos { }
             pager.scrollToPage(if (returnToLibrary) model.state.value.homePages else page.coerceIn(0, model.state.value.homePages - 1))
             if (!moved && !cancelled) {
-                if (source.target is DropTarget.Dock) { dockSlot = source.target.index; sheet = "dock" }
+                // A held dock app already shows its menu; only an empty slot opens the app chooser.
+                if (source.target is DropTarget.Dock) { if (source.appId == null) { dockSlot = source.target.index; sheet = "dock" } else selectedId = source.appId }
                 else if (source.target is DropTarget.Widget) { widgetSlot = source.target.index; sheet = "widgetActions" }
                 else if (source.appId?.let(::isFolderId) == true) openFolderId = source.appId
                 else if (source.folderId == null) selectedId = source.appId
@@ -406,15 +429,19 @@ fun LauncherScreen(
         enabled = sheet.isEmpty() && !showFirstRun && selectedId == null && resizeSlot == null && pager.currentPage >= 0,
         page = pager.currentPage, eligiblePages = eligibleDragPages, onStart = {
             focus.clearFocus(); keyboard?.hide(); haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            if (drag.source?.folderId != null) openFolderId = null
-            if (drag.source?.target is DropTarget.Library) scope.launch {
-                withFrameNanos { }
-                pager.scrollToPage(lastHomePage.coerceIn(0, homePages - 1))
+            // iPhone: holding an app shows its menu right away (no Android-style pick-up). Moving while still
+            // holding dismisses the menu, picks the app up and starts jiggle mode (see the effect below).
+            drag.source?.let { src ->
+                if (!homeEdit.active && src.appId != null && !isFolderId(src.appId) && src.folderId == null && src.target !is DropTarget.Widget)
+                    selectedId = src.appId
             }
+            if (drag.source?.folderId != null) openFolderId = null
         },
-        onFinish = { cancelled -> finishDrag(cancelled) })) {
+        onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
         DuneWallpaper()
-        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
+        // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets()))) {
             val wide = maxWidth.value >= 650f
             val preset = if (wide) state.expanded else state.compact
             val density = LocalDensity.current
@@ -494,7 +521,7 @@ fun LauncherScreen(
                     }
                 },
                 onDownwardSwipe = { panel ->
-                    if (panel == ShadePanel.SEARCH) launcherActivity.openSpotlight()
+                    if (panel == ShadePanel.SEARCH) { if (state.swipeDownSearch) launcherActivity.openSpotlight() }
                     else launcherActivity.openSystemShade(panel)
                 },
                 onLeadingOverscroll = if (firstHome == 0) onDiscover else null,
@@ -537,7 +564,7 @@ fun LauncherScreen(
                         onTurnOnWork = { model.turnOnWork(it) },
                         onActions = { selectedId = it.id }, onWidget = { widgetSlot = it; sheet = "widgetActions" },
                         onFolder = { openFolderId = it },
-                        onEmptyWidget = { emptyCellIndex = it },
+                        onEmptyWidget = onEmptyLongPress,
                         onRefresh = model::refresh,
                     )
                 }
@@ -564,7 +591,7 @@ fun LauncherScreen(
                                 onLaunch = onLaunchFrom, onActions = { selectedId = it.id },
                                 onWidget = { widgetSlot = it; sheet = "widgetActions" },
                                 onFolder = { openFolderId = it },
-                                onEmptyWidget = { emptyCellIndex = it },
+                                onEmptyWidget = onEmptyLongPress,
                                 onRefresh = model::refresh)
                         }
                     }
@@ -601,16 +628,44 @@ fun LauncherScreen(
                     if (!drag.active) IconButton(onClick = openDiscover, Modifier.size(32.dp).testTag("discover-page-link")) {
                         Icon(Icons.Rounded.Explore, "Discover", tint = Color.White.copy(alpha = .65f), modifier = Modifier.size(17.dp))
                     }
-                    if (visibleHomePages <= 6) repeat(visibleHomePages) { index ->
-                        Box(Modifier.size(28.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(index) } }
-                            .semantics { contentDescription = if (index == homePages) "New home page" else "Home page ${index + 1}" }, contentAlignment = Alignment.Center) {
-                            if (index == homePages) Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                            else Box(Modifier.size(if (index == pager.currentPage) 6.dp else 4.dp).background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else .4f), CircleShape))
+                    // iOS: a "Search" capsule where the page dots are; the dots come back while paging or editing.
+                    val showSearchPill = state.searchPill && !homeEdit.active && !drag.active &&
+                        !nativePager.isScrollInProgress && pager.currentPage in 0 until homePages
+                    androidx.compose.animation.AnimatedContent(showSearchPill, label = "search pill",
+                        transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) togetherWith
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) },
+                        contentAlignment = Alignment.Center) { pill ->
+                        if (pill) HomeSearchPill { if (!state.googleSearch || !onGoogleSearch(null)) launcherActivity.openSpotlight() }
+                        else Row(Modifier.height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (visibleHomePages <= 6) repeat(visibleHomePages) { index ->
+                            Box(Modifier.size(28.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(index) } }
+                                .semantics { contentDescription = if (index == homePages) "New home page" else "Home page ${index + 1}" }, contentAlignment = Alignment.Center) {
+                                if (index == homePages) Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                else Box(Modifier.size(if (index == pager.currentPage) 6.dp else 4.dp).background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else .4f), CircleShape))
+                            }
+                        } else Text("${minOf(pager.currentPage + 1, homePages)} / $homePages", color = Color.White, fontSize = 12.sp)
                         }
-                    } else Text("${minOf(pager.currentPage + 1, homePages)} / $homePages", color = Color.White, fontSize = 12.sp)
+                    }
                     IconButton(onClick = openLibrary, Modifier.size(32.dp).testTag("library-page-link")) {
                         Icon(Icons.AutoMirrored.Rounded.FormatListBulleted, "All apps page", tint = Color.White.copy(alpha = if (pager.currentPage == homePages) 1f else .6f), modifier = Modifier.size(17.dp))
                     }
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(homeEdit.active && sheet.isEmpty(),
+                Modifier.align(if (state.leftHanded) Alignment.TopEnd else Alignment.TopStart).width(pagerWidth),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 }) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp).testTag("jiggle-bar"), verticalAlignment = Alignment.CenterVertically) {
+                    val editPage = pager.currentPage.coerceIn(0, homePages - 1)
+                    JigglePill("", Icons.Rounded.Add, description = "Add widget") {
+                        widgetSlot = model.nextWidgetSlot(); widgetTargetIndex = homeCellIndex(editPage, 0); widgetExactTarget = false
+                        widgetPackage = null; widgetProfileSerial = null; sheet = "widgets"
+                    }
+                    JigglePill("Edit") {
+                        emptyCellIndex = homeEdit.lastEmptyIndex?.takeIf { homeCellPage(it) == editPage } ?: homeCellIndex(editPage, 0)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    JigglePill("Done", emphasized = true) { haptic.performHapticFeedback(HapticFeedbackType.Confirm); homeEdit.stop() }
                 }
             }
             if (!inLibrary && !drag.active) Column(Modifier.align(railBottom(state.leftHanded)).railEdge(state.leftHanded, 12.dp).padding(bottom = 6.dp)
@@ -619,7 +674,7 @@ fun LauncherScreen(
                 val controlSize = dockIconSize(geometry.iconSize).dp
                 if (pager.currentPage == -1) CircleControl(Icons.Rounded.ArrowForward, "Back to home", "discover-home", controlSize) { scope.launch { pager.animateScrollToPage(0) } }
                 val searchBounds = remember { android.graphics.Rect() }
-                Box(Modifier.onGloballyPositioned { searchBounds.set(it.boundsInWindow().toAndroidBounds()) }) {
+                if (!state.searchPill || pager.currentPage !in 0 until homePages) Box(Modifier.onGloballyPositioned { searchBounds.set(it.boundsInWindow().toAndroidBounds()) }) {
                     CircleControl(Icons.Rounded.Search, if (state.googleSearch) "Search Google" else "Search apps", "search", controlSize) {
                         if (!state.googleSearch || !onGoogleSearch(searchBounds)) launcherActivity.openSpotlight()
                     }
@@ -876,7 +931,7 @@ fun LauncherScreen(
                                 cell?.let { widgetSession = session.copy(pointer = point, targetIndex = it.index) }
                             }
                         } else Modifier)) {
-                        Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp)
+                        Row(Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.folioSafeTop).padding(top = 8.dp)
                             .background(Glass.copy(alpha = .97f), RoundedCornerShape(22.dp))
                             .testTag("widget-placement-toolbar"), verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = widgetPickerBack) { Text("Back to widgets") }
@@ -1007,7 +1062,7 @@ fun LauncherScreen(
                 }
             }
             if (blockedDock) Surface(
-                Modifier.align(Alignment.TopCenter).statusBarsPadding()
+                Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.folioSafeTop)
                     .padding(top = 10.dp, start = 20.dp, end = 100.dp),
                 color = Glass.copy(alpha = .96f), shape = RoundedCornerShape(18.dp)
             ) {
@@ -1085,27 +1140,20 @@ fun LauncherScreen(
             val hasWidgets = packageName.isNotEmpty() && runCatching {
                 widgets.providersForPackage(packageName, app.user)
             }.getOrDefault(emptyList()).isNotEmpty()
-            ModalBottomSheet(onDismissRequest = { appMoveMenu = false; selectedId = null },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)) {
-                LauncherAppActionSheet(app, pinned, homePages, appMoveMenu, { appMoveMenu = it },
-                    onAddOrRemove = { model.setPinned(app.id, !pinned); selectedId = null },
-                    onMoveFirst = { model.move(app.id, -maxOf(HOME_CELLS, state.homeSlots.size)); selectedId = null },
-                    onMoveEarlier = { model.move(app.id, -1); selectedId = null },
-                    onMoveLater = { model.move(app.id, 1); selectedId = null },
-                    onMovePage = { page -> model.applyDrop(app.id, DropTarget.Home(homeCellIndex(page, 0))); selectedId = null },
-                    onInfo = { onAppInfo(app); selectedId = null },
-                    onWidgets = if (hasWidgets) {{
-                        val page = lastHomePage.coerceIn(0, homePages - 1)
-                        widgetTargetIndex = homeCellIndex(page, 0); widgetExactTarget = false
-                        widgetSlot = model.nextWidgetSlot(); widgetPackage = packageName
-                        widgetProfileSerial = app.userSerial; selectedId = null; sheet = "widgets"
-                    }} else null,
-                    onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
-                    onClose = { appMoveMenu = false; selectedId = null },
-                    hidden = app.id in state.hiddenApps,
-                    onToggleHidden = { model.setHidden(app.id, app.id !in state.hiddenApps); selectedId = null })
-            }
+            val openWidgetsFor: (() -> Unit)? = if (hasWidgets) {{
+                val page = lastHomePage.coerceIn(0, homePages - 1)
+                widgetTargetIndex = homeCellIndex(page, 0); widgetExactTarget = false
+                widgetSlot = model.nextWidgetSlot(); widgetPackage = packageName
+                widgetProfileSerial = app.userSerial; selectedId = null; sheet = "widgets"
+            }} else null
+            // iPhone-style menu next to the icon; "Edit Home Screen" starts jiggle mode for moving.
+            AppContextMenu(app, onHome = pinned, hidden = app.id in state.hiddenApps,
+                onDismiss = { selectedId = null }, onMove = { selectedId = null; homeEdit.start() },
+                onAddOrRemove = { model.setPinned(app.id, !pinned); selectedId = null },
+                onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
+                onWidgets = openWidgetsFor,
+                onToggleHidden = { model.setHidden(app.id, app.id !in state.hiddenApps); selectedId = null },
+                onInfo = { onAppInfo(app); selectedId = null })
         }
         emptyCellIndex?.let { index ->
             ModalBottomSheet(onDismissRequest = { emptyCellIndex = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -1150,6 +1198,7 @@ fun LauncherScreen(
                 FolderPanel(folder, appsById, drag, pager.currentPage, homeDestinations,
                     dockVacancies = state.dock.indices.filter { state.dock[it] == null },
                     onDismiss = { openFolderId = null }, onRename = { model.renameFolder(id, it) },
+                    color = state.folderColors[id], onColor = { model.setFolderColor(id, it) },
                     onLaunch = onLaunchFrom,
                     onMoveOut = { appId, destination ->
                         if (model.removeAppFromFolder(id, appId, destination)) openFolderId = model.folder(id)?.id
@@ -1202,7 +1251,7 @@ fun LauncherScreen(
                     modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Cancel") } })
         }
         }
-    }
+    } }
 }
 
 @Composable
@@ -1386,7 +1435,10 @@ private fun HomePagePane(
             delay(16)
         }
     }
+    val edit = LocalHomeEdit.current
     Box(modifier.testTag("home-page-$page")
+        // Jiggle mode: a tap on empty space (not on an icon, which handles its own taps) finishes editing.
+        .pointerInput(edit.active) { if (edit.active) detectTapGestures(onTap = { edit.stop() }) }
         .semantics {
             onLongClick("Home options") {
                 if (!drag.active) onEmptyWidget(backgroundTarget)
@@ -1448,6 +1500,7 @@ private fun SharedHomeGrid(
 ) {
     val rowHeight = geometry.rowHeight
     val iconSize = geometry.iconSize
+    val edit = LocalHomeEdit.current
     val pageStart = homeCellIndex(page, 0)
     val pageRange = pageStart until pageStart + HOME_CELLS
     fun savedAt(index: Int) = if (page == -1) savedLeadingSlots.getOrNull(homeCellLocal(index)) else savedSlots.getOrNull(index)
@@ -1493,7 +1546,7 @@ private fun SharedHomeGrid(
             Box(Modifier.offset(x = cellWidth * (localIndex % GRID_COLUMNS), y = rowTop(row).dp)
                 .width(cellWidth).height(cellHeight.dp).testTag("home-cell-$globalIndex")
                 .dropRegion(drag, cell, savedApp?.id ?: savedFolder?.id, page)
-                .combinedClickable(onClick = { savedFolder?.let { onFolder(it.id) } },
+                .combinedClickable(onClick = { if (savedFolder != null) onFolder(savedFolder.id) else if (edit.active) edit.stop() },
                     onLongClick = { if (savedId == null && !drag.active) onEmptyWidget(globalIndex) })
                 .background(if (highlighted) Glass.copy(alpha = .25f) else Color.Transparent, RoundedCornerShape(16.dp))
                 .border(if (highlighted) 2.dp else 0.dp,
@@ -1528,7 +1581,8 @@ private fun SharedHomeGrid(
                 Box(Modifier.offset { animatedOffset }.width(cellWidth).height(rowHeight.dp)
                     .alpha(opacity).testTag("home-app-$id"), contentAlignment = Alignment.TopCenter) {
                     if (visible) AppTile(app, iconSize, labels,
-                        onClick = { onLaunch(app, it) }, onLongClick = { onActions(app) })
+                        onClick = { if (!edit.active) onLaunch(app, it) }, onLongClick = { onActions(app) },
+                        onRemove = if (edit.active && savedIndex != -1) {{ edit.onRemove(DropTarget.Home(savedIndex)) }} else null)
                 }
             }
         }
@@ -1580,6 +1634,7 @@ private fun DockAppColumn(
     onChoose: (Int) -> Unit,
 ) {
     val draggedId = drag.source?.appId
+    val edit = LocalHomeEdit.current
     val dockTarget = (target as? DropTarget.Dock)?.index
     val source = drag.source?.target as? DropTarget.Dock
     val draggedPreviewIndex = previewDock.indexOf(draggedId)
@@ -1620,7 +1675,7 @@ private fun DockAppColumn(
                 .testTag("dock-slot-$index").dropRegion(drag, cell, savedApp?.id)
                 .semantics(mergeDescendants = true) { contentDescription = savedApp?.label ?: "Choose dock app ${index + 1}" }
                 .combinedClickable(interactionSource = interactions[index], indication = LocalIndication.current, role = Role.Button, onClick = {
-                    if (savedApp != null) onLaunch(savedApp, launchBounds[index]) else onChoose(index)
+                    if (savedApp != null) { if (!edit.active) onLaunch(savedApp, launchBounds[index]) } else onChoose(index)
                 }, onLongClick = null)
                 .semantics { onLongClick("Choose dock app") { onChoose(index); true } })
         }
@@ -1641,10 +1696,13 @@ private fun DockAppColumn(
                 )
                 Box(Modifier.offset { animatedOffset }.fillMaxWidth().height(rowHeight.dp).alpha(opacity)
                     .testTag("dock-app-$id"), contentAlignment = Alignment.Center) {
-                    AppIcon(app, null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")
-                        .onGloballyPositioned { if (savedIndex >= 0) launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()) }
-                        .graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] }
-                        .clip(RoundedCornerShape(11.dp)))
+                    Box(Modifier.size(iconSize.dp).testTag("dock-icon-$id")
+                        .onGloballyPositioned { if (savedIndex >= 0) { launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(id, launchBounds[savedIndex]) } }
+                        .jiggle(id)) {
+                        AppIcon(app, null, Modifier.fillMaxSize().graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] },
+                            shape = RoundedCornerShape(11.dp))
+                        if (edit.active && savedIndex >= 0) JiggleRemoveButton("Remove ${app.label} from dock") { edit.onRemove(DropTarget.Dock(savedIndex)) }
+                    }
                 }
             }
         }
@@ -1660,9 +1718,13 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
     Column(modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
         contentDescription = "Folder ${folder.title}, ${folder.appIds.size} apps"
     }, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * .24f).dp))
-            .background(Glass.copy(alpha = .72f)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape((size * .24f).dp))
+        val tint = LocalFolderColors.current[folder.id]?.let { Color(it) }
+        val bounds = remember { android.graphics.Rect() }
+        Box(Modifier.size(size.dp)
             .dropRegion(drag, DropTarget.Folder(folder.id), page = page, folderId = folder.id)
+            .onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(folder.id, bounds) }
+            .jiggle(folder.id).clip(RoundedCornerShape((size * .24f).dp))
+            .background(tint?.copy(alpha = .78f) ?: Glass.copy(alpha = .72f)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape((size * .24f).dp))
             .testTag("folder-drop-${folder.id}")) {
             folder.appIds.take(4).forEachIndexed { index, id ->
                 apps[id]?.let { app ->
@@ -1678,19 +1740,26 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
 }
 
 @Composable
-private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modifier = Modifier, onClick: (android.graphics.Rect) -> Unit, onLongClick: () -> Unit) {
+private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modifier = Modifier, onClick: (android.graphics.Rect) -> Unit, onLongClick: () -> Unit,
+    onRemove: (() -> Unit)? = null) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .92f else 1f, label = "app press")
+    val scale by animateFloatAsState(if (pressed) .88f else 1f,
+        androidx.compose.animation.core.spring(dampingRatio = .55f, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "app press")
     val iconSize by animateDpAsState(size.dp, label = "icon size")
     val bounds = remember { android.graphics.Rect() }
     Column(modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = app.label }
-        .clickable(interactionSource = interaction, indication = LocalIndication.current,
+        .clickable(interactionSource = interaction, indication = null,
             role = Role.Button, onClick = { onClick(bounds) })
         .semantics { onLongClick("App options") { onLongClick(); true } }.padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        AppIcon(app, null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
-            .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
+        // Bounds are read outside the wiggle layer so jiggling doesn't report a new position every frame.
+        Box(Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(app.id, bounds) }
+            .jiggle(app.id)) {
+            AppIcon(app, null, Modifier.fillMaxSize()
+                .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (pressed) .82f else 1f }, shape = RoundedCornerShape((size * .24f).dp))
+            if (onRemove != null) JiggleRemoveButton("Remove ${app.label} from Home", onRemove)
+        }
         if (labels) Text(app.label, color = Color.White, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = .55f), Offset(0f, 1f), 3f)), modifier = Modifier.padding(top = 4.dp))
@@ -1700,15 +1769,15 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
 @Composable
 private fun GlassCard(modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Surface(modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
-        color = Glass.copy(alpha = .24f), shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.SpaceBetween, content = content)
+        color = Glass.copy(alpha = .26f), shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, RailBorder)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween, content = content)
     }
 }
 
 @Composable
 private fun currentTime(): LocalDateTime {
-    val time by produceState(LocalDateTime.now()) { while (true) { value = LocalDateTime.now(); delay(1000) } }
-    return time
+    val tick by rememberMinuteTick()
+    return remember(tick) { LocalDateTime.now() }
 }
 
 @Composable
@@ -1716,9 +1785,11 @@ private fun ClockCard(onClick: () -> Unit) {
     val time = currentTime()
     val format = if (android.text.format.DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm"
     GlassCard(onClick = onClick) {
-        Icon(Icons.Rounded.Schedule, "Clock widget; tap to replace", tint = Color.White, modifier = Modifier.size(20.dp))
-        Text(time.format(DateTimeFormatter.ofPattern(format)), color = Color.White, fontWeight = FontWeight.Light, fontSize = 30.sp, maxLines = 1)
-        Text("Local time", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
+        Text("LOCAL TIME", color = Color.White.copy(alpha = .75f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp,
+            modifier = Modifier.semantics { contentDescription = "Clock widget; tap to replace" })
+        Text(time.format(DateTimeFormatter.ofPattern(format)), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, maxLines = 1,
+            style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+        Text(time.format(DateTimeFormatter.ofPattern(if (format == "HH:mm") "EEE" else "a · EEE")), color = Color.White.copy(alpha = .75f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1726,9 +1797,10 @@ private fun ClockCard(onClick: () -> Unit) {
 private fun DateCard(onClick: () -> Unit) {
     val date = currentTime()
     GlassCard(onClick = onClick) {
-        Text(date.format(DateTimeFormatter.ofPattern("EEEE")), color = Color.White, fontSize = 12.sp, maxLines = 1)
-        Text(date.dayOfMonth.toString(), color = Color.White, fontWeight = FontWeight.Light, fontSize = 40.sp, lineHeight = 42.sp)
-        Text(date.format(DateTimeFormatter.ofPattern("MMMM")), color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
+        Text(date.format(DateTimeFormatter.ofPattern("EEEE")).uppercase(), color = Color.White.copy(alpha = .75f), fontSize = 11.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = .6.sp, maxLines = 1)
+        Text(date.dayOfMonth.toString(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 44.sp, lineHeight = 46.sp)
+        Text(date.format(DateTimeFormatter.ofPattern("MMMM")), color = Color.White.copy(alpha = .75f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1803,7 +1875,11 @@ private fun widgetLabel(id: Int, controller: WidgetController) = when (id) {
 private fun MovableWidget(id: Int, slot: Int, controller: WidgetController, drag: HomeDragState,
     target: DropTarget?, modifier: Modifier, page: Int, onAdd: () -> Unit) {
     val cell = DropTarget.Widget(slot)
-    WidgetSlot(id, slot, controller, modifier.dropRegion(drag, cell, page = page, widgetId = id)
+    val edit = LocalHomeEdit.current
+    // Built-in cards wiggle; provider widgets (Android views) only get the remove button, since moving
+    // a hosted view every frame would re-lay it out constantly.
+    Box(modifier.dropRegion(drag, cell, page = page, widgetId = id)) {
+    WidgetSlot(id, slot, controller, Modifier.fillMaxSize().then(if (id < 0) Modifier.jiggle("widget-$slot", .35f) else Modifier)
         .alpha(if (drag.source?.target == cell) .3f else 1f)
         .border(if (drag.active && target == cell) 2.dp else 0.dp,
             if (drag.active && target == cell) Color.White else Color.Transparent, RoundedCornerShape(24.dp))
@@ -1824,6 +1900,8 @@ private fun MovableWidget(id: Int, slot: Int, controller: WidgetController, drag
                 }
             }
         }
+    }
+    if (edit.active && id != EMPTY_WIDGET && id != INFO_WIDGET) JiggleRemoveButton("Remove widget") { edit.onRemove(cell) }
     }
 }
 
@@ -1917,7 +1995,7 @@ private fun SettingsPanel(state: LauncherState, initiallyWide: Boolean, model: L
         Button(onClick = backgrounds::choosePhoto, enabled = !backgrounds.loading,
             modifier = Modifier.fillMaxWidth().testTag("background-choose")) { Text("Choose background photo") }
         if (backgrounds.photoSelected) OutlinedButton(onClick = backgrounds::reset,
-            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text("Reset to Duo dunes") }
+            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text("Reset to Folio dunes") }
         if (backgrounds.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("background-loading"))
         (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
             TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }

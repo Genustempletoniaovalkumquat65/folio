@@ -26,9 +26,21 @@ class FoldBridgeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Invisible and edge to edge with the status bar hidden, like Home underneath, so the cover
+        // screen doesn't flash a status bar (or hide the island) while this helper is on top.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+        }
         instance = WeakReference(this)
+        if (!wanted) { finishQuietly("cancelled before start"); return }
         handler.postDelayed(giveUp, TIMEOUT_MS)
-        Log.d(TAG, "bridge up width=${resources.configuration.screenWidthDp}")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -41,6 +53,8 @@ class FoldBridgeActivity : Activity() {
     }
 
     // Any touch means the person is using the phone half-open: get out of the way.
+    override fun onResume() { super.onResume(); if (!wanted) finishQuietly("cancelled") }
+
     override fun onUserInteraction() = finishQuietly("touch")
 
     override fun onDestroy() {
@@ -50,8 +64,8 @@ class FoldBridgeActivity : Activity() {
     }
 
     private fun finishQuietly(reason: String) {
+        wanted = false
         if (isFinishing) return
-        Log.d(TAG, "bridge done: $reason")
         finish()
         @Suppress("DEPRECATION") overridePendingTransition(0, 0)
     }
@@ -59,10 +73,13 @@ class FoldBridgeActivity : Activity() {
     companion object {
         private const val TAG = "FolioFold"
         private const val TIMEOUT_MS = 2_500L
-        private const val HANDOFF_MS = 350L
+        private const val HANDOFF_MS = 220L
         private var instance = WeakReference<FoldBridgeActivity>(null)
+        /** Set by start(), cleared by cancel(): an activity created after cancel finishes at once. */
+        @Volatile private var wanted = false
 
         fun start(context: Context) {
+            wanted = true
             if (instance.get()?.isFinishing == false) return
             val options = ActivityOptions.makeCustomAnimation(context, 0, 0).toBundle()
             runCatching {
@@ -71,6 +88,6 @@ class FoldBridgeActivity : Activity() {
             }.onFailure { Log.w(TAG, "bridge failed", it) }
         }
 
-        fun cancel() { instance.get()?.finishQuietly("reopened") }
+        fun cancel() { wanted = false; instance.get()?.finishQuietly("reopened") }
     }
 }

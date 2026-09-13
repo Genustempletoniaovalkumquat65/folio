@@ -1,6 +1,9 @@
 package com.mccal.folio
 
 import android.app.role.RoleManager
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.isImeVisible
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
@@ -70,7 +73,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        android.util.Log.d("FolioFold", "MainActivity.onCreate restored=${savedInstanceState != null}")
         setupExperience = SetupExperience(this)
         showFirstRun.value = setupExperience.entryDecision(SetupExperience.hadLauncherState(this)) ==
             SetupEntryDecision.SHOW
@@ -89,10 +91,9 @@ class MainActivity : ComponentActivity() {
             LiveDiscover.setExternalResultPending(this, "main", "launcher-background", active)
         }
         status = DeviceStatusMonitor(this).also { lifecycle.addObserver(it) }
-        lifecycle.addObserver(IslandEvents(this))
+        lifecycle.addObserver(IslandEvents.Observer(this))
         updateDefaultHome()
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
-        if (intent.getStringExtra("duo_destination") == "spotlight") openSpotlight()
         intent.removeExtra("duo_destination")
         setContent {
             val state = model.state.collectAsStateWithLifecycle().value
@@ -106,15 +107,34 @@ class MainActivity : ComponentActivity() {
                     else show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 }
             }
-            val overlayOpen = topPanel.value != null || spotlightVisible.value
+            val overlayOpen = topPanel.value != null || spotlightVisible.value || LauncherSheetsOpen.intValue > 0
             val overlayProgress by androidx.compose.animation.core.animateFloatAsState(if (overlayOpen) 1f else 0f, OverlaySpring, label = "overlay")
-            val backdropBlurPx = with(androidx.compose.ui.platform.LocalDensity.current) { (state.panelBlur * 40).dp.toPx() }
-            DuoTheme(appearance.state.dark) { androidx.compose.runtime.CompositionLocalProvider(LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(state.iconTint))) { FoldTransitionHost(state.foldEffect, state.foldIntensity, state.stayAwakeOnFold) {
+            val backdropBlurPx = with(androidx.compose.ui.platform.LocalDensity.current) { (state.panelBlur * 32).dp.toPx() }
+            val backdropBlur = androidx.compose.runtime.remember(backdropBlurPx) {
+                androidx.compose.ui.graphics.BlurEffect(backdropBlurPx, backdropBlurPx, androidx.compose.ui.graphics.TileMode.Clamp)
+            }
+            DuoTheme(appearance.state.dark) { val notificationItems = IslandListenerService.notifications.collectAsStateWithLifecycle().value
+            // The Discover host is a not-touchable window stacked above the keyboard; Android drops every key
+            // tap "due to occlusion" while it exists. Remove it whenever a keyboard can be up.
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            val imeUp = WindowInsets.isImeVisible ||
+                WindowInsets.imeAnimationTarget.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+            val typing = spotlightVisible.value || imeUp
+            androidx.compose.runtime.DisposableEffect(typing) {
+                if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", true)
+                onDispose { if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", false) }
+            }
+            val badgeCounts = androidx.compose.runtime.remember(notificationItems) { notificationItems.groupingBy { it.packageName }.eachCount() }
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(state.iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor),
+                LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {
                     val p = overlayProgress
-                    renderEffect = if (p > .01f && backdropBlurPx > 0f)
-                        androidx.compose.ui.graphics.BlurEffect(backdropBlurPx * p, backdropBlurPx * p, androidx.compose.ui.graphics.TileMode.Clamp) else null
+                    // Fixed radius while any overlay is showing: a constant blur is cached by the RenderThread,
+                    // whereas animating the radius re-blurred the whole Home every frame (~14ms of GPU per
+                    // frame). The overlay's scrim fades in over it, which hides the switch.
+                    renderEffect = if (p > .02f && backdropBlurPx >= 2f) backdropBlur else null
                 }) {
                 LauncherScreen(state, model, widgets, homeRequests.intValue,
                     onLaunch = { launchApp(it) }, onMakeDefault = ::makeDefault, onAppInfo = ::appInfo,
@@ -131,12 +151,14 @@ class MainActivity : ComponentActivity() {
                     onShadeSetup = ::showShadeSetup)
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
-                if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value) {
+                if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value, state.islandEventsOff) {
                     IslandListenerService.open(this@MainActivity, it)
                 }
                 TopPanels(topPanel.value, { overlayProgress }, deviceStatus, onClose = { topPanel.value = null },
-                    onSystemPanel = { openAndroidShade(it) }, showClock = state.notificationClock, grouped = state.groupNotifications)
-                SpotlightOverlay(spotlightVisible.value, state, onClose = { spotlightVisible.value = false },
+                    onSystemPanel = { openAndroidShade(it) }, showClock = state.notificationClock, grouped = state.groupNotifications,
+                    ccControls = state.ccControls, onCcControls = model::setCcControls,
+                    ccSize = state.ccSize, ccCentered = state.ccCentered, ncSplit = state.ncSplit)
+                SpotlightOverlay(spotlightVisible.value, { overlayProgress }, state, onClose = { spotlightVisible.value = false },
                     onLaunch = { launchApp(it) })
             } } }
         }
@@ -147,10 +169,6 @@ class MainActivity : ComponentActivity() {
         if (restoreShadeDialog) window.decorView.post { if (!isFinishing && !isDestroyed) showShadeSetup() }
     }
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-        android.util.Log.d("FolioFold", "onConfigurationChanged width=${newConfig.screenWidthDp}dp")
-    }
     override fun onStart() {
         super.onStart(); widgets.host.startListening()
         if (!timeReceiverRegistered) {
@@ -163,6 +181,7 @@ class MainActivity : ComponentActivity() {
         appearance.refresh(systemDark())
     }
     override fun onStop() {
+        closeOverlays() // never come back to a blurred Home
         if (timeReceiverRegistered) { unregisterReceiver(timeReceiver); timeReceiverRegistered = false }
         widgets.host.stopListening(); super.onStop()
     }
@@ -180,6 +199,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FolioForeground.visible.value = true
+        if (SpotlightRequest.consume()) openSpotlight()
         if (returningFromShadeSettings) {
             returningFromShadeSettings = false
             releaseShadeSetupOwnership()
@@ -199,6 +219,7 @@ class MainActivity : ComponentActivity() {
     internal val topPanel = androidx.compose.runtime.mutableStateOf<ShadePanel?>(null)
     internal val spotlightVisible = androidx.compose.runtime.mutableStateOf(false)
     internal fun openSpotlight() { topPanel.value = null; spotlightVisible.value = true }
+    private fun closeOverlays() { topPanel.value = null; spotlightVisible.value = false }
 
     internal fun openSystemShade(panel: ShadePanel) {
         if (model.state.value.folioPanels) topPanel.value = panel else openAndroidShade(panel)
@@ -219,8 +240,8 @@ class MainActivity : ComponentActivity() {
         if (shadeSetupDialog?.isShowing == true) return
         ownShadeSetupExternally()
         shadeSetupDialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Turn on shade gestures")
-            .setMessage("Android requires you to enable Folio shade gestures in Accessibility settings. This service only opens Notifications or Quick Settings; it doesn’t read screen content or watch other apps.")
+            .setTitle("Turn on Folio gestures")
+            .setMessage("Android requires you to enable “Folio gestures & overlays” in Accessibility settings. It opens Notifications or Quick Settings, and draws the dock handle and island over other apps only if you turn those on. It doesn’t read screen content or watch what you do in other apps.")
             .setNegativeButton("Not now", null)
             .setPositiveButton("Open settings") { _, _ ->
                 try {
@@ -267,11 +288,13 @@ class MainActivity : ComponentActivity() {
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getStringExtra("duo_destination") == "spotlight") { openSpotlight(); intent.removeExtra("duo_destination") }
+
         setIntent(intent)
         FoldRenderExperiment.onNewIntent(this, intent)
         if (intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
-        else if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getStringExtra("duo_destination") == "home") homeRequests.intValue++
+        else if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getStringExtra("duo_destination") == "home") {
+            closeOverlays(); homeRequests.intValue++
+        }
         intent.removeExtra("duo_destination")
     }
 
@@ -324,7 +347,7 @@ class MainActivity : ComponentActivity() {
         val google = packageManager.getLaunchIntentForPackage(DiscoverClient.GOOGLE_PACKAGE)
         android.app.AlertDialog.Builder(this)
             .setTitle("Discover isn’t available here")
-            .setMessage("Duo can’t place the Discover feed beside Home on this device. You can open the Google app or stay on Home.")
+            .setMessage("Folio can’t place the Discover feed beside Home on this device. You can open the Google app or stay on Home.")
             .setNegativeButton("Stay on Home", null)
             .apply {
                 if (google != null) setPositiveButton("Open Google") { _, _ ->

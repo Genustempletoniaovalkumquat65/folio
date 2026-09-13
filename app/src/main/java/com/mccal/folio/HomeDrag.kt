@@ -150,7 +150,10 @@ private suspend fun AwaitPointerEventScope.awaitWidgetLongPressOrCancellation(
 internal fun Modifier.homeDragInput(
     drag: HomeDragState, enabled: Boolean, page: Int, eligiblePages: Set<Int> = setOf(page),
     onStart: () -> Unit, onFinish: (Boolean) -> Unit,
+    /** Jiggle mode: moving a finger past touch slop picks the item up without a long-press. */
+    immediate: Boolean = false,
 ): Modifier {
+    val currentImmediate by rememberUpdatedState(immediate)
     val currentEnabled by rememberUpdatedState(enabled)
     val currentPage by rememberUpdatedState(page)
     val currentEligiblePages by rememberUpdatedState(eligiblePages)
@@ -162,16 +165,20 @@ internal fun Modifier.homeDragInput(
             if (!currentEnabled) return@awaitEachGesture
             val point = down.position + drag.rootOrigin
             val region = drag.hit(point, currentEligiblePages)?.takeIf { it.movable } ?: return@awaitEachGesture
-            if (region.target is DropTarget.Widget && (region.widgetId ?: EMPTY_WIDGET) >= 0) {
-                awaitWidgetLongPressOrCancellation(down)
+            var movedAlready = false
+            if (currentImmediate) {
+                val result = awaitSlopOrLongPress(down) ?: return@awaitEachGesture
+                movedAlready = result
+            } else if (region.target is DropTarget.Widget && (region.widgetId ?: EMPTY_WIDGET) >= 0) {
+                awaitWidgetLongPressOrCancellation(down) ?: return@awaitEachGesture
             } else {
-                awaitLongPressOrCancellation(down.id)
-            } ?: return@awaitEachGesture
+                awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+            }
             drag.source = region
             drag.pointer = point
             drag.origin = point
             drag.originPage = currentPage
-            drag.moved = false
+            drag.moved = movedAlready
             start()
             try {
                 while (true) {
@@ -197,4 +204,23 @@ internal fun Modifier.homeDragInput(
             }
         }
     }
+}
+
+/** true once the finger moves past slop, false after a long-press without moving, null on release or cancel. */
+private suspend fun AwaitPointerEventScope.awaitSlopOrLongPress(down: PointerInputChange): Boolean? {
+    var result: Boolean? = false
+    val finished = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id }
+            if (change == null || !change.pressed || change.isConsumed || event.changes.any { it.id != down.id && it.pressed }) {
+                result = null; break
+            }
+            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                change.consume(); result = true; break
+            }
+        }
+        Unit
+    }
+    return if (finished == null) false else result
 }

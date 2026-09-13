@@ -23,6 +23,9 @@
             <category android:name="android.intent.category.APP_CALENDAR" />
         </intent>
         <intent><action android:name="android.intent.action.SHOW_ALARMS" /></intent>
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="com.teslacoilsw.launcher.THEME" /></intent>
     </queries>
     <application android:label="Folio" android:icon="@drawable/ic_launcher"
         android:name=".DuoApplication"
@@ -36,7 +39,7 @@
         <activity android:name=".DiscoverFeedActivity" android:theme="@style/Theme.Duo.Discover" android:exported="false" android:resizeableActivity="true" />
         <activity android:name=".LiveDiscoverActivity" android:theme="@style/Theme.Duo.LiveDiscover"
             android:exported="false" android:resizeableActivity="true" />
-        <service android:name=".DuneWallpaperService" android:label="Duo dunes"
+        <service android:name=".DuneWallpaperService" android:label="Folio dunes"
             android:permission="android.permission.BIND_WALLPAPER" android:exported="true">
             <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/dune_wallpaper" />

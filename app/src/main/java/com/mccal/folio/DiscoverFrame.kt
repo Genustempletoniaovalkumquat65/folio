@@ -62,6 +62,7 @@ internal class DiscoverFrame(private val activity: Activity, private val vertica
                 color = 0x66ffffff; style = Paint.Style.STROKE; strokeWidth = resources.displayMetrics.density
             }
             private val cover = Paint()
+            private val clipPath = Path() // reused every frame (no allocation while drawing)
             override fun onAttachedToWindow() {
                 super.onAttachedToWindow()
                 windowInsetsController?.apply {
@@ -95,7 +96,7 @@ internal class DiscoverFrame(private val activity: Activity, private val vertica
                                     "layer=${layer?.size} matrix=${values.contentToString()}")
                         }
                     }
-                    val shape = Path().apply { addRoundRect(left, 0f, right, height.toFloat(), 16*d, 16*d, Path.Direction.CW) }
+                    val shape = clipPath.apply { reset(); addRoundRect(left, 0f, right, height.toFloat(), 16*d, 16*d, Path.Direction.CW) }
                     val save = canvas.save()
                     canvas.clipOutPath(shape)
                     val layer = LiveDiscover.homeLayer
@@ -111,7 +112,8 @@ internal class DiscoverFrame(private val activity: Activity, private val vertica
                     return
                 }
                 val insets = rootWindowInsets?.getInsets(WindowInsets.Type.systemBars())
-                val path = Path().apply {
+                val path = clipPath.apply {
+                    reset()
                     if (DiscoverBounds.available) addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), 16*d, 16*d, Path.Direction.CW)
                     else addRoundRect(2*d, (insets?.top ?: 0) + 12*d, width - 2*d,
                         height - (insets?.bottom ?: 0) - 12*d, 26*d, 26*d, Path.Direction.CW)

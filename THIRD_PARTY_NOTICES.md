@@ -18,3 +18,11 @@ The Gradle dependency graph records the resolved artifact versions. Test and bui
 The default wallpaper and launcher icon are generated locally from project drawing code/resources. Installed application icons and widget content belong to their respective providers. Google Discover and Google search run in the installed Google application; that application and its content are not redistributed here.
 
 Private design-study images, copied reference files, device captures, and probe research are excluded from the public source package. Apple, Google, Android, Samsung, and other referenced names are trademarks of their respective owners; this project is unaffiliated with those companies.
+
+## Inspiration (no code included)
+
+| Project | Author | License | What inspired Folio |
+| --- | --- | --- | --- |
+| [iphone-duo](https://github.com/chuspeeism/iphone-duo) | chuspeeism | MIT | Fold blur/darkening curves and hinge-angle progress model (re-implemented as an AGSL shader) |
+| Galaxy Z Fold 8 iPhone Duo animation demo (r/GalaxyFold) | u/moomanjohnny | — (no code released) | Screenshot + shader + hinge-sensor approach behind the screenshot-morph fold style |
+| [QuickLaunch](https://github.com/AhmedTheGeek/QuickLaunch) | AhmedTheGeek | GPL-3.0 | Spotlight ideas: keyboard after first frame, frecency ranking (7-day half-life), drag to split screen. Independently re-implemented; no source copied |

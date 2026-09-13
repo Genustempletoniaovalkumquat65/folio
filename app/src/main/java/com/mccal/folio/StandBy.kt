@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.LocalDateTime
@@ -43,7 +45,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 internal fun rememberHalfOpenPose(activity: Activity): FoldingFeature.Orientation? {
     val info by remember(activity) { WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity) }
-        .collectAsState(initial = null)
+        .collectAsStateWithLifecycle(initialValue = null)
     val fold = info?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
     return fold?.takeIf { it.state == FoldingFeature.State.HALF_OPENED }?.orientation
 }
@@ -67,7 +69,8 @@ internal fun StandByOverlay(pose: FoldingFeature.Orientation?, enabled: Boolean,
     BackHandler(active) { active = false; dismissedForPose = true }
 
     AnimatedVisibility(active, enter = fadeIn(tween(500)), exit = fadeOut(tween(300))) {
-        val now by produceState(LocalDateTime.now()) { while (true) { value = LocalDateTime.now(); delay(1_000L - System.currentTimeMillis() % 1_000L) } }
+        val tick by rememberMinuteTick()
+        val now = remember(tick) { LocalDateTime.now() }
         val night = now.hour >= 22 || now.hour < 6
         val ink = if (night) Color(0xFFB3261E) else Color.White
         val soft = ink.copy(alpha = if (night) .75f else .6f)
@@ -98,7 +101,8 @@ private fun BigClock(now: LocalDateTime, ink: Color, soft: Color, modifier: Modi
 @Composable
 private fun StandByInfo(status: DeviceStatus, ink: Color, soft: Color, night: Boolean, modifier: Modifier) {
     val context = LocalContext.current
-    val alarm = remember { context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime }
+    val tick by rememberMinuteTick()
+    val alarm = remember(tick) { context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime }
     val media = IslandListenerService.activity.collectAsState().value as? IslandActivity.Media
     Column(modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally) {
@@ -121,10 +125,10 @@ private fun StandByInfo(status: DeviceStatus, ink: Color, soft: Color, night: Bo
                 media.subtitle?.let { Text(it, color = soft, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             val t = media.controller.transportControls
-            Icon(Icons.Rounded.SkipPrevious, "Previous", tint = ink, modifier = Modifier.size(36.dp).clip(CircleShape).clickable { t.skipToPrevious() })
+            Icon(Icons.Rounded.SkipPrevious, "Previous", tint = ink, modifier = Modifier.minimumInteractiveComponentSize().size(36.dp).clip(CircleShape).clickable { t.skipToPrevious() })
             Icon(if (media.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Play or pause", tint = ink,
                 modifier = Modifier.size(44.dp).clip(CircleShape).clickable { if (media.playing) t.pause() else t.play() })
-            Icon(Icons.Rounded.SkipNext, "Next", tint = ink, modifier = Modifier.size(36.dp).clip(CircleShape).clickable { t.skipToNext() })
+            Icon(Icons.Rounded.SkipNext, "Next", tint = ink, modifier = Modifier.minimumInteractiveComponentSize().size(36.dp).clip(CircleShape).clickable { t.skipToNext() })
         }
     }
 }

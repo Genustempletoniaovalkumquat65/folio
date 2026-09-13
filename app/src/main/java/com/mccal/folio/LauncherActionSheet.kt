@@ -48,50 +48,6 @@ internal fun ModalDialogBackHandler(onBack: () -> Unit) {
 }
 
 @Composable
-internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: Int,
-    moving: Boolean, onMoving: (Boolean) -> Unit,
-    onAddOrRemove: () -> Unit, onMoveFirst: () -> Unit, onMoveEarlier: () -> Unit, onMoveLater: () -> Unit,
-    onMovePage: (Int) -> Unit, onInfo: () -> Unit, onWidgets: (() -> Unit)?, onCreateFolder: () -> Unit,
-    onClose: () -> Unit, hidden: Boolean = false, onToggleHidden: (() -> Unit)? = null) {
-    ModalDialogBackHandler { if (moving) onMoving(false) else onClose() }
-    val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .88f).toDp() }
-    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (moving) IconButton(onClick = { onMoving(false) }) { Icon(Icons.Rounded.ArrowBack, "Back") }
-            AppIcon(app, null, Modifier.size(48.dp).clip(RoundedCornerShape(13.dp)))
-            Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) {
-                Text(if (moving) "Move ${app.label}" else app.label, style = MaterialTheme.typography.titleLarge)
-                Text("${app.profileLabel} profile", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close app options") }
-        }
-        if (moving) {
-            ActionRow(Icons.Rounded.ArrowUpward, "Move to first position", onMoveFirst)
-            ActionRow(Icons.Rounded.KeyboardArrowUp, "Move earlier", onMoveEarlier)
-            ActionRow(Icons.Rounded.KeyboardArrowDown, "Move later", onMoveLater)
-            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            repeat(homePages) { page -> ActionRow(Icons.Rounded.GridView, "Move to page ${page + 1}",
-                { onMovePage(page) }, Modifier.testTag("app-move-${app.id}-page-$page")) }
-        } else {
-            if (placed) ActionRow(Icons.Rounded.DragIndicator, "Move on Home", { onMoving(true) })
-            else ActionRow(Icons.Rounded.Home, "Add to Home", onAddOrRemove)
-            onWidgets?.let { ActionRow(Icons.Rounded.Widgets, "Widgets", it) }
-            ActionRow(Icons.Rounded.CreateNewFolder, "Create folder", onCreateFolder)
-            onToggleHidden?.let { ActionRow(if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                if (hidden) "Show in All apps" else "Hide from All apps", it) }
-            ActionRow(Icons.Rounded.Info, "App info", onInfo)
-            if (placed) {
-                Spacer(Modifier.height(10.dp)); HorizontalDivider(); Spacer(Modifier.height(4.dp))
-                ActionRow(Icons.Rounded.RemoveCircleOutline, "Remove from Home", onAddOrRemove,
-                    tint = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
-@Composable
 internal fun EmptySpaceActionSheet(onWidgets: () -> Unit, onWallpaper: () -> Unit,
     onCustomize: () -> Unit, onClose: () -> Unit, onAddPage: (() -> Unit)? = null, onRemovePage: (() -> Unit)? = null) {
     val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .75f).toDp() }

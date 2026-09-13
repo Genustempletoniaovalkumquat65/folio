@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.mccal.folio
 
 import android.app.role.RoleManager
@@ -62,7 +64,7 @@ class AssistPickerActivity : ComponentActivity() {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .35f))
                 .clickable(remember { MutableInteractionSource() }, null) { finish() }, contentAlignment = Alignment.BottomCenter) {
                 AnimatedVisibility(shown, enter = fadeIn() + slideInVertically(spring(dampingRatio = .82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 }) {
-                    Column(Modifier.navigationBarsPadding().imePadding().padding(16.dp).widthIn(max = 520.dp).fillMaxWidth()
+                    Column(Modifier.navigationBarsPadding().windowInsetsPadding(WindowInsets.imeAnimationTarget).padding(16.dp).widthIn(max = 520.dp).fillMaxWidth()
                         .clip(RoundedCornerShape(30.dp)).background(Color(0xFF1C1C1E).copy(alpha = .94f))
                         .clickable(remember { MutableInteractionSource() }, null) {}.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -91,8 +93,8 @@ class AssistPickerActivity : ComponentActivity() {
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PickerPill("Spotlight", Modifier.weight(1f)) {
-                                startActivity(Intent(this@AssistPickerActivity, MainActivity::class.java)
-                                    .putExtra("duo_destination", "spotlight").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                SpotlightRequest.request()
+                                startActivity(Intent(this@AssistPickerActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                 finish()
                             }
                             PickerPill("DuckDuckGo", Modifier.weight(1f)) {
@@ -106,6 +108,9 @@ class AssistPickerActivity : ComponentActivity() {
         }
     }
 
+    // Never come back stale (old query, old app list) on the next side-key press.
+    override fun onStop() { super.onStop(); if (!isChangingConfigurations) finish() }
+
     private fun start(intent: Intent) {
         runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         finish()
@@ -117,6 +122,13 @@ class AssistPickerActivity : ComponentActivity() {
 
         fun settingsIntent() = Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
+}
+
+/** In-process request to open Spotlight; unlike an intent extra, other apps can't trigger it. */
+internal object SpotlightRequest {
+    @Volatile private var pending = false
+    fun request() { pending = true }
+    fun consume(): Boolean = pending.also { pending = false }
 }
 
 internal enum class AssistTarget(val label: String, val packageName: String) {

@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 
 @Composable
-internal fun DuneWallpaper(modifier: Modifier = Modifier.fillMaxSize()) {
+internal fun DuneWallpaper(modifier: Modifier = Modifier) {
     val palette = LocalDuoPalette.current
     val context = LocalContext.current.applicationContext
     val revision = LauncherBackgroundCache.revision.intValue
@@ -43,7 +43,7 @@ internal fun DuneWallpaper(modifier: Modifier = Modifier.fillMaxSize()) {
     val photo = produceState(initialValue = initial, key1 = context, key2 = revision) {
         value = withContext(Dispatchers.IO) { loadLauncherBackground(context) }
     }.value
-    Canvas(modifier) { drawLauncherBackground(photo?.asImageBitmap(), palette.dark) }
+    Canvas(Modifier.fillMaxSize().then(modifier)) { drawLauncherBackground(photo?.asImageBitmap(), palette.dark) }
 }
 
 internal fun DrawScope.drawLauncherBackground(photo: ImageBitmap?, dark: Boolean = false) {

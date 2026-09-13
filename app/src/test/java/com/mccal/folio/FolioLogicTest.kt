@@ -1,0 +1,170 @@
+package com.mccal.folio
+
+import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SpotlightMathTest {
+    @Test fun precedenceAndParentheses() {
+        assertEquals("14", evaluateMath("2+3*4"))
+        assertEquals("20", evaluateMath("(2+3)*4"))
+        assertEquals("42", evaluateMath("12*(3+4)/2"))
+    }
+
+    @Test fun powerIsRightAssociativeAndUnaryMinusWorks() {
+        assertEquals("512", evaluateMath("2^3^2"))
+        assertEquals("-6", evaluateMath("-2*3"))
+    }
+
+    @Test fun decimalsUseDotsRegardlessOfLocale() {
+        val previous = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY)
+            assertEquals("0.5", evaluateMath("1/2"))
+        } finally { java.util.Locale.setDefault(previous) }
+    }
+
+    @Test fun phoneNumbersDatesAndWordsAreNotMath() {
+        assertNull(evaluateMath("555-1234"))
+        assertNull(evaluateMath("2026-09-12"))
+        assertNull(evaluateMath("gmail"))
+        assertNull(evaluateMath("12"))
+        assertNull(evaluateMath("1/0"))
+        assertNull(evaluateMath("(2+3"))
+    }
+}
+
+class SpotlightRankingTest {
+    private val labels = listOf("Google Maps", "Maps", "Gmail", "Messages", "Amazon Music", "Samsung Notes")
+    private fun rank(q: String) = rankByLabel(labels, q) { it }
+
+    @Test fun exactThenPrefixThenWordStartThenSubstring() {
+        assertEquals("Maps", rank("maps").first())               // exact
+        assertEquals(listOf("Maps", "Google Maps"), rank("maps"))  // then word start
+        assertEquals("Gmail", rank("gma").first())               // prefix
+        assertEquals(listOf("Amazon Music"), rank("azon"))         // substring
+    }
+
+    @Test fun initialsMatch() {
+        assertEquals("Google Maps", rank("gm").first { it == "Google Maps" })
+        assertTrue(rank("sn").contains("Samsung Notes"))
+    }
+
+    @Test fun shorterLabelWinsTies() {
+        assertEquals(listOf("Maps", "Messages"), rankByLabel(listOf("Messages", "Maps"), "m") { it })
+    }
+
+    @Test fun fuzzyLettersInOrderMatchLast() {
+        assertEquals("Samsung Notes", rankByLabel(labels, "smng") { it }.first())
+    }
+
+    @Test fun frecencyBreaksTiesWithinATier() {
+        val boosted = rankByLabel(listOf("Messages", "Maps"), "m", boost = { if (it == "Messages") 3.0 else 0.0 }) { it }
+        assertEquals(listOf("Messages", "Maps"), boosted)
+        val plain = rankByLabel(listOf("Messages", "Maps"), "m") { it }
+        assertEquals(listOf("Maps", "Messages"), plain)
+    }
+
+    @Test fun frecencyHalvesEveryWeek() {
+        val week = 7L * 24 * 60 * 60 * 1000
+        val now = 10 * week
+        val scores = RecentApps.frecencyOf(listOf("a|$now", "a|${now - week}", "b|${now - 2 * week}", "garbage"), now)
+        assertEquals(1.5, scores.getValue("a"), 1e-9)
+        assertEquals(0.25, scores.getValue("b"), 1e-9)
+    }
+
+    @Test fun noMatchGivesNothing() {
+        assertTrue(rank("zzz").isEmpty())
+    }
+}
+
+class ShadeZonesTest {
+    @Test fun topLeftTopRightAndLower() {
+        assertEquals(ShadePanel.NOTIFICATIONS, shadePanelForStart(10f, 10f, 400f, 120f))
+        assertEquals(ShadePanel.QUICK_SETTINGS, shadePanelForStart(200f, 10f, 400f, 120f))
+        assertEquals(ShadePanel.SEARCH, shadePanelForStart(10f, 120f, 400f, 120f))
+    }
+}
+
+class StatusStyleJsonTest {
+    @Test fun roundTrip() {
+        val style = StatusStyle(showTime = false, showDate = true, showBatteryPercent = false, glyph = StatusGlyph.ICONS,
+            colorfulBattery = false, railGlass = .5f)
+        assertEquals(style, StatusStyle.fromJson(style.toJson()))
+    }
+
+    @Test fun unknownGlyphAndOutOfRangeFrostFallBack() {
+        val json = org.json.JSONObject().put("glyph", "SPARKLES").put("railGlass", 3.0)
+        val style = StatusStyle.fromJson(json)
+        assertEquals(StatusGlyph.RING, style.glyph)
+        assertEquals(1f, style.railGlass)
+        assertEquals(StatusStyle(), StatusStyle.fromJson(null))
+    }
+}
+
+class PagesTest {
+    private fun layout(slots: Int, minPages: Int) =
+        HomeLayout(List(slots) { "app$it" }, List(4) { null }, minPages = minPages)
+
+    @Test fun explicitPagesAddToContentPages() {
+        assertEquals(1, layout(HOME_CELLS, minPages = 1).pageCount)
+        assertEquals(3, layout(HOME_CELLS, minPages = 3).pageCount)
+        assertEquals(1, layout(HOME_CELLS, minPages = 3).contentPageCount)
+    }
+
+    @Test fun contentBeyondExplicitPagesStillCounts() {
+        assertEquals(2, layout(HOME_CELLS + 1, minPages = 1).pageCount)
+    }
+}
+
+class IslandGeometryTest {
+    @Test fun pillIsCenteredOnTheCameraAndCappedByTheNarrowSide() {
+        // 1000px wide window, camera 40px wide near the right edge, density 2.
+        val g = islandGeometry(intArrayOf(900, 20, 940, 60), 1000, 2f)
+        assertEquals(920f, g.centerXPx)
+        assertEquals(20f, g.camW)
+        // Room on the narrow (right) side: (1000-920)/2 - 8 = 32dp → max width 64dp.
+        assertEquals(64f, g.maxW)
+        val event = IslandContent.Event(IslandEvent.Silent(true))
+        assertEquals(64f, g.widthFor(event))
+        // Camera spans 10..30dp: pill starts 6dp from the edge and wraps the camera with a 5dp margin.
+        assertEquals(6f, g.top)
+        assertEquals(34f, g.pillH)
+        assertTrue(g.top <= 10f && g.top + g.pillH >= 30f)
+    }
+
+    @Test fun noCutoutCentersOnTheWindow() {
+        val g = islandGeometry(null as IntArray?, 800, 2f)
+        assertEquals(400f, g.centerXPx)
+        assertEquals(islandWantWidth(IslandContent.Event(IslandEvent.Focus(true)), 0.dp).value, 190f)
+    }
+}
+
+class CameraAreaTest {
+    @Test fun rotatesTheHiddenCamera() {
+        // Pure math check without android.graphics.Rect: rotate corner points like CameraArea.rotate does.
+        val w = 2448; val h = 1848
+        val left = 1823; val top = 18; val right = 1901; val bottom = 96
+        // ROTATION_90: (x, y) -> (y, w - x)
+        assertEquals(listOf(18, 2448 - 1901, 96, 2448 - 1823), listOf(top, w - right, bottom, w - left))
+        // ROTATION_180 keeps the camera's size
+        assertEquals(78, (w - left) - (w - right)); assertEquals(78, (h - top) - (h - bottom))
+    }
+}
+
+class BadgeAccentTest {
+    private fun icon(vararg colors: Int) = IntArray(576) { colors[it % colors.size] }
+
+    @Test fun picksTheMainColor() {
+        val blue = 0xFF1E88E5.toInt(); val white = 0xFFFFFFFF.toInt()
+        val c = dominantAccent(icon(blue, blue, blue, white))!!
+        assertEquals(0x1E, c shr 16 and 255); assertEquals(0xE5, c and 255)
+    }
+
+    @Test fun grayOrTransparentIconsHaveNoAccent() {
+        assertNull(dominantAccent(icon(0xFF808080.toInt(), 0xFFFFFFFF.toInt(), 0xFF000000.toInt())))
+        assertNull(dominantAccent(icon(0x00FF0000)))
+    }
+}

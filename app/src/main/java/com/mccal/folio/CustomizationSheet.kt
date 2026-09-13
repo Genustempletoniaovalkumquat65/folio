@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
 internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP }
@@ -67,7 +68,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         .testTag("default-home-settings")) { Text("Set as home app") }
                     if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
                         Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Undo last layout change") }
-                    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup)
+                    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp)
                     val setupLeft = setupSteps.count { it.required && !it.done }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
                         "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.SETUP) }
@@ -85,7 +86,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         "Unfold animation and staying awake", "customization-fold") { onPage(CustomizationPage.FOLD) }
                     CustomizationDestination(Icons.Rounded.Save, "Backup",
                         "Save or restore this layout", "customization-backup") { onPage(CustomizationPage.BACKUP) }
-                    CustomizationDestination(Icons.Rounded.Checklist, "Setup checklist",
+                    if (setupLeft == 0) CustomizationDestination(Icons.Rounded.Checklist, "Setup checklist",
                         "Permissions and Samsung settings Folio uses", "customization-setup-all") { onPage(CustomizationPage.SETUP) }
                     CustomizationDestination(Icons.Rounded.HelpOutline, "Help & setup",
                         "Home app, widgets, gestures, and Discover", "customization-help") {
@@ -94,7 +95,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     if (isDefaultHome) TextButton(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .testTag("default-home-settings")) { Text("Change home app") }
                 }
-                CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup))
+                CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp))
                 CustomizationPage.WALLPAPER -> {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
                     Text("Launcher background", style = MaterialTheme.typography.titleMedium)
@@ -137,6 +138,16 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         CustomizationSlider("Background blur", "${(state.panelBlur * 100).toInt()}%", state.panelBlur, 0f..1f) { model.setPanelBlur(it) }
                         SettingsSwitch("Big clock in Notification Center", state.notificationClock, model::setNotificationClock, "notification-clock-switch")
                         SettingsSwitch("Stack notifications by app", state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
+                        SettingsSwitch("Unfolded: clock beside notifications", state.ncSplit, model::setNcSplit, "notification-split-switch")
+                        Text("Control Center size", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PanelSize.entries.forEach { size ->
+                                FilterChip(selected = state.ccSize == size, onClick = { model.setCcSize(size) }, label = { Text(size.label) })
+                            }
+                        }
+                        SettingsSwitch("Unfolded: Control Center in the middle", state.ccCentered, model::setCcCentered, "cc-centered-switch")
+                        Text("Tip: tap + at the top of Control Center to add or remove controls.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("To restyle Samsung\u2019s own pull-down (colors, transparency, layout), use Good Lock \u203a QuickStar and Theme Park.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -150,7 +161,35 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             Text("Choose Folio as assistant")
                         }
                     }
+                    SettingsCard("Spotlight") {
+                        Text("Search with Enter", style = MaterialTheme.typography.labelLarge)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(WebSearchTarget.GOOGLE to "Google (no AI)", WebSearchTarget.DUCKDUCKGO to "DuckDuckGo").forEach { (target, label) ->
+                                FilterChip(selected = state.searchEngine == target.name, onClick = { model.setSearchEngine(target.name) }, label = { Text(label) })
+                            }
+                        }
+                        SpotlightSection.entries.forEach { section ->
+                            SettingsSwitch(section.title, section.name !in state.spotlightHidden,
+                                { model.setSpotlightSection(section.name, it) }, "spotlight-${section.name.lowercase()}")
+                        }
+                        val messageContext = androidx.compose.ui.platform.LocalContext.current
+                        val iMessageApps = remember { Messaging.iMessageApps.filter { Messaging.installed(messageContext, it.first) } }
+                        if (iMessageApps.isNotEmpty()) {
+                            Text("Message contacts with", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text("Texting app") })
+                                iMessageApps.forEach { (pkg, label) ->
+                                    FilterChip(selected = state.messagesApp == pkg, onClick = { model.setMessagesApp(pkg) }, label = { Text(label) })
+                                }
+                            }
+                        }
+                    }
+                    SettingsCard("App Library") {
+                        SettingsSwitch("Group apps into categories", state.libraryCategories, model::setLibraryCategories, "library-categories-switch")
+                    }
                     SettingsCard("Search") {
+                        SettingsSwitch("Search button on Home", state.searchPill, model::setSearchPill, "search-pill-switch")
+                        SettingsSwitch("Swipe down on Home for Spotlight", state.swipeDownSearch, model::setSwipeDownSearch, "swipe-search-switch")
                         SettingsSwitch("Search button opens the Google app", state.googleSearch, model::setGoogleSearch, "google-search-switch")
                         Text("When off, the search button opens Spotlight: apps, contacts, settings, a calculator, Google without AI, and ChatGPT, Claude or Perplexity.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -159,6 +198,36 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.STATUS -> {
                     val st = state.statusStyle
                     SettingsCard("App icons") {
+                        val iconContext = androidx.compose.ui.platform.LocalContext.current
+                        val packs = remember { IconPacks.installed(iconContext) }
+                        Text("Icon pack", style = MaterialTheme.typography.labelLarge)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text("App icons") })
+                            packs.forEach { pack ->
+                                FilterChip(selected = state.iconPack == pack.packageName, onClick = { IconPacks.clear(); model.setIconPack(pack.packageName) },
+                                    label = { Text(pack.label) })
+                            }
+                        }
+                        if (packs.isEmpty()) Text("Install any icon pack made for Nova-style launchers to use it here.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Shape", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IconShape.entries.forEach { shape ->
+                                FilterChip(selected = state.iconShape == shape, onClick = { model.setIconShape(shape) }, label = { Text(shape.label) })
+                            }
+                        }
+                        Text("Notification badges", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BadgeStyle.entries.forEach { style ->
+                                FilterChip(selected = state.badgeStyle == style, onClick = { model.setBadgeStyle(style) }, label = { Text(style.label) })
+                            }
+                        }
+                        if (state.badgeStyle != BadgeStyle.OFF) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BadgeColor.entries.forEach { color ->
+                                FilterChip(selected = state.badgeColor == color, onClick = { model.setBadgeColor(color) }, label = { Text(color.label) })
+                            }
+                        }
+                        Text("Style", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconStyle.entries.forEach { style ->
                                 FilterChip(selected = state.iconStyle == style, onClick = { model.setIconStyle(style, state.iconTint) },
@@ -167,9 +236,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }
                         if (state.iconStyle == IconStyle.TINTED) Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             listOf(0xFFFFB340, 0xFFFF6961, 0xFFFF7EB6, 0xFFBF8CFF, 0xFF64B5FF, 0xFF5EE0C4, 0xFF9BE15D, 0xFFE8E8E8).forEach { c ->
-                                Box(Modifier.size(32.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(c))
+                                Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(c))
                                     .then(if (state.iconTint == c) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
-                                    .clickable { model.setIconStyle(IconStyle.TINTED, c) })
+                                    .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { model.setIconStyle(IconStyle.TINTED, c) }
+                                    .semantics { contentDescription = "Tint color"; selected = state.iconTint == c })
                             }
                         }
                     }
@@ -216,13 +286,29 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         if (state.island && !IslandListenerService.hasAccess(islandContext)) TextButton(onClick = {
                             runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }) { Text("Allow notification access") }
-                        Text("Reads only music and ongoing progress. Nothing leaves your phone.",
+                        if (state.island) {
+                            Text("Long-press and drag the island to move it. On the inner screen the camera sits under the display, so drag it onto the camera once.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            TextButton(onClick = { IslandPosition.reset(islandContext) }) { Text("Put the island back at the camera") }
+                            Text("Brief pop-ups", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            listOf("CHARGING" to "Charging", "SILENT" to "Silent mode", "FOCUS" to "Do Not Disturb", "BLUETOOTH" to "Bluetooth devices", "MESSAGE" to "New messages (with quick reply)").forEach { (kind, label) ->
+                                SettingsSwitch(label, kind !in state.islandEventsOff, { model.setIslandEvent(kind, it) }, "island-event-${kind.lowercase()}")
+                            }
+                            if ("MESSAGE" !in state.islandEventsOff) MessageBannerSettings(state.messagesAvoidDouble, model::setMessagesAvoidDouble)
+                        }
+                        Text("Reads only music, calls, timers, navigation and progress. Nothing leaves your phone.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 CustomizationPage.FOLD -> {
                     SettingsCard("Fold animation") {
-                        SettingsSwitch("iPhone Duo–style blur", state.foldEffect, model::setFoldEffect, "fold-effect-switch")
+                        SettingsSwitch("Fold animation", state.foldEffect, model::setFoldEffect, "fold-effect-switch")
+                        if (state.foldEffect) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("Duo blur") })
+                            FilterChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text("Screenshot morph") })
+                        }
+                        if (state.foldEffect && state.foldSnapshot) Text("Takes a quick in-memory snapshot of Folio’s screen as the hinge starts moving and melts it into the other display. Nothing is saved.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (state.foldEffect) CustomizationSlider("Intensity", "${(state.foldIntensity * 100).toInt()}%",
                             state.foldIntensity, .3f..1.5f) { model.setFoldIntensity(it) }
                         Text("Your Fold reports only a few hinge positions, so Folio learns how fast you open and close and paces the effect to match.",
@@ -267,10 +353,10 @@ private fun LauncherHelp(
     onShadeSetup: () -> Unit,
 ) {
     HelpSection(Icons.Rounded.Home, "Home app",
-        if (isDefaultHome) "Duo is your Home app. You can switch launchers in Android’s Home settings."
-        else "Choose Duo in Android’s Home settings to use it when you press Home.")
+        if (isDefaultHome) "Folio is your Home app. You can switch launchers in Android’s Home settings."
+        else "Choose Folio in Android’s Home settings to use it when you press Home.")
     Button(onClick = onHomeSettings, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-home-settings")) {
-        Text(if (isDefaultHome) "Change home app" else "Set Duo as Home")
+        Text(if (isDefaultHome) "Change home app" else "Set Folio as Home")
     }
     HorizontalDivider(Modifier.padding(vertical = 4.dp))
     HelpSection(Icons.Rounded.TouchApp, "Customize any page",
@@ -282,12 +368,12 @@ private fun LauncherHelp(
     }
     HorizontalDivider(Modifier.padding(vertical = 4.dp))
     HelpSection(Icons.Rounded.SwipeDown, "Notifications and quick settings",
-        "Swipe down on Home. The first time, Duo explains Android’s optional Accessibility setting. The service only opens the system panels.")
+        "Pull down from the top of Home. The first time, Folio explains Android’s optional Accessibility setting, which opens the system panels and, if you turn them on, shows the dock handle and island over other apps.")
     TextButton(onClick = onShadeSetup, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-shade-setup")) {
         Text("Set up shade gestures")
     }
     HelpSection(Icons.Rounded.Explore, "Discover",
-        "Swipe right from the first Home page. If Google can’t provide the feed, Duo keeps a Home return and recovery actions available.")
+        "Swipe right from the first Home page. If Google can’t provide the feed, Folio keeps a Home return and recovery actions available.")
 }
 
 @Composable
@@ -374,6 +460,31 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
         }
     }
     TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Add widget to this page") }
+}
+
+/** Keeps Android's pop-up and Folio's island message card from showing for the same message. */
+@Composable private fun MessageBannerSettings(avoidDouble: Boolean, onAvoidDouble: (Boolean) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val channels by IslandListenerService.messageChannels.collectAsState()
+    SettingsSwitch("Don\u2019t double up with Android pop-ups", avoidDouble, onAvoidDouble, "messages-avoid-double-switch")
+    Text(if (avoidDouble) "Messages that Android already pops up are left to Android. Turn off Android\u2019s pop-up for an app below and its messages use the island instead (sound, badges and the notification list stay the same)."
+        else "The island shows every new message, even when Android also shows its own pop-up.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (!avoidDouble) return
+    val list = channels.values.sortedWith(compareBy({ !it.popsUp }, { it.appLabel }))
+    if (list.isEmpty()) Text("Messaging apps appear here after they post a notification.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    list.forEach { channel ->
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(channel.appLabel, style = MaterialTheme.typography.bodyLarge)
+                Text(listOfNotNull(channel.channelName, if (channel.popsUp) "Android pop-up" else "Island").joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (channel.popsUp) TextButton(onClick = { runCatching { context.startActivity(channel.settingsIntent()) } }) { Text("Use island") }
+            else Icon(Icons.Rounded.Check, "Uses the island", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
+        }
+    }
 }
 
 @Composable private fun SettingsSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit, tag: String? = null) {

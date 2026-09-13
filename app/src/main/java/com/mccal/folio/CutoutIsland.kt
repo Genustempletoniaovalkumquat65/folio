@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import kotlinx.coroutines.flow.first
 import android.graphics.Rect
 import android.view.ViewTreeObserver
 import androidx.compose.animation.AnimatedVisibility
@@ -11,6 +12,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -26,10 +29,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -64,7 +71,7 @@ internal sealed interface IslandContent {
  * symmetric around the camera; tapping opens a separate card underneath so the pill never moves.
  */
 @Composable
-internal fun CutoutIsland(activity: IslandActivity?, onOpen: (IslandActivity) -> Unit) {
+internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = emptySet(), onOpen: (IslandActivity) -> Unit) {
     val view = LocalView.current
     val density = LocalDensity.current
 
@@ -74,7 +81,9 @@ internal fun CutoutIsland(activity: IslandActivity?, onOpen: (IslandActivity) ->
     DisposableEffect(view) {
         val update = ViewTreeObserver.OnGlobalLayoutListener {
             windowWidth = view.rootView.width
-            cutout = view.rootWindowInsets?.displayCutout?.boundingRects?.minByOrNull { it.top }?.let(::Rect)
+            // Reported cutout first; otherwise a known under-display camera (e.g. Galaxy Z Fold8 inner screen).
+            cutout = view.rootWindowInsets?.displayCutout?.boundingRects?.filter { !it.isEmpty }?.minByOrNull { it.top }?.let(::Rect)
+                ?: CameraArea.hiddenCamera(view.display)
         }
         view.viewTreeObserver.addOnGlobalLayoutListener(update)
         update.onGlobalLayout()
@@ -83,55 +92,140 @@ internal fun CutoutIsland(activity: IslandActivity?, onOpen: (IslandActivity) ->
 
     val eventPair by IslandEvents.latest.collectAsState()
     var eventVisible by remember { mutableStateOf<IslandEvent?>(null) }
+    // While typing a quick reply the message stays put; nothing new replaces it.
+    var replying by remember { mutableStateOf(false) }
     LaunchedEffect(eventPair) {
+        if (replying) return@LaunchedEffect
         val (event, at) = eventPair ?: return@LaunchedEffect
-        val remaining = IslandEvents.SHOW_MS - (System.currentTimeMillis() - at)
+        if (event.kind in eventsOff) return@LaunchedEffect
+        val remaining = IslandEvents.showMs(event) - (System.currentTimeMillis() - at)
         if (remaining <= 0) return@LaunchedEffect
-        eventVisible = event; delay(remaining); eventVisible = null
+        eventVisible = event; delay(remaining)
+        snapshotFlow { replying }.first { r -> !r }
+        eventVisible = null
     }
+    val message = eventVisible as? IslandEvent.Message
+    // Only a reply in progress owns Back; a passing message card must not swallow Back for the rest of Home.
+    androidx.activity.compose.BackHandler(message != null && replying) { replying = false; eventVisible = null }
     val content: IslandContent? = eventVisible?.let { IslandContent.Event(it) } ?: activity?.let { IslandContent.Live(it) }
     var expanded by remember(activity?.packageName) { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(expanded) { expanded = false }
     if (content == null || windowWidth <= 0) return
 
-    with(density) {
-        val cam = cutout
-        val camW = (cam?.width() ?: 0).toDp()
-        val camH = (cam?.height() ?: 0).toDp()
-        val centerX = cam?.exactCenterX() ?: (windowWidth / 2f)
-        val centerY = cam?.exactCenterY()?.toDp() ?: 18.dp
-        // Height hugs the camera; never taller than fits above/below its center.
-        val pillH = (maxOf(camH + 8.dp, 30.dp)).coerceAtMost(maxOf(camH + 4.dp, (centerY - 2.dp) * 2))
-        // Width is symmetric around the camera and capped by the room on the narrower side.
-        val room = (minOf(centerX, windowWidth - centerX)).toDp() - 8.dp
-        val wantW = islandWantWidth(content, camW)
-        val targetW = minOf(wantW, room * 2).coerceAtLeast(camW + pillH)
-        val width by animateDpAsState(targetW, spring(dampingRatio = .72f, stiffness = Spring.StiffnessMediumLow), label = "island-width")
-        val left = centerX - width.toPx() / 2f
-        val top = centerY - pillH / 2
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val wide = with(density) { windowWidth.toDp() } >= 600.dp
+    // A spot the user dragged the island to on this screen (needed on the inner screen, whose
+    // under-display camera isn't reported by Android). Null = wrap the reported camera cutout.
+    var custom by remember(wide) { mutableStateOf(IslandPosition.load(context, wide)) }
+    var dragOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var dragging by remember { mutableStateOf(false) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
 
-        // Compact pill
-        Box(Modifier.offset { IntOffset(left.roundToInt(), top.roundToPx()) }.size(width, pillH)
-            .clip(RoundedCornerShape(pillH / 2)).background(Color.Black)
-            .clickable(remember { MutableInteractionSource() }, null) {
-                if (content is IslandContent.Live) expanded = !expanded
+    with(density) {
+        val cameraGeometry = islandGeometry(cutout, windowWidth, density.density)
+        val geometry = custom?.let { islandGeometryAt(it.xFraction * windowWidth, it.topDp, windowWidth, density.density) } ?: cameraGeometry
+        val camW = geometry.camW.dp
+        val pillH = geometry.pillH.dp
+        val centerX = geometry.centerXPx
+        val live = (content as? IslandContent.Live)?.activity
+        // A new message opens straight into a small card (like an iPhone banner coming out of the island).
+        val open = (expanded && live != null) || message != null
+        val cardW = 340.dp.coerceAtMost(windowWidth.toDp() - 16.dp)
+        // One shape morphs between pill and card: width, corner radius and height all spring together,
+        // anchored to the camera like the real Dynamic Island.
+        val morph = spring<Dp>(dampingRatio = .74f, stiffness = Spring.StiffnessMediumLow)
+        val width by animateDpAsState(if (open) cardW else geometry.widthFor(content).dp, morph, label = "island-width")
+        val corner by animateDpAsState(if (open) 34.dp else pillH / 2, morph, label = "island-corner")
+        val left = (centerX - width.toPx() / 2f).coerceIn(8.dp.toPx(), windowWidth - width.toPx() - 8.dp.toPx())
+        val top = geometry.top.dp
+
+        Box(Modifier.offset { IntOffset((left + dragOffset.x).roundToInt(), (top.toPx() + dragOffset.y).roundToInt()) }.width(width)
+            .graphicsLayer { val s = if (dragging) 1.06f else 1f; scaleX = s; scaleY = s }
+            // Long-press and drag to move it; dropping near the camera snaps back to the camera.
+            .pointerInput(wide, windowWidth) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { dragging = true; expanded = false; haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
+                    onDragCancel = { dragging = false; dragOffset = androidx.compose.ui.geometry.Offset.Zero },
+                    onDragEnd = {
+                        dragging = false
+                        val newCenterX = (geometry.centerXPx + dragOffset.x).coerceIn(0f, windowWidth.toFloat())
+                        val newTopDp = (geometry.top + dragOffset.y / density.density).coerceAtLeast(4f)
+                        val nearCamera = kotlin.math.abs(newCenterX - cameraGeometry.centerXPx) < 56.dp.toPx() &&
+                            kotlin.math.abs(newTopDp - cameraGeometry.top) < 40f && cutout != null
+                        custom = if (nearCamera) null else IslandPosition(newCenterX / windowWidth, newTopDp)
+                        IslandPosition.save(context, wide, custom)
+                        dragOffset = androidx.compose.ui.geometry.Offset.Zero
+                    },
+                ) { change, amount -> change.consume(); dragOffset += amount }
             }
+            .animateContentSize(spring(dampingRatio = .78f, stiffness = Spring.StiffnessMediumLow))
+            .clip(RoundedCornerShape(corner)).background(Color.Black)
+            .clickable(remember { MutableInteractionSource() }, null) { if (message == null && live != null) expanded = !expanded }
             .semantics { contentDescription = describe(content) }
             .testTag("cutout-island")) {
-            IslandPillContent(content, camW, pillH)
-        }
-
-        // Expanded card under the pill (clamped to the screen; the pill itself stays put)
-        val live = (content as? IslandContent.Live)?.activity
-        val cardW = 320.dp.coerceAtMost(windowWidth.toDp() - 16.dp)
-        val cardLeft = (centerX - cardW.toPx() / 2f).coerceIn(8.dp.toPx(), windowWidth - cardW.toPx() - 8.dp.toPx())
-        AnimatedVisibility(expanded && live != null,
-            modifier = Modifier.offset { IntOffset(cardLeft.roundToInt(), (top + pillH + 8.dp).roundToPx()) },
-            enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) + scaleIn(spring(dampingRatio = .75f, stiffness = Spring.StiffnessMediumLow),
-                initialScale = .6f, transformOrigin = TransformOrigin(.5f, 0f)),
-            exit = fadeOut(tween(140)) + scaleOut(tween(160), targetScale = .7f, transformOrigin = TransformOrigin(.5f, 0f))) {
-            if (live != null) ExpandedCard(live, cardW, onOpen = { expanded = false; onOpen(live) })
+            androidx.compose.animation.AnimatedContent(open, label = "island-content",
+                transitionSpec = { fadeIn(tween(220, delayMillis = 60)) togetherWith fadeOut(tween(90)) }) { showCard ->
+                if (showCard && message != null) MessageCardContent(message, replying, onReply = { replying = true },
+                    onOpen = { replying = false; eventVisible = null; IslandListenerService.openKey(context, message.key, message.packageName) },
+                    onDone = { replying = false; eventVisible = null })
+                else if (showCard && live != null) ExpandedCardContent(live, onOpen = { expanded = false; onOpen(live) })
+                else Box(Modifier.width(geometry.widthFor(content).dp).height(pillH)) { IslandPillContent(content, camW, pillH) }
+            }
         }
     }
+}
+
+/** Where the user dragged the island on one screen: horizontal center as a fraction of width, top in dp. */
+internal data class IslandPosition(val xFraction: Float, val topDp: Float) {
+    companion object {
+        private fun key(wide: Boolean) = if (wide) "island_pos_inner" else "island_pos_cover"
+        fun load(context: android.content.Context, wide: Boolean): IslandPosition? =
+            context.getSharedPreferences("folio", 0).getString(key(wide), null)?.split(',')?.let { parts ->
+                runCatching { IslandPosition(parts[0].toFloat(), parts[1].toFloat()) }.getOrNull()
+            }
+        fun save(context: android.content.Context, wide: Boolean, position: IslandPosition?) {
+            context.getSharedPreferences("folio", 0).edit().apply {
+                if (position == null) remove(key(wide)) else putString(key(wide), "${position.xFraction},${position.topDp}")
+            }.apply()
+        }
+        fun reset(context: android.content.Context) {
+            context.getSharedPreferences("folio", 0).edit().remove(key(true)).remove(key(false)).apply()
+        }
+    }
+}
+
+/** Island placed at a free position (no camera inside). */
+internal fun islandGeometryAt(centerXPx: Float, topDp: Float, windowWidthPx: Int, density: Float): IslandGeometry {
+    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - 8f
+    val pillH = 34f
+    return IslandGeometry(0f, 0f, centerXPx, topDp + pillH / 2, pillH, maxOf(room * 2, 80f), topDp)
+}
+
+/** Pure placement of the island around a camera cutout. Dp values except [centerXPx]. */
+internal data class IslandGeometry(val camW: Float, val camH: Float, val centerXPx: Float, val centerY: Float, val pillH: Float, val maxW: Float,
+    val top: Float = centerY - pillH / 2) {
+    fun widthFor(content: IslandContent): Float = minOf(islandWantWidth(content, camW.dp).value, maxW).coerceAtLeast(camW + pillH)
+}
+
+internal fun islandGeometry(cutout: Rect?, windowWidthPx: Int, density: Float): IslandGeometry =
+    if (cutout == null) islandGeometry(null as IntArray?, windowWidthPx, density)
+    else islandGeometry(intArrayOf(cutout.left, cutout.top, cutout.right, cutout.bottom), windowWidthPx, density)
+
+/** [cutoutLtrb] is left, top, right, bottom in px (or null when the display has no cutout). */
+internal fun islandGeometry(cutoutLtrb: IntArray?, windowWidthPx: Int, density: Float): IslandGeometry {
+    val camW = (cutoutLtrb?.let { it[2] - it[0] } ?: 0) / density
+    val camH = (cutoutLtrb?.let { it[3] - it[1] } ?: 0) / density
+    val centerXPx = cutoutLtrb?.let { (it[0] + it[2]) / 2f } ?: (windowWidthPx / 2f)
+    val centerY = (cutoutLtrb?.let { (it[1] + it[3]) / 2f } ?: (18 * density)) / density
+    // Keep a real gap from the screen edge (like iPhone), wrap the camera with a small margin, and
+    // never be shorter than a comfortable pill.
+    val camTop = (cutoutLtrb?.get(1) ?: (12 * density).toInt()) / density
+    val camBottom = camTop + camH
+    val top = maxOf(ISLAND_EDGE_GAP, camTop - ISLAND_CAMERA_MARGIN)
+    val pillH = maxOf(camBottom + ISLAND_CAMERA_MARGIN - top, ISLAND_MIN_HEIGHT)
+    // Width stays symmetric around the camera, capped by the room on the narrower side.
+    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - 8f
+    return IslandGeometry(camW, camH, centerXPx, top + pillH / 2, pillH, room * 2, top)
 }
 
 /** The inside of the compact pill: glyph left of the camera, detail right of it. */
@@ -159,6 +253,7 @@ internal fun describe(content: IslandContent): String = when (content) {
         is IslandEvent.Silent -> if (e.on) "Silent mode on" else "Silent mode off"
         is IslandEvent.Focus -> if (e.on) "Do Not Disturb on" else "Do Not Disturb off"
         is IslandEvent.Bluetooth -> "Connected${e.name?.let { " to $it" } ?: ""}"
+        is IslandEvent.Message -> "Message from ${e.sender}${e.text?.let { ": $it" } ?: ""}"
     }
     is IslandContent.Live -> content.activity.title + ". Tap for details"
 }
@@ -183,12 +278,14 @@ private fun LeadingGlyph(content: IslandContent, size: Dp) {
                 Text("Focus", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             is IslandEvent.Bluetooth -> Icon(Icons.Rounded.Headphones, null, tint = Blue, modifier = Modifier.size(size * .8f))
+            is IslandEvent.Message -> MessageAvatar(e, size)
         }
         is IslandContent.Live -> when (val a = content.activity) {
             is IslandActivity.Call -> CircleGlyph(Icons.Rounded.Call, Green, size)
             is IslandActivity.Timer -> CircleGlyph(Icons.Rounded.Timer, Orange, size)
             is IslandActivity.Navigation -> CircleGlyph(Icons.Rounded.TurnRight, Blue, size)
-            else -> a.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(size).clip(RoundedCornerShape(size * .28f))) }
+            else -> ((a as? IslandActivity.Media)?.art ?: a.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(size).clip(RoundedCornerShape(size * .28f)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
         }
     }
 }
@@ -201,23 +298,65 @@ private fun TrailingGlyph(content: IslandContent, size: Dp) {
             is IslandEvent.Silent -> Text(if (e.on) "On" else "Off", color = if (e.on) Red else Color.White.copy(alpha = .7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             is IslandEvent.Focus -> Text(if (e.on) "On" else "Off", color = if (e.on) Purple else Color.White.copy(alpha = .7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             is IslandEvent.Bluetooth -> Text(e.name ?: "Connected", color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            is IslandEvent.Message -> e.appIcon?.let { Image(it.asImageBitmap(), null, Modifier.size(size * .8f).clip(RoundedCornerShape(size * .22f))) }
         }
         is IslandContent.Live -> when (val a = content.activity) {
             is IslandActivity.Media -> Bars(a.playing)
             is IslandActivity.Progress -> Ring(a.fraction, size)
-            is IslandActivity.Call -> Chronometer(a.since ?: System.currentTimeMillis(), countDown = false, color = Green)
+            is IslandActivity.Call -> Chronometer(remember(a.key) { a.since ?: System.currentTimeMillis() }, countDown = false, color = Green)
             is IslandActivity.Timer -> Chronometer(a.base, a.countDown, Orange)
             is IslandActivity.Navigation -> Text(a.subtitle ?: a.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
+/** Sender photo, or the app icon when the app didn't include one. */
 @Composable
-private fun ExpandedCard(activity: IslandActivity, width: Dp, onOpen: () -> Unit) {
-    Column(Modifier.width(width).clip(RoundedCornerShape(30.dp)).background(Color.Black).padding(16.dp),
+private fun MessageAvatar(message: IslandEvent.Message, size: Dp) {
+    val bitmap = message.avatar ?: message.appIcon
+    if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.size(size).clip(if (message.avatar != null) CircleShape else RoundedCornerShape(size * .24f)))
+    else Box(Modifier.size(size).clip(CircleShape).background(Color(0xFF3A3A3C)), contentAlignment = Alignment.Center) {
+        Text(message.sender.take(1).uppercase(), color = Color.White, fontSize = (size.value * .42f).sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun MessageCardContent(message: IslandEvent.Message, replying: Boolean, onReply: () -> Unit, onOpen: () -> Unit, onDone: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.Top, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpen)) {
+            Box {
+                MessageAvatar(message, 44.dp)
+                if (message.avatar != null) message.appIcon?.let {
+                    Image(it.asImageBitmap(), null, Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(20.dp).clip(RoundedCornerShape(5.dp)))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(message.sender, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(message.appLabel, color = Color.White.copy(alpha = .5f), fontSize = 12.sp, maxLines = 1)
+                }
+                message.text?.let { Text(it, color = Color.White.copy(alpha = .85f), fontSize = 14.sp, maxLines = if (replying) 2 else 3,
+                    overflow = TextOverflow.Ellipsis, lineHeight = 18.sp) }
+            }
+        }
+        if (replying) QuickReplyField(message.sender.substringBefore(" · "), onSend = { IslandListenerService.reply(context, message.key, it) }, onDone = onDone)
+        else if (message.canReply) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MessageActionPill("Reply", onReply)
+        }
+    }
+}
+
+@Composable
+private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpen)) {
-            activity.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(11.dp))) }
+            ((activity as? IslandActivity.Media)?.art ?: activity.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(activity.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -230,7 +369,7 @@ private fun ExpandedCard(activity: IslandActivity, width: Dp, onOpen: () -> Unit
                 subtitle?.let { Text(it, color = Color.White.copy(alpha = .6f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
             when (activity) {
-                is IslandActivity.Call -> Chronometer(activity.since ?: System.currentTimeMillis(), false, Green, 20.sp)
+                is IslandActivity.Call -> Chronometer(remember(activity.key) { activity.since ?: System.currentTimeMillis() }, false, Green, 20.sp)
                 is IslandActivity.Timer -> Chronometer(activity.base, activity.countDown, Orange, 20.sp)
                 else -> Unit
             }
@@ -238,10 +377,10 @@ private fun ExpandedCard(activity: IslandActivity, width: Dp, onOpen: () -> Unit
         when (activity) {
             is IslandActivity.Media -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 val t = activity.controller.transportControls
-                Icon(Icons.Rounded.FastRewind, "Previous", tint = Color.White, modifier = Modifier.size(34.dp).clip(CircleShape).clickable { t.skipToPrevious() })
+                Icon(Icons.Rounded.FastRewind, "Previous", tint = Color.White, modifier = Modifier.minimumInteractiveComponentSize().size(34.dp).clip(CircleShape).clickable { t.skipToPrevious() })
                 Icon(if (activity.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, "Play or pause", tint = Color.White,
                     modifier = Modifier.size(44.dp).clip(CircleShape).clickable { if (activity.playing) t.pause() else t.play() })
-                Icon(Icons.Rounded.FastForward, "Next", tint = Color.White, modifier = Modifier.size(34.dp).clip(CircleShape).clickable { t.skipToNext() })
+                Icon(Icons.Rounded.FastForward, "Next", tint = Color.White, modifier = Modifier.minimumInteractiveComponentSize().size(34.dp).clip(CircleShape).clickable { t.skipToNext() })
             }
             is IslandActivity.Progress -> activity.fraction?.let { f ->
                 Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = .2f))) {
@@ -263,9 +402,7 @@ private fun CircleGlyph(icon: ImageVector, color: Color, size: Dp) {
 
 @Composable
 private fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
-    val now by produceState(System.currentTimeMillis()) {
-        while (true) { value = System.currentTimeMillis(); delay(1_000L - (value % 1_000L)) }
-    }
+    val now by rememberSecondTick()
     val seconds = ((if (countDown) base - now else now - base) / 1000).coerceAtLeast(0)
     val text = if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
         else "%d:%02d".format(seconds / 60, seconds % 60)
@@ -275,8 +412,11 @@ private fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: 
 
 @Composable
 private fun Bars(playing: Boolean) {
-    val transition = rememberInfiniteTransition(label = "island-bars")
-    val phase by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "phase")
+    // No infinite animation while paused: a paused session must not redraw forever.
+    val phase = if (playing) {
+        val transition = rememberInfiniteTransition(label = "island-bars")
+        transition.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "phase").value
+    } else 0f
     Canvas(Modifier.size(width = 20.dp, height = 14.dp)) {
         val w = size.width / 7
         for (i in 0 until 4) {
@@ -304,3 +444,7 @@ private val Orange = Color(0xFFFF9F0A)
 private val Red = Color(0xFFFF453A)
 private val Purple = Color(0xFF5E5CE6)
 private val Blue = Color(0xFF0A84FF)
+
+private const val ISLAND_EDGE_GAP = 6f
+private const val ISLAND_CAMERA_MARGIN = 5f
+private const val ISLAND_MIN_HEIGHT = 34f

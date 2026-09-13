@@ -3,6 +3,10 @@ package com.mccal.folio
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -23,6 +27,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun FolderPanel(
@@ -30,38 +37,76 @@ internal fun FolderPanel(
     homeDestinations: List<Int>, dockVacancies: List<Int>, onDismiss: () -> Unit,
     onRename: (String) -> Unit, onLaunch: (AppEntry, android.graphics.Rect?) -> Unit,
     onMoveOut: (String, DropTarget) -> Unit,
+    color: Long? = null, onColor: (Long?) -> Unit = {},
 ) {
     var title by rememberSaveable(folder.id) { mutableStateOf(folder.title) }
-    BackHandler { onDismiss() }
+    // Zoom in from the folder's tile on Home and back into it on close, like iPhone folders.
+    val appear = remember(folder.id) { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var closing by remember(folder.id) { mutableStateOf(false) }
+    val close: () -> Unit = {
+        if (!closing) { closing = true; scope.launch {
+            appear.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 700f)); onDismiss()
+        } }
+    }
+    val tile = remember(folder.id) { IconBounds.of(folder.id) }
+    var panelBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    BackHandler { close() }
+    DisposableEffect(folder.id) { onDispose { if (title.isNotBlank() && title != folder.title) onRename(title) } }
     DisposableEffect(drag, folder.id) {
         drag.activeSourceScope = folder.id
         onDispose { if (drag.activeSourceScope == folder.id) drag.activeSourceScope = null }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .28f))
+    LaunchedEffect(folder.id) { appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .78f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)) }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value.coerceIn(0f, 1f) }.background(FolioGlass.scrim)
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             onClickLabel = "Close folder",
-            onClick = onDismiss,
+            onClick = close,
         )
         .imePadding().testTag("folder-panel"),
         contentAlignment = Alignment.Center) {
-        Surface(Modifier.fillMaxWidth(.9f).fillMaxHeight(.82f).heightIn(min = 260.dp, max = 620.dp)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
+            .onGloballyPositioned { panelBounds = it.boundsInWindow() }
+            .graphicsLayer {
+                val p = appear.value
+                if (tile != null && panelBounds.width > 0f) {
+                    val start = (tile.width() / panelBounds.width).coerceIn(.08f, 1f)
+                    val s = start + (1f - start) * p; scaleX = s; scaleY = s
+                    translationX = (tile.exactCenterX() - panelBounds.center.x) * (1f - p)
+                    translationY = (tile.exactCenterY() - panelBounds.center.y) * (1f - p)
+                    alpha = (p * 1.8f).coerceIn(0f, 1f)
+                } else { val s = .86f + .14f * p; scaleX = s; scaleY = s }
+            }) {
+        androidx.compose.foundation.text.BasicTextField(title, { title = it },
+            Modifier.widthIn(max = 420.dp).padding(bottom = 18.dp).testTag("folder-name"), singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (title.isNotBlank()) onRename(title) }))
+        // Folder tint: none + a few iOS-like colors.
+        androidx.compose.foundation.layout.Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            (listOf<Long?>(null) + FolderSwatches).forEach { swatch ->
+                val selected = swatch == color
+                Box(Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(swatch?.let { Color(it) } ?: Color.White.copy(alpha = .18f))
+                    .then(if (selected) Modifier.border(2.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape) else Modifier)
+                    .clickable(onClickLabel = if (swatch == null) "No folder color" else "Folder color") { onColor(swatch) })
+            }
+        }
+        Surface(Modifier.fillMaxWidth(.86f).widthIn(max = 520.dp).fillMaxHeight(.7f).heightIn(min = 240.dp, max = 560.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = {},
             )
             .testTag("folder-panel-content"),
-            color = Glass.copy(alpha = .97f), shape = RoundedCornerShape(30.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .6f))) {
-            Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(title, { title = it }, Modifier.weight(1f).testTag("folder-name"),
-                        singleLine = true, label = { Text("Folder name") })
-                    TextButton(onClick = { if (title.isNotBlank()) onRename(title); onDismiss() }) { Text("Done") }
-                }
-                LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
+            color = FolioGlass.card, contentColor = Color.White, shape = RoundedCornerShape(38.dp),
+            border = FolioGlass.edge) {
+            Column(Modifier.padding(20.dp)) {
+                LazyVerticalGrid(GridCells.Adaptive(84.dp), Modifier.fillMaxWidth().weight(1f),
                     contentPadding = PaddingValues(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(folder.appIds, key = { it }) { appId ->
@@ -70,6 +115,7 @@ internal fun FolderPanel(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -81,13 +127,13 @@ private fun FolderChild(
     onLaunch: (AppEntry, android.graphics.Rect?) -> Unit, onMoveOut: (String, DropTarget) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
-    Surface(Modifier.fillMaxWidth().testTag("folder-child-${app.id}"), color = Color.White.copy(alpha = .34f),
+    Surface(Modifier.fillMaxWidth().testTag("folder-child-${app.id}"), color = Color.Transparent, contentColor = Color.White,
         shape = RoundedCornerShape(18.dp)) {
         Box {
             Column(Modifier.fillMaxWidth().dropRegion(drag, DropTarget.Library(app.id), app.id, page,
                 folderId = folderId, scope = folderId).clickable(enabled = app.available) { onLaunch(app, null) }
                 .padding(horizontal = 6.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                AppIcon(app, null, Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)))
+                AppIcon(app, null, Modifier.size(58.dp), shape = RoundedCornerShape(14.dp))
                 Text(app.label, Modifier.padding(top = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium)
                 if (app.isWork || !app.available) Text(if (app.available) app.profileLabel else "${app.profileLabel} unavailable",
@@ -115,3 +161,5 @@ private fun FolderChild(
         }
     }
 }
+
+private val FolderSwatches = listOf(0xFFFF6B63, 0xFFFFA94D, 0xFFFFD84D, 0xFF63D98B, 0xFF4DB8FF, 0xFF8E7CFF, 0xFFFF7EB9)

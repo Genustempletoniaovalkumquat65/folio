@@ -12,7 +12,11 @@ Duo Launcher stores settings, Home layout, widget placement, and selected wallpa
 
 ## Optional access
 
-The shade-gesture accessibility service opens notifications or Quick Settings in response to your gesture. It cannot retrieve window contents or perform gesture injection and unsubscribes from accessibility events when connected. You can disable it in Android Accessibility settings and continue using the launcher.
+The “Folio gestures & overlays” accessibility service opens notifications or Quick Settings in response to your gesture. If you turn them on, it also draws Folio’s dock handle and Dynamic Island over other apps, launches your dock apps and performs Home. It cannot retrieve window contents or perform gesture injection and unsubscribes from accessibility events when connected. You can disable it in Android Accessibility settings and continue using the launcher.
+
+Notification access (optional) lets the Dynamic Island and Notification Center show music, calls, timers, navigation, progress and your notifications. Notification content is kept only in memory while shown and is cleared when access is turned off; it is never stored or sent anywhere. When you use quick reply or Mark as Read, Folio passes your text to that notification’s own reply action inside the messaging app (the same thing the system notification shade does); Folio itself sends nothing over the network. Spotlight’s Message button opens your texting app, or OpenBubbles/BlueBubbles if you choose one, with the contact’s number or email.
+
+Contacts (optional) are searched on the device from Spotlight only. Bluetooth device names (optional) are shown in the island when a device connects. Folio remembers the last apps you launched on the device to suggest them in Spotlight, and learns how fast you open and close the phone to pace the fold animation; both stay in Folio’s private storage.
 
 Android controls widget-binding approval and Home-app selection. Providers can require separate setup or permissions.
 

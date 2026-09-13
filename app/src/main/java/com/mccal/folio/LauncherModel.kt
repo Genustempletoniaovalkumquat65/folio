@@ -67,15 +67,45 @@ data class LauncherState(
     val statusStyle: StatusStyle = StatusStyle(),
     val foldEffect: Boolean = true,
     val foldIntensity: Float = 1f,
+    /** Fold style: Duo blur (false) or screenshot morph (true). */
+    val foldSnapshot: Boolean = false,
     val stayAwakeOnFold: Boolean = true,
     /** Blur of Home behind panels and Spotlight, 0…1. */
-    val panelBlur: Float = .6f,
+    val panelBlur: Float = 1f,
     val notificationClock: Boolean = true,
     val groupNotifications: Boolean = true,
     val dockEverywhere: Boolean = false,
     val iconStyle: IconStyle = IconStyle.DEFAULT,
     val standBy: Boolean = true,
+    /** Spotlight sections the user turned off (names of [SpotlightSection]). */
+    val spotlightHidden: Set<String> = emptySet(),
+    /** Engine for Enter in search: a [WebSearchTarget] name. */
+    val searchEngine: String = "GOOGLE",
+    /** Island system pop-ups the user turned off (IslandEventKind names). */
+    val islandEventsOff: Set<String> = emptySet(),
+    val libraryCategories: Boolean = true,
     val iconTint: Long = 0xFFFFB340,
+    val iconShape: IconShape = IconShape.DEFAULT,
+    /** Package of the selected third-party icon pack, or null for app icons. */
+    val iconPack: String? = null,
+    val badgeStyle: BadgeStyle = BadgeStyle.DOT,
+    val badgeColor: BadgeColor = BadgeColor.RED,
+    /** iOS "Search" capsule on Home in place of the page dots. */
+    val searchPill: Boolean = true,
+    /** Swipe down on Home (below the top edge) opens Spotlight. */
+    val swipeDownSearch: Boolean = true,
+    /** App for messaging contacts from Spotlight: null = default texting app, or OpenBubbles/BlueBubbles. */
+    val messagesApp: String? = null,
+    val messagesAvoidDouble: Boolean = true,
+    /** Control Center's small controls, in order (names of [CcControl]). */
+    val ccControls: List<String> = CcControl.DEFAULTS,
+    val ccSize: PanelSize = PanelSize.STANDARD,
+    /** Unfolded: Control Center in the middle instead of under the right-hand pull. */
+    val ccCentered: Boolean = false,
+    /** Unfolded: iPad-style Notification Center (clock left, notifications right). */
+    val ncSplit: Boolean = true,
+    /** Optional tint per folder id (ARGB). */
+    val folderColors: Map<String, Long> = emptyMap(),
     val islandEverywhere: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
@@ -233,7 +263,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     val validPins = pins.map { it?.takeUnless(removedIds::contains) }
                     val validDock = dock.map { it?.takeUnless(removedIds::contains) }
                     val reconciled = reconcileFolders(HomeLayout(validPins, validDock, old.widgetPlacements, old.folders,
-                        old.widgetRestores, old.leadingSlots), removedIds)
+                        old.widgetRestores, old.leadingSlots, old.minPages), removedIds)
                     old.copy(apps = entries, profiles = profiles, homeSlots = reconciled.slots, leadingSlots = reconciled.leadingSlots,
                         dock = reconciled.dock, folders = reconciled.folders,
                         canUndoEdit = old.canUndoEdit && old.layout == reconciled, loading = false,
@@ -442,26 +472,47 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun setLabels(value: Boolean) { if (statePayloadInvalid) return; undoLayout = null; undoImportSettings = null; mutable.update { it.copy(labels = value, canUndoEdit = false) }; persist() }
     /** Adds an empty Home page after the last one; returns its index. */
     fun addPage(): Int { if (statePayloadInvalid) return -1; val next = state.value.homePages
-        mutable.update { it.copy(minPages = (next + 1).coerceAtMost(20)) }; persist(); return next }
+        undoLayout = null; mutable.update { it.copy(minPages = (next + 1).coerceAtMost(20), canUndoEdit = false) }; persist(); return next }
     /** Removes the last page when it has no apps or widgets. */
     fun removeLastEmptyPage(): Boolean { if (statePayloadInvalid) return false; val s = state.value
         if (s.homePages <= 1 || s.layout.contentPageCount >= s.homePages) return false
-        mutable.update { it.copy(minPages = maxOf(1, it.homePages - 1)) }; persist(); return true }
-    fun setStandBy(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(standBy = value) }; persist() }
-    fun setIconStyle(style: IconStyle, tint: Long) { if (statePayloadInvalid) return; mutable.update { it.copy(iconStyle = style, iconTint = tint) }; persist() }
-    fun setDockEverywhere(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(dockEverywhere = value) }; persist() }
-    fun setIslandEverywhere(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(islandEverywhere = value) }; persist() }
-    fun setPanelBlur(value: Float) { if (statePayloadInvalid) return; mutable.update { it.copy(panelBlur = value) }; persist() }
-    fun setNotificationClock(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(notificationClock = value) }; persist() }
-    fun setGroupNotifications(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(groupNotifications = value) }; persist() }
-    fun setFoldEffect(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(foldEffect = value) }; persist() }
-    fun setFoldIntensity(value: Float) { if (statePayloadInvalid) return; mutable.update { it.copy(foldIntensity = value) }; persist() }
-    fun setStayAwakeOnFold(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(stayAwakeOnFold = value) }; persist() }
-    fun setStatusStyle(style: StatusStyle) { if (statePayloadInvalid) return; mutable.update { it.copy(statusStyle = style) }; persist() }
-    fun setFolioPanels(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(folioPanels = value) }; persist() }
-    fun setIsland(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(island = value) }; persist() }
-    fun setHidden(id: String, hidden: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(hiddenApps = if (hidden) it.hiddenApps + id else it.hiddenApps - id) }; persist() }
-    fun setLeftHanded(value: Boolean) { if (statePayloadInvalid) return; mutable.update { it.copy(leftHanded = value) }; persist() }
+        undoLayout = null; mutable.update { it.copy(minPages = maxOf(1, it.homePages - 1), canUndoEdit = false) }; persist(); return true }
+    fun setSpotlightSection(section: String, visible: Boolean) = updateSettings(soon = false) {
+        it.copy(spotlightHidden = if (visible) it.spotlightHidden - section else it.spotlightHidden + section) }
+    fun setSearchEngine(engine: String) = updateSettings(soon = false) { it.copy(searchEngine = engine) }
+    fun setIslandEvent(kind: String, enabled: Boolean) = updateSettings(soon = false) {
+        it.copy(islandEventsOff = if (enabled) it.islandEventsOff - kind else it.islandEventsOff + kind) }
+    fun setLibraryCategories(value: Boolean) = updateSettings(soon = false) { it.copy(libraryCategories = value) }
+    fun setFoldSnapshot(value: Boolean) = updateSettings(soon = false) { it.copy(foldSnapshot = value) }
+    fun setStandBy(value: Boolean) = updateSettings(soon = false) { it.copy(standBy = value) }
+    fun setIconStyle(style: IconStyle, tint: Long) = updateSettings(soon = false) { it.copy(iconStyle = style, iconTint = tint) }
+    fun setIconShape(shape: IconShape) = updateSettings(soon = false) { it.copy(iconShape = shape) }
+    fun setIconPack(pack: String?) = updateSettings(soon = false) { it.copy(iconPack = pack) }
+    fun setBadgeStyle(style: BadgeStyle) = updateSettings(soon = false) { it.copy(badgeStyle = style) }
+    fun setBadgeColor(color: BadgeColor) = updateSettings(soon = false) { it.copy(badgeColor = color) }
+    fun setSearchPill(value: Boolean) = updateSettings(soon = false) { it.copy(searchPill = value) }
+    fun setSwipeDownSearch(value: Boolean) = updateSettings(soon = false) { it.copy(swipeDownSearch = value) }
+    fun setMessagesApp(pkg: String?) = updateSettings(soon = false) { it.copy(messagesApp = pkg) }
+    fun setMessagesAvoidDouble(value: Boolean) = updateSettings(soon = false) { it.copy(messagesAvoidDouble = value) }
+    fun setCcControls(controls: List<String>) = updateSettings(soon = false) { it.copy(ccControls = controls.distinct()) }
+    fun setCcSize(size: PanelSize) = updateSettings(soon = false) { it.copy(ccSize = size) }
+    fun setCcCentered(value: Boolean) = updateSettings(soon = false) { it.copy(ccCentered = value) }
+    fun setNcSplit(value: Boolean) = updateSettings(soon = false) { it.copy(ncSplit = value) }
+    fun setFolderColor(folderId: String, color: Long?) = updateSettings(soon = false) {
+        it.copy(folderColors = if (color == null) it.folderColors - folderId else it.folderColors + (folderId to color)) }
+    fun setDockEverywhere(value: Boolean) = updateSettings(soon = false) { it.copy(dockEverywhere = value) }
+    fun setIslandEverywhere(value: Boolean) = updateSettings(soon = false) { it.copy(islandEverywhere = value) }
+    fun setPanelBlur(value: Float) = updateSettings(soon = true) { it.copy(panelBlur = value) }
+    fun setNotificationClock(value: Boolean) = updateSettings(soon = false) { it.copy(notificationClock = value) }
+    fun setGroupNotifications(value: Boolean) = updateSettings(soon = false) { it.copy(groupNotifications = value) }
+    fun setFoldEffect(value: Boolean) = updateSettings(soon = false) { it.copy(foldEffect = value) }
+    fun setFoldIntensity(value: Float) = updateSettings(soon = true) { it.copy(foldIntensity = value) }
+    fun setStayAwakeOnFold(value: Boolean) = updateSettings(soon = false) { it.copy(stayAwakeOnFold = value) }
+    fun setStatusStyle(style: StatusStyle) = updateSettings(soon = true) { it.copy(statusStyle = style) }
+    fun setFolioPanels(value: Boolean) = updateSettings(soon = false) { it.copy(folioPanels = value) }
+    fun setIsland(value: Boolean) = updateSettings(soon = false) { it.copy(island = value) }
+    fun setHidden(id: String, hidden: Boolean) = updateSettings(soon = false) { it.copy(hiddenApps = if (hidden) it.hiddenApps + id else it.hiddenApps - id) }
+    fun setLeftHanded(value: Boolean) = updateSettings(soon = false) { it.copy(leftHanded = value) }
     fun setVerticalStatus(value: Boolean) { if (statePayloadInvalid) return; undoLayout = null; undoImportSettings = null; mutable.update { it.copy(verticalStatus = value, canUndoEdit = false) }; persist() }
     fun setGoogleSearch(value: Boolean) { if (statePayloadInvalid) return; undoLayout = null; undoImportSettings = null; mutable.update { it.copy(googleSearch = value, canUndoEdit = false) }; persist() }
     fun setPreset(expanded: Boolean, value: LayoutPreset) {
@@ -503,6 +554,20 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         persist()
     }
 
+    /** Appearance/behaviour settings: no-op while the saved state is unreadable, then saved. */
+    private inline fun updateSettings(soon: Boolean, change: (LauncherState) -> LauncherState) {
+        if (statePayloadInvalid) return
+        mutable.update(change)
+        if (soon) persistSoon() else persist()
+    }
+
+    private var persistJob: kotlinx.coroutines.Job? = null
+    /** Coalesces rapid changes (sliders) into one write shortly after they stop. */
+    private fun persistSoon() {
+        persistJob?.cancel()
+        persistJob = viewModelScope.launch { kotlinx.coroutines.delay(300); persist() }
+    }
+
     private fun persist() {
         if (needsMigration || statePayloadInvalid) return
         val s = mutable.value
@@ -524,16 +589,20 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("restores", restores)
             .put("googleSearch", s.googleSearch)
             .put("verticalStatus", s.verticalStatus)
-            .put("leftHanded", s.leftHanded)
+            .put(SettingKeys.LEFT_HANDED, s.leftHanded)
             .put("hiddenApps", JSONArray(s.hiddenApps.toList()))
             .put("island", s.island)
             .put("folioPanels", s.folioPanels)
             .put("minPages", s.minPages)
             .put("statusStyle", s.statusStyle.toJson())
-            .put("foldEffect", s.foldEffect).put("foldIntensity", s.foldIntensity.toDouble()).put("stayAwakeOnFold", s.stayAwakeOnFold)
+            .put("foldEffect", s.foldEffect).put("foldSnapshot", s.foldSnapshot).put("foldIntensity", s.foldIntensity.toDouble()).put("stayAwakeOnFold", s.stayAwakeOnFold)
             .put("panelBlur", s.panelBlur.toDouble()).put("notificationClock", s.notificationClock).put("groupNotifications", s.groupNotifications)
-            .put("standBy", s.standBy).put("iconStyle", s.iconStyle.name).put("iconTint", s.iconTint)
-            .put("dockEverywhere", s.dockEverywhere).put("islandEverywhere", s.islandEverywhere)
+            .put("standBy", s.standBy).put("spotlightHidden", JSONArray(s.spotlightHidden.toList())).put("searchEngine", s.searchEngine)
+            .put(SettingKeys.ISLAND_EVENTS_OFF, JSONArray(s.islandEventsOff.toList())).put("libraryCategories", s.libraryCategories).put("iconStyle", s.iconStyle.name).put("iconTint", s.iconTint)
+            .put("iconShape", s.iconShape.name).put("iconPack", s.iconPack ?: JSONObject.NULL).put("badgeStyle", s.badgeStyle.name).put("badgeColor", s.badgeColor.name).put("searchPill", s.searchPill).put("swipeDownSearch", s.swipeDownSearch).put("messagesApp", s.messagesApp ?: JSONObject.NULL).put(SettingKeys.MESSAGES_AVOID_DOUBLE, s.messagesAvoidDouble).put("ccControls", JSONArray(s.ccControls))
+            .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
+            .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
+            .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
         val editor = prefs.edit()
         if (legacyRaw != null && sourceSchema == 2 && !prefs.contains("state_v2_backup"))
@@ -678,13 +747,29 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             folioPanels = j.optBoolean("folioPanels", true),
             minPages = j.optInt("minPages", 1).coerceIn(1, 20),
             statusStyle = StatusStyle.fromJson(j.optJSONObject("statusStyle")),
-            foldEffect = j.optBoolean("foldEffect", true), foldIntensity = j.optDouble("foldIntensity", 1.0).toFloat().coerceIn(.3f, 1.5f),
+            foldEffect = j.optBoolean("foldEffect", true), foldSnapshot = j.optBoolean("foldSnapshot", false), foldIntensity = j.optDouble("foldIntensity", 1.0).toFloat().coerceIn(.3f, 1.5f),
             stayAwakeOnFold = j.optBoolean("stayAwakeOnFold", true),
-            panelBlur = j.optDouble("panelBlur", .6).toFloat().coerceIn(0f, 1f), notificationClock = j.optBoolean("notificationClock", true),
+            panelBlur = j.optDouble("panelBlur", 1.0).toFloat().coerceIn(0f, 1f), notificationClock = j.optBoolean("notificationClock", true),
             groupNotifications = j.optBoolean("groupNotifications", true),
             standBy = j.optBoolean("standBy", true),
+            spotlightHidden = j.optJSONArray("spotlightHidden")?.let { a -> (0 until a.length()).map(a::getString).toSet() } ?: emptySet(),
+            searchEngine = j.optString("searchEngine", "GOOGLE"),
+            islandEventsOff = j.optJSONArray(SettingKeys.ISLAND_EVENTS_OFF)?.let { a -> (0 until a.length()).map(a::getString).toSet() } ?: emptySet(),
+            libraryCategories = j.optBoolean("libraryCategories", true),
             iconStyle = runCatching { IconStyle.valueOf(j.optString("iconStyle")) }.getOrDefault(IconStyle.DEFAULT),
             iconTint = j.optLong("iconTint", 0xFFFFB340),
+            iconShape = runCatching { IconShape.valueOf(j.optString("iconShape")) }.getOrDefault(IconShape.DEFAULT),
+            iconPack = j.optString("iconPack").takeIf { it.isNotBlank() && it != "null" },
+            badgeStyle = runCatching { BadgeStyle.valueOf(j.optString("badgeStyle")) }.getOrDefault(BadgeStyle.DOT),
+            badgeColor = runCatching { BadgeColor.valueOf(j.optString("badgeColor")) }.getOrDefault(BadgeColor.RED),
+            searchPill = j.optBoolean("searchPill", true), swipeDownSearch = j.optBoolean("swipeDownSearch", true),
+            messagesApp = j.optString("messagesApp").takeIf { it.isNotBlank() && it != "null" },
+            messagesAvoidDouble = j.optBoolean(SettingKeys.MESSAGES_AVOID_DOUBLE, true),
+            ccControls = j.optJSONArray("ccControls")?.let { a -> (0 until a.length()).map(a::getString).filter { name -> CcControl.entries.any { it.name == name } } }
+                ?: CcControl.DEFAULTS,
+            ccSize = runCatching { PanelSize.valueOf(j.optString("ccSize")) }.getOrDefault(PanelSize.STANDARD),
+            ccCentered = j.optBoolean("ccCentered", false), ncSplit = j.optBoolean("ncSplit", true),
+            folderColors = j.optJSONObject("folderColors")?.let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } ?: emptyMap(),
             dockEverywhere = j.optBoolean("dockEverywhere", false), islandEverywhere = j.optBoolean("islandEverywhere", false))
     }.getOrElse {
         statePayloadInvalid = legacyRaw != null

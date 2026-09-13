@@ -62,7 +62,17 @@ import kotlinx.coroutines.flow.asStateFlow
 /** A notification as shown in Folio's Notification Center. */
 data class NotificationItem(val key: String, val packageName: String, val appLabel: String, val icon: Bitmap?,
     val title: String?, val text: String?, val postTime: Long, val clearable: Boolean,
-    val contentIntent: android.app.PendingIntent?)
+    val contentIntent: android.app.PendingIntent?,
+    /** Messaging notifications: whether quick reply / mark-as-read are offered by the app. */
+    val canReply: Boolean = false, val canMarkRead: Boolean = false, val channelId: String? = null)
+
+/** A messaging app's notification channel and whether Android pops it up itself (importance HIGH or above). */
+data class MessageChannel(val packageName: String, val appLabel: String, val channelId: String, val channelName: String?, val importance: Int) {
+    val popsUp get() = importance >= android.app.NotificationManager.IMPORTANCE_HIGH
+    fun settingsIntent(): Intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName).putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+}
 
 /** What the side-rail island shows: now playing wins over ongoing progress. */
 sealed interface IslandActivity {
@@ -71,7 +81,12 @@ sealed interface IslandActivity {
     val icon: Bitmap?
 
     data class Media(override val packageName: String, override val title: String, val subtitle: String?,
-        override val icon: Bitmap?, val playing: Boolean, val controller: MediaController) : IslandActivity
+        override val icon: Bitmap?, val playing: Boolean, val token: android.media.session.MediaSession.Token,
+        /** Album art (scaled down), when the app provides it. */
+        val art: Bitmap? = null) : IslandActivity {
+        /** Excluded from equality: a fresh controller object per query must not look like a change. */
+        lateinit var controller: MediaController; internal set
+    }
 
     data class Progress(override val packageName: String, override val title: String, val subtitle: String?,
         override val icon: Bitmap?, val fraction: Float?, val key: String) : IslandActivity
@@ -95,6 +110,9 @@ sealed interface IslandEvent {
     data class Silent(val on: Boolean) : IslandEvent
     data class Focus(val on: Boolean) : IslandEvent
     data class Bluetooth(val name: String?) : IslandEvent
+    /** A new message from any messaging app (OpenBubbles, WhatsApp, Signal, Messages...). */
+    data class Message(val key: String, val packageName: String, val appLabel: String, val sender: String, val text: String?,
+        val avatar: Bitmap?, val appIcon: Bitmap?, val canReply: Boolean) : IslandEvent
 }
 
 /**
@@ -104,12 +122,16 @@ sealed interface IslandEvent {
 class IslandListenerService : NotificationListenerService() {
     private var sessions: MediaSessionManager? = null
     private val sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { publish() }
+    // All reading happens off the main thread, coalesced so bursts of posts cost one pass.
+    private val worker = android.os.HandlerThread("folio-island").apply { start() }
+    private val workerHandler = android.os.Handler(worker.looper)
+    private val publishPass = Runnable { publishNow() }
     private val controllerCallbacks = mutableMapOf<android.media.session.MediaSession.Token, Pair<MediaController, MediaController.Callback>>()
 
     override fun onListenerConnected() {
         connected.value = true
         sessions = getSystemService(MediaSessionManager::class.java)
-        runCatching { sessions?.addOnActiveSessionsChangedListener(sessionListener, component(this)) }
+        runCatching { sessions?.addOnActiveSessionsChangedListener(sessionListener, component(this), workerHandler) }
         instance = this
         publish()
     }
@@ -120,14 +142,88 @@ class IslandListenerService : NotificationListenerService() {
         clearControllerCallbacks()
         if (instance === this) instance = null
         mutable.value = null
+        notificationsMutable.value = emptyList() // don't keep other apps' content after access is gone
+    }
+
+    override fun onDestroy() {
+        workerHandler.removeCallbacksAndMessages(null)
+        worker.quitSafely()
+        if (instance === this) instance = null
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = publish()
+    override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
+        publish()
+        if (Messaging.isMessage(sbn.notification)) workerHandler.post { runCatching { announceMessage(sbn, rankingMap) } }
+    }
+
+    /** Last alerting post time per notification key, so updates that don't alert don't pop up again. */
+    private val announced = object : LinkedHashMap<String, Long>(32, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 64
+    }
+
+    /** Pops a new message into the island, following the app's own alert settings and Do Not Disturb. */
+    private fun announceMessage(sbn: StatusBarNotification, rankingMap: RankingMap?) {
+        val n = sbn.notification
+        if (sbn.packageName == packageName || sbn.isOngoing || n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (System.currentTimeMillis() - sbn.postTime > 10_000) return
+        val ranking = Ranking().takeIf { rankingMap?.getRanking(sbn.key, it) == true }
+        if (ranking != null && (!ranking.matchesInterruptionFilter() || ranking.isSuspended ||
+                ranking.importance < android.app.NotificationManager.IMPORTANCE_DEFAULT)) return
+        // Android shows its own pop-up for high-importance channels; don't stack a second banner on it.
+        if (ranking != null && ranking.importance >= android.app.NotificationManager.IMPORTANCE_HIGH && avoidDoubleBanners()) return
+        val previous = announced[sbn.key]
+        if (previous == sbn.postTime || (previous != null && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)) return
+        announced[sbn.key] = sbn.postTime
+        val style = androidx.core.app.NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+        val last = style?.messages?.lastOrNull()
+        // Our own reply echoed back into the conversation isn't news.
+        if (style != null && last != null && (last.person == null || last.person?.name == style.user.name)) return
+        val extras = n.extras
+        val group = style?.conversationTitle?.toString()?.takeIf { style.isGroupConversation }
+        val person = last?.person?.name?.toString() ?: extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
+        val sender = if (group != null && group != person) "$person · $group" else person
+        val text = (last?.text ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+        val avatar = runCatching { last?.person?.icon?.loadDrawable(this)?.toBitmap(96, 96) }.getOrNull()
+            ?: runCatching { n.getLargeIcon()?.loadDrawable(this)?.toBitmap(96, 96) }.getOrNull()
+        IslandEvents.post(IslandEvent.Message(sbn.key, sbn.packageName, appLabel(sbn.packageName), sender, text, avatar,
+            appIcon(sbn.packageName), Messaging.replyAction(n) != null))
+    }
     override fun onNotificationRemoved(sbn: StatusBarNotification) = publish()
+    // Fires when a channel's importance changes (e.g. its pop-up was turned off), so the settings list updates.
+    override fun onNotificationRankingUpdate(rankingMap: RankingMap?) = publish()
 
     private fun publish() {
-        mutable.value = runCatching { currentOngoing() ?: currentMedia() ?: currentProgress() }.getOrNull()
+        workerHandler.removeCallbacks(publishPass)
+        workerHandler.postDelayed(publishPass, PUBLISH_COALESCE_MS)
+    }
+
+    private fun publishNow() {
+        val controllers = runCatching { sessions?.getActiveSessions(component(this)) }.getOrNull().orEmpty()
+        watch(controllers) // every pass, so ended sessions are unregistered even during a call
+        mutable.value = runCatching { currentOngoing() ?: currentMedia(controllers) ?: currentProgress() }.getOrNull()
         notificationsMutable.value = runCatching { currentNotifications() }.getOrDefault(emptyList())
+        runCatching { rememberMessageChannels() }
+    }
+
+    private fun avoidDoubleBanners(): Boolean = runCatching {
+        org.json.JSONObject(getSharedPreferences(SettingKeys.PREFS, 0).getString(SettingKeys.STATE, "{}") ?: "{}")
+            .optBoolean(SettingKeys.MESSAGES_AVOID_DOUBLE, true)
+    }.getOrDefault(true)
+
+    /** Which messaging apps' channels pop up on their own, for the "turn off Android pop-ups" helper in Settings. */
+    private fun rememberMessageChannels() {
+        val ranking = Ranking()
+        val map = currentRanking ?: return
+        val seen = activeNotifications.orEmpty().filter { it.packageName != packageName && Messaging.isMessage(it.notification) }
+            .mapNotNull { sbn ->
+                if (!map.getRanking(sbn.key, ranking)) return@mapNotNull null
+                val channel = ranking.channel ?: return@mapNotNull null
+                MessageChannel(sbn.packageName, appLabel(sbn.packageName), channel.id, channel.name?.toString(), ranking.importance)
+            }
+        if (seen.isEmpty()) return
+        messageChannelsMutable.value = messageChannelsMutable.value + seen.associateBy { "${it.packageName}|${it.channelId}" }
     }
 
     private fun currentNotifications(): List<NotificationItem> = activeNotifications.orEmpty()
@@ -142,7 +238,9 @@ class IslandListenerService : NotificationListenerService() {
             NotificationItem(sbn.key, sbn.packageName, appLabel(sbn.packageName), appIcon(sbn.packageName),
                 extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
                 (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString(),
-                sbn.postTime, sbn.isClearable, sbn.notification.contentIntent)
+                sbn.postTime, sbn.isClearable, sbn.notification.contentIntent,
+                canReply = Messaging.replyAction(sbn.notification) != null, canMarkRead = Messaging.markReadAction(sbn.notification) != null,
+                channelId = sbn.notification.channelId)
         }
 
     /** Calls, navigation and timers outrank media, as on iPhone. */
@@ -168,16 +266,32 @@ class IslandListenerService : NotificationListenerService() {
         return null
     }
 
-    private fun currentMedia(): IslandActivity.Media? {
-        val controllers = runCatching { sessions?.getActiveSessions(component(this)) }.getOrNull().orEmpty()
-        watch(controllers)
+    private fun currentMedia(controllers: List<MediaController>): IslandActivity.Media? {
         val active = controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             ?: controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PAUSED }
             ?: return null
         val meta = active.metadata ?: return null
         val title = meta.getString(MediaMetadata.METADATA_KEY_TITLE) ?: return null
-        return IslandActivity.Media(active.packageName, title, meta.getString(MediaMetadata.METADATA_KEY_ARTIST),
-            appIcon(active.packageName), active.playbackState?.state == PlaybackState.STATE_PLAYING, active)
+        val artist = meta.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        return IslandActivity.Media(active.packageName, title, artist,
+            appIcon(active.packageName), active.playbackState?.state == PlaybackState.STATE_PLAYING, active.sessionToken,
+            art = albumArt(active.packageName, title, artist, meta))
+            .also { it.controller = active }
+    }
+
+    /** Cached per track so each playback update reuses one small bitmap (stable equality, no re-scaling). */
+    private fun albumArt(pkg: String, title: String, artist: String?, meta: MediaMetadata): Bitmap? {
+        val key = "$pkg|$title|$artist"
+        artCache.get(key)?.let { return it }
+        val source = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: meta.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON) ?: return null
+        val scaled = runCatching {
+            val max = 256
+            if (source.width <= max && source.height <= max) source
+            else Bitmap.createScaledBitmap(source, max, (max * source.height / source.width.coerceAtLeast(1)).coerceAtLeast(1), true)
+        }.getOrNull() ?: return null
+        artCache.put(key, scaled)
+        return scaled
     }
 
     private fun currentProgress(): IslandActivity.Progress? {
@@ -210,7 +324,7 @@ class IslandListenerService : NotificationListenerService() {
                 override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
                 override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
             }
-            controller.registerCallback(callback)
+            controller.registerCallback(callback, workerHandler)
             controllerCallbacks[controller.sessionToken] = controller to callback
         }
     }
@@ -220,28 +334,59 @@ class IslandListenerService : NotificationListenerService() {
         controllerCallbacks.clear()
     }
 
-    private fun appIcon(pkg: String): Bitmap? = iconCache.getOrPut(pkg) {
+    private fun appIcon(pkg: String): Bitmap? = iconCache.get(pkg) ?: loadIcon(pkg)?.also { iconCache.put(pkg, it) }
+    private fun loadIcon(pkg: String): Bitmap? = run {
         runCatching { packageManager.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
     }
 
-    private fun appLabel(pkg: String): String =
-        runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+    private fun appLabel(pkg: String): String = labelCache.get(pkg) ?: runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg).also { labelCache.put(pkg, it) }
 
     companion object {
+        private val messageChannelsMutable = MutableStateFlow<Map<String, MessageChannel>>(emptyMap())
+        /** Messaging channels seen since Folio started (kept in memory only). */
+        val messageChannels: StateFlow<Map<String, MessageChannel>> = messageChannelsMutable.asStateFlow()
         private val notificationsMutable = MutableStateFlow<List<NotificationItem>>(emptyList())
         val notifications: StateFlow<List<NotificationItem>> = notificationsMutable.asStateFlow()
 
         fun dismiss(key: String) { runCatching { instance?.cancelNotification(key) } }
+        private fun find(key: String) = runCatching { instance?.activeNotifications?.firstOrNull { it.key == key } }.getOrNull()
+        /** Quick reply through the app's own reply action; false if the notification or action is gone. */
+        fun reply(context: Context, key: String, text: String): Boolean =
+            find(key)?.notification?.let(Messaging::replyAction)?.let { Messaging.sendReply(context, it, text) } == true
+        fun markRead(key: String): Boolean = find(key)?.notification?.let(Messaging::markReadAction)?.let(Messaging::send) == true
+        /** Opens a notification by key (its own tap action, or the app). */
+        fun openKey(context: Context, key: String, packageName: String) {
+            if (!sendAllowingLaunch(context, find(key)?.notification?.contentIntent))
+                context.packageManager.getLaunchIntentForPackage(packageName)
+                    ?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        }
         fun dismissAll() { runCatching { instance?.cancelAllNotifications() } }
+        /** Hides a notification for a while; Android brings it back afterwards. */
+        fun snooze(key: String, millis: Long) { runCatching { instance?.snoozeNotification(key, millis) } }
         fun openNotification(context: Context, item: NotificationItem) {
-            val sent = runCatching { item.contentIntent?.send(); item.contentIntent != null }.getOrDefault(false)
+            val sent = sendAllowingLaunch(context, item.contentIntent)
             if (!sent) context.packageManager.getLaunchIntentForPackage(item.packageName)
                 ?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         }
         private val mutable = MutableStateFlow<IslandActivity?>(null)
         val activity: StateFlow<IslandActivity?> = mutable.asStateFlow()
         val connected = MutableStateFlow(false)
-        private val iconCache = mutableMapOf<String, Bitmap?>()
+        private const val PUBLISH_COALESCE_MS = 120L
+        private val iconCache = android.util.LruCache<String, Bitmap>(64)
+        private val artCache = android.util.LruCache<String, Bitmap>(8)
+        private val labelCache = android.util.LruCache<String, String>(128)
+
+        /** Sends another app's PendingIntent so it may open even though Folio's window isn't in front (Android 14+ rule). */
+        internal fun sendAllowingLaunch(context: Context, intent: android.app.PendingIntent?): Boolean = intent != null && runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                val options = android.app.ActivityOptions.makeBasic()
+                    .setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
+                intent.send(context, 0, null, null, null, null, options)
+            } else intent.send()
+            true
+        }.getOrDefault(false)
         private var instance: IslandListenerService? = null
 
         fun component(context: Context) = ComponentName(context, IslandListenerService::class.java)
@@ -268,7 +413,7 @@ class IslandListenerService : NotificationListenerService() {
             val pending = key?.let { k ->
                 runCatching { service?.activeNotifications?.firstOrNull { it.key == k }?.notification?.contentIntent }.getOrNull()
             } ?: (activity as? IslandActivity.Media)?.controller?.sessionActivity
-            val sent = runCatching { pending?.send(); pending != null }.getOrDefault(false)
+            val sent = sendAllowingLaunch(context, pending)
             if (!sent) context.packageManager.getLaunchIntentForPackage(activity.packageName)
                 ?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
         }

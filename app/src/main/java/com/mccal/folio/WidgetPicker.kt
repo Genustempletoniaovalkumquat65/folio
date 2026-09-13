@@ -81,8 +81,7 @@ internal fun widgetCatalog(context: Context, providers: List<AppWidgetProviderIn
         }
             .getOrDefault(packageName)
         val providerLabel = provider.loadLabel(pm).toString()
-        val description = if (android.os.Build.VERSION.SDK_INT >= 31)
-            runCatching { provider.loadDescription(context)?.toString().orEmpty() }.getOrDefault("") else ""
+        val description = runCatching { provider.loadDescription(context)?.toString().orEmpty() }.getOrDefault("")
         WidgetCatalogEntry(provider, providerLabel, appLabel, description, profile.userSerial, profile.label, profile.isWork)
     }.sortedWith(compareBy({ it.appLabel.lowercase() }, { it.providerLabel.lowercase() }))
 }
@@ -123,7 +122,7 @@ private suspend fun loadWidgetPreview(context: Context, provider: AppWidgetProvi
             remote = runCatching { manager.getWidgetPreview(provider.provider, provider.profile,
                 AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN) }.getOrNull()
         }
-        if (remote == null && android.os.Build.VERSION.SDK_INT >= 31 && provider.previewLayout != 0)
+        if (remote == null && provider.previewLayout != 0)
             remote = runCatching { RemoteViews(provider.provider.packageName, provider.previewLayout) }.getOrNull()
         remote?.let(CatalogPreview::Remote) ?: run {
             val drawable = runCatching { provider.loadPreviewImage(context, density) }.getOrNull()
@@ -218,7 +217,7 @@ internal fun VisualWidgetPicker(
         .then(if (hiddenForDrag) Modifier.clearAndSetSemantics { }.focusProperties { canFocus = false } else Modifier)
         .testTag("visual-widget-picker"),
         color = Glass.copy(alpha = .96f)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 18.dp)) {
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(horizontal = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") }
                 Text("Widgets", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)

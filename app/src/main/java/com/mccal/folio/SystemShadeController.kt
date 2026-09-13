@@ -41,6 +41,9 @@ class SystemShadeAccessibilityService : AccessibilityService() {
         private var instance = WeakReference<SystemShadeAccessibilityService>(null)
         internal fun isConnected() = instance.get() != null
 
+        /** Screenshot, lock screen, power menu… through the gestures service; false when it isn't running. */
+        internal fun global(action: Int): Boolean = instance.get()?.performGlobalAction(action) == true
+
         internal fun open(context: Context, panel: ShadePanel): ShadeOpenResult {
             val service = instance.get()
             if (service != null) {

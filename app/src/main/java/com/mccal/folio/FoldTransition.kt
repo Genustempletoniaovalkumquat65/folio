@@ -32,6 +32,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlin.math.exp
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
 
 /**
  * iPhone Duo–style fold effect, as dynamic as a Galaxy Z Fold allows.
@@ -45,7 +50,8 @@ import kotlin.math.exp
  * radius ∝ m·e^1.35 and darkened toward its outer edge; m is 1 half-folded and 0 flat.
  */
 @Composable
-fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake: Boolean = true, content: @Composable () -> Unit) {
+fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake: Boolean = true,
+    snapshotMorph: Boolean = false, content: @Composable () -> Unit) {
     val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
     val view = LocalView.current
     val context = LocalContext.current
@@ -54,6 +60,17 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
     fold.stayAwake = stayAwake
     // m: 0 = clean, 1 = fully half-folded look. cover = whole-screen mode on the cover display.
     var m by remember { mutableFloatStateOf(0f) }
+
+    // Screenshot morph (fallback style): snapshots of Folio's own screen taken the moment the hinge
+    // starts moving, drawn over the new display and melted into the live UI. Memory only, never saved.
+    val contentLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var coverShot by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var innerShot by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var morph by remember { mutableFloatStateOf(1f) } // 0 = snapshot fully shown, 1 = done
+    val morphEnabled by androidx.compose.runtime.rememberUpdatedState(enabled && snapshotMorph)
+    fold.onOpeningStarted = { if (morphEnabled && !fold.expanded) scope.launch { coverShot = runCatching { contentLayer.toImageBitmap() }.getOrNull() } }
+    fold.onClosingStarted = { if (morphEnabled && fold.expanded) scope.launch { innerShot = runCatching { contentLayer.toImageBitmap() }.getOrNull() } }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -73,9 +90,11 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
         fold.expanded = expanded
         fold.onDisplaySwitched(SystemClock.uptimeMillis())
         m = if (expanded) START_M_ON_UNFOLD else START_M_ON_COVER
+        // Cover the very first frame on the new display with the snapshot (held until the panel is lit).
+        if (enabled && snapshotMorph && (if (expanded) coverShot != null else innerShot != null)) morph = 0f
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
         var litFrames = 0
         var lastFrame = 0L
         while (true) {
@@ -87,27 +106,101 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
                 if (fold.waitingForPanel) {
                     val lit = view.display?.state == Display.STATE_ON
                     litFrames = if (lit) litFrames + 1 else 0
-                    if (litFrames >= 2 || now - fold.switchedAt > LIT_TIMEOUT_MS) { fold.onPanelLit(now); litFrames = 0 }
+                    if (litFrames >= 2 || now - fold.switchedAt > LIT_TIMEOUT_MS) {
+                        fold.onPanelLit(now); litFrames = 0
+                        if (morphEnabled && (if (fold.expanded) coverShot != null else innerShot != null)) { fold.morphFrom = now; morph = 0f }
+                    }
                 }
                 val target = fold.targetM(now)
                 // Follow the target closely but never jump: small time constant, frame-rate independent.
                 val next = m + (target - m) * (1f - exp(-dt / FOLLOW_MS))
                 m = if (target == 0f && next < .003f) 0f else next
+                if (fold.morphFrom >= 0) {
+                    val t = ((now - fold.morphFrom) / (if (fold.expanded) MORPH_UNFOLD_MS else MORPH_FOLD_MS)).coerceIn(0f, 1f)
+                    morph = easeInOutSine(t)
+                    if (t >= 1f) { fold.morphFrom = -1L; morph = 1f; if (fold.expanded) coverShot = null }
+                }
             }
         }
-    }
+    } }
 
-    Box(Modifier.fillMaxSize().then(
+    val useBlurEffect = enabled && !snapshotMorph
+    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()
+        // Keep a live recording of Folio's screen so a snapshot can be taken instantly when folding starts.
+        .then(if (enabled && snapshotMorph) Modifier.drawWithContent {
+            contentLayer.record { this@drawWithContent.drawContent() }
+            drawLayer(contentLayer)
+        } else Modifier)
+        .then(
         if (shader != null) Modifier.graphicsLayer {
-            renderEffect = if (enabled && m > 0f) shader.effect(size.width, size.height, (m * intensity).coerceIn(0f, 1.5f), cover = !fold.expanded) else null
+            renderEffect = if (useBlurEffect && m > 0f && Build.VERSION.SDK_INT >= 33) shader.effect(size.width, size.height, (m * intensity).coerceIn(0f, 1.5f), cover = !fold.expanded) else null
         } else Modifier.drawWithContent {
             drawContent()
-            if (enabled && m > 0f) {
+            if (useBlurEffect && m > 0f) {
                 if (fold.expanded) drawRect(Brush.horizontalGradient(0f to Color.Black.copy(alpha = m),
                     .5f to Color.Transparent, startX = 0f, endX = size.width))
                 else drawRect(Color.Black.copy(alpha = .5f * m))
             }
         })) { content() }
+        if (snapshotMorph && morph < 1f) SnapshotMorph(fold.expanded, coverShot, innerShot) { morph }
+    }
+}
+
+/**
+ * Draws the snapshots over the live screen and melts them away:
+ *  - unfold: last inner screen (blurred, dim) on the left half; the cover screen grows into the right half.
+ *  - fold: the right half of the inner screen, scaled onto the cover, fades into the live cover.
+ */
+@Composable
+private fun SnapshotMorph(expanded: Boolean, coverShot: androidx.compose.ui.graphics.ImageBitmap?,
+    innerShot: androidx.compose.ui.graphics.ImageBitmap?, progress: () -> Float) {
+    if (expanded) {
+        innerShot?.let { shot ->
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
+                val p = progress()
+                alpha = 1f - p
+                val r = 48f * (1f - p) + 8f
+                renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp)
+            }) {
+                val half = size.width / 2
+                clipRect(right = half) {
+                    drawImage(shot, dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()))
+                    drawRect(Color.Black.copy(alpha = .35f))
+                }
+            }
+        }
+        coverShot?.let { shot ->
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
+                val p = progress()
+                alpha = (1f - p * 1.15f).coerceIn(0f, 1f)
+            }) {
+                val p = progress()
+                val half = size.width / 2
+                // Cover content lands on the right half and grows slightly into place.
+                val scale = (half / shot.width) * (.94f + .06f * p)
+                val w = shot.width * scale; val h = shot.height * scale
+                val left = half + (half - w) / 2
+                drawImage(shot, dstOffset = androidx.compose.ui.unit.IntOffset(left.toInt(), 0),
+                    dstSize = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()))
+            }
+        }
+    } else innerShot?.let { shot ->
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
+            val p = progress()
+            alpha = 1f - p
+        }) {
+            // Right half of the inner screen shrinks onto the cover.
+            val p = progress()
+            val srcLeft = shot.width / 2
+            val scale = 1.06f - .06f * p
+            val w = size.width * scale; val h = size.height * scale
+            drawImage(shot, srcOffset = androidx.compose.ui.unit.IntOffset(srcLeft, 0),
+                srcSize = androidx.compose.ui.unit.IntSize(shot.width - srcLeft, shot.height),
+                dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()))
+        }
+    }
 }
 
 /** Hinge steps + learned timing → target effect strength over time. */
@@ -140,7 +233,11 @@ private class FoldTimeline(context: Context) : SensorEventListener {
     private var coverOpeningAt = -1L
     private val appContext = context.applicationContext
 
-    val busy get() = waitingForPanel || litAt >= 0 || closeStartAt >= 0 || reopenedAt >= 0 || coverLitAt >= 0 || coverOpeningAt >= 0
+    var onOpeningStarted: (() -> Unit)? = null
+    var onClosingStarted: (() -> Unit)? = null
+    /** Uptime when the screenshot morph started on the new display, or -1. */
+    var morphFrom = -1L
+    val busy get() = morphFrom >= 0 || waitingForPanel || litAt >= 0 || closeStartAt >= 0 || reopenedAt >= 0 || coverLitAt >= 0 || coverOpeningAt >= 0
 
     fun start() { hinge?.let { sensors?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) } }
     fun stop() { sensors?.unregisterListener(this) }
@@ -171,6 +268,7 @@ private class FoldTimeline(context: Context) : SensorEventListener {
                 // Started folding from flat: keep One UI from sleeping, and start the fold-away.
                 previous >= FLAT_DEG && value < FLAT_DEG -> {
                     closeStartAt = now; closedAt = -1L; reopenedAt = -1L
+                    onClosingStarted?.invoke()
                     if (stayAwake) FoldBridgeActivity.start(appContext)
                 }
                 // Nearly closed: learn how long the fold takes, and make sure the bridge is up.
@@ -179,13 +277,14 @@ private class FoldTimeline(context: Context) : SensorEventListener {
                     learnClose((now - closeStartAt).toFloat())
                     if (stayAwake) FoldBridgeActivity.start(appContext)
                 }
-                // Folding that didn't start from flat (e.g. from half-open).
-                value < previous -> {
-                    if (closeStartAt < 0) { closeStartAt = now; closedAt = if (value <= CLOSED_DEG) now else -1L; reopenedAt = -1L }
+                // Folding that didn't start from flat (e.g. from half-open): only a real drop counts,
+                // so sensor jitter or adjusting a propped phone never starts the bridge.
+                value < FLAT_DEG && closeStartAt < 0 && previous - value >= MIN_FOLD_DROP_DEG -> {
+                    if (closeStartAt < 0) { closeStartAt = now; closedAt = if (value <= CLOSED_DEG) now else -1L; reopenedAt = -1L; onClosingStarted?.invoke() }
                     if (stayAwake) FoldBridgeActivity.start(appContext)
                 }
                 // Opened back up before closing.
-                value >= FLAT_DEG && closeStartAt >= 0 -> {
+                value > previous && closeStartAt >= 0 -> {
                     closeStartAt = -1L; closedAt = -1L; reopenedAt = now
                     FoldBridgeActivity.cancel()
                 }
@@ -193,7 +292,7 @@ private class FoldTimeline(context: Context) : SensorEventListener {
         } else {
             when {
                 // Starting to open on the cover: blur the whole cover screen.
-                previous <= CLOSED_DEG && value > CLOSED_DEG -> coverOpeningAt = now
+                previous <= CLOSED_DEG && value > CLOSED_DEG -> { coverOpeningAt = now; onOpeningStarted?.invoke() }
                 value <= CLOSED_DEG -> coverOpeningAt = -1L
             }
         }
@@ -223,6 +322,7 @@ private class FoldTimeline(context: Context) : SensorEventListener {
             val stalled = closedAt < 0 && now - angleAt > predictedCloseMs + STALL_MS
             when {
                 stalled -> { closeStartAt = -1L; 0f } // deliberately half-open (flex mode): clear
+                closedAt >= 0 && now - closedAt > CLOSED_STALL_MS -> { closeStartAt = -1L; closedAt = -1L; 0f } // never stuck dimmed
                 closedAt >= 0 -> 1f
                 else -> easeInOutSine((since / predictedCloseMs).coerceIn(0f, 1f)) * HOLD_M_BEFORE_CLOSED
             }
@@ -320,6 +420,8 @@ private class DuoShader {
 }
 
 private const val EXPANDED_WIDTH_DP = 600
+private const val MORPH_UNFOLD_MS = 650f
+private const val MORPH_FOLD_MS = 420f
 /** Inner panel lights around 120–135° on Z Fold: the cover half is still ~50° from flat. */
 private const val START_M_ON_UNFOLD = .78f
 private const val HOLD_M_BEFORE_FLAT = .08f
@@ -333,6 +435,8 @@ private const val COVER_OPEN_MS = 220f
 private const val COVER_OPEN_STALL_MS = 2_000L
 private const val FOLLOW_MS = 28f
 private const val FLAT_DEG = 170f
+private const val MIN_FOLD_DROP_DEG = 20f
+private const val CLOSED_STALL_MS = 1_800L
 private const val CLOSED_DEG = 10f
 private const val LIT_TIMEOUT_MS = 1_200L
 private const val IDLE_POLL_MS = 50L
