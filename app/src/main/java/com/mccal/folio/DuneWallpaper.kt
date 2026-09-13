@@ -1,5 +1,7 @@
 package com.mccal.folio
 
+import kotlinx.coroutines.flow.conflate
+
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import android.content.SharedPreferences
@@ -212,13 +214,17 @@ internal fun SystemWallpaperParallax(pager: androidx.compose.foundation.pager.Pa
     val view = androidx.compose.ui.platform.LocalView.current
     val manager = androidx.compose.runtime.remember(view) { android.app.WallpaperManager.getInstance(view.context) }
     androidx.compose.runtime.LaunchedEffect(pager, view) {
+        // The offset call is a binder round-trip: keep it off the UI thread and drop stale positions.
         androidx.compose.runtime.snapshotFlow { pager.currentPage + pager.currentPageOffsetFraction to pager.pageCount }
+            .conflate()
             .collect { (position, count) ->
                 val token = view.windowToken ?: return@collect
                 val steps = (count - 1).coerceAtLeast(1)
-                runCatching {
-                    manager.setWallpaperOffsetSteps(1f / steps, 0f)
-                    manager.setWallpaperOffsets(token, (position / steps).coerceIn(0f, 1f), .5f)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    runCatching {
+                        manager.setWallpaperOffsetSteps(1f / steps, 0f)
+                        manager.setWallpaperOffsets(token, (position / steps).coerceIn(0f, 1f), .5f)
+                    }
                 }
             }
     }

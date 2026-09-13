@@ -92,6 +92,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <!-- Opens Folio's settings from Android's screens (Accessibility gear, tile long-press, wallpaper settings). -->
+        <activity android:name=".FolioSettingsActivity" android:exported="true" android:excludeFromRecents="true"
+            android:noHistory="true" android:theme="@style/Theme.Folio.FoldBridge" android:label="Folio settings">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
         <!-- Quick Settings tiles -->
         <service android:name=".SpotlightTileService" android:exported="true" android:label="Spotlight"
             android:icon="@drawable/ic_tile_search" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">

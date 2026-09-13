@@ -126,6 +126,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }
                         Text("Labels, status, page dots and widget text on the wallpaper. Automatic uses dark text over light wallpapers, like iPhone.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SettingsSwitch("Tint glass with wallpaper color", state.tintedGlass, model::setTintedGlass, "tinted-glass-switch")
+                        SettingsSwitch("Dark appearance dims wallpaper", state.dimWallpaperDark, model::setDimWallpaperDark, "dim-wallpaper-switch")
                     }
                     if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
@@ -299,11 +301,21 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                         if (state.iconStyle == IconStyle.TINTED) Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Wallpaper color (follows the wallpaper when it changes)
+                            val tone = LocalWallpaperTone.current
+                            Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(tone.primary?.let { androidx.compose.ui.graphics.Color(vividTint(it)) } ?: androidx.compose.ui.graphics.Color.Gray)
+                                .then(if (state.iconTintFromWallpaper) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
+                                .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { model.setIconTintFromWallpaper(true) }
+                                .semantics { contentDescription = "Wallpaper color"; selected = state.iconTintFromWallpaper },
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Wallpaper, null, tint = androidx.compose.ui.graphics.Color.Black.copy(alpha = .6f), modifier = Modifier.size(18.dp))
+                            }
                             listOf(0xFFFFB340, 0xFFFF6961, 0xFFFF7EB6, 0xFFBF8CFF, 0xFF64B5FF, 0xFF5EE0C4, 0xFF9BE15D, 0xFFE8E8E8).forEach { c ->
                                 Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(c))
-                                    .then(if (state.iconTint == c) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
-                                    .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { model.setIconStyle(IconStyle.TINTED, c) }
-                                    .semantics { contentDescription = "Tint color"; selected = state.iconTint == c })
+                                    .then(if (!state.iconTintFromWallpaper && state.iconTint == c) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape) else Modifier)
+                                    .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { model.setIconTintFromWallpaper(false); model.setIconStyle(IconStyle.TINTED, c) }
+                                    .semantics { contentDescription = "Tint color"; selected = !state.iconTintFromWallpaper && state.iconTint == c })
                             }
                         }
                     }

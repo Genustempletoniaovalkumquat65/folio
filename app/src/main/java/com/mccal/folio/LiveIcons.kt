@@ -150,9 +150,10 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
     val badgeCount = if (!badge || look.badges == BadgeStyle.OFF) 0 else LocalBadgeCounts.current[app.component.packageName] ?: 0
     Box(modifier.semantics { contentDescription?.let { this.contentDescription = it } }) {
         val fill = Modifier.fillMaxSize().then(if (clipShape != null) Modifier.clip(clipShape) else Modifier)
+        // App icon bitmaps carry a small transparent margin; inset the drawn live icons to the same visual size.
         when {
-            kind == LiveIcons.Kind.CALENDAR -> CalendarIcon(fill, accent)
-            kind == LiveIcons.Kind.CLOCK -> ClockIcon(fill, accent)
+            kind == LiveIcons.Kind.CALENDAR -> BoxWithConstraints(Modifier.fillMaxSize()) { CalendarIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), accent) }
+            kind == LiveIcons.Kind.CLOCK -> BoxWithConstraints(Modifier.fillMaxSize()) { ClockIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), accent) }
             else -> {
                 val source = packIcon ?: app.icon
                 val bitmap = remember(source) { source.asImageBitmap() }

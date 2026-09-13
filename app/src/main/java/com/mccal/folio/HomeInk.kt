@@ -38,32 +38,56 @@ internal fun homeInkFor(setting: String, wallpaperPrefersDarkText: Boolean) = Ho
 internal fun WallpaperColors?.prefersDarkText(): Boolean =
     this != null && colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
 
+/** What Folio knows about the wallpaper behind Home, without reading its pixels. */
+@Immutable
+internal data class WallpaperTone(val prefersDarkText: Boolean = false, val primary: Int? = null)
+
+internal val LocalWallpaperTone = staticCompositionLocalOf { WallpaperTone() }
+
+internal fun WallpaperColors?.tone() = WallpaperTone(prefersDarkText(), this?.primaryColor?.toArgb())
+
 /**
- * Whether the wallpaper behind Home suits dark text. Android's wallpaper: the system's own color hint (no
- * permission needed, updates when the wallpaper changes). Folio's photo: the same hint computed from it.
- * Folio's dunes: white text.
+ * The wallpaper's tone. Android's wallpaper: the system's own colors and hints (no permission needed, updates
+ * when the wallpaper changes). Folio's photo: the same computed from it. Folio's dunes: white text, no tint.
  */
 @Composable
-internal fun rememberWallpaperPrefersDarkText(systemWallpaper: Boolean): Boolean {
+internal fun rememberWallpaperTone(systemWallpaper: Boolean): WallpaperTone {
     val context = LocalContext.current
     if (systemWallpaper) {
         val manager = remember(context) { WallpaperManager.getInstance(context) }
-        var dark by remember { mutableStateOf(runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull().prefersDarkText()) }
+        var tone by remember { mutableStateOf(runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull().tone()) }
         DisposableEffect(manager) {
             val listener = WallpaperManager.OnColorsChangedListener { colors, which ->
-                if (which and WallpaperManager.FLAG_SYSTEM != 0) dark = colors.prefersDarkText()
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) tone = colors.tone()
             }
             runCatching { manager.addOnColorsChangedListener(listener, Handler(Looper.getMainLooper())) }
             onDispose { runCatching { manager.removeOnColorsChangedListener(listener) } }
         }
-        return dark
+        return tone
     }
     val revision = LauncherBackgroundCache.revision.intValue
-    val dark by produceState(false, revision) {
+    val tone by produceState(WallpaperTone(), revision) {
         value = withContext(Dispatchers.Default) {
-            val photo = loadLauncherBackground(context)?.takeUnless { it.isRecycled } ?: return@withContext false
-            runCatching { WallpaperColors.fromBitmap(photo).prefersDarkText() }.getOrDefault(false)
+            val photo = loadLauncherBackground(context)?.takeUnless { it.isRecycled } ?: return@withContext WallpaperTone()
+            runCatching { WallpaperColors.fromBitmap(photo).tone() }.getOrDefault(WallpaperTone())
         }
     }
-    return dark
+    return tone
+}
+
+/** Blends [base] toward the wallpaper's main color, keeping [base]'s alpha (iOS-style tinted material). */
+internal fun tintedGlass(base: Color, wallpaper: Int?, amount: Float = .28f): Color {
+    if (wallpaper == null) return base
+    val w = Color(wallpaper)
+    return Color(base.red + (w.red - base.red) * amount, base.green + (w.green - base.green) * amount,
+        base.blue + (w.blue - base.blue) * amount, base.alpha)
+}
+
+/** A clear, bright version of a wallpaper color for tinted icons (saturation ≥ 45%, brightness ≥ 85%). */
+internal fun vividTint(argb: Int): Int {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(argb, hsv)
+    hsv[1] = hsv[1].coerceAtLeast(.45f)
+    hsv[2] = hsv[2].coerceAtLeast(.85f)
+    return android.graphics.Color.HSVToColor(hsv)
 }

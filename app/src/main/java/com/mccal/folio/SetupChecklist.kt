@@ -74,6 +74,12 @@ internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Uni
             SetupStep(Icons.Rounded.Wallpaper, "Keep your wallpaper",
                 "Coming from Samsung’s or another launcher? Show the same wallpaper behind Folio.",
                 systemWallpaper, false, "Use") { onSystemWallpaper(true); (context as? android.app.Activity)?.recreate() },
+            SetupStep(Icons.Rounded.Assistant, "Folio as your digital assistant",
+                "Holding the side key opens Folio’s picker: ChatGPT, Claude, Perplexity, Gemini, or Google without AI.",
+                AssistPickerActivity.isDefaultAssistant(context), false, "Choose") { open(AssistPickerActivity.settingsIntent()) },
+            if (sideKeySettings(context) != null) SetupStep(Icons.Rounded.TouchApp, "Hold side key: Digital assistant",
+                "Samsung: Side button › Press and hold › Digital assistant, so holding the key reaches Folio’s picker.",
+                sideKeyHoldIsAssistant(context), false, "Open") { sideKeySettings(context)?.let(::open) } else null,
             SetupStep(Icons.Rounded.Contacts, "Contacts in Spotlight", "Search your contacts from Spotlight.",
                 granted(context, Manifest.permission.READ_CONTACTS), false, "Allow") { contacts.launch(Manifest.permission.READ_CONTACTS) },
             SetupStep(Icons.Rounded.Headphones, "Bluetooth device names", "Shows “Connected to Galaxy Buds” in the island.",
@@ -85,6 +91,15 @@ internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Uni
         )
     }
 }
+
+/** Samsung's "Side button › Press and hold" screen, when this phone has it. */
+private fun sideKeySettings(context: Context): Intent? =
+    Intent("com.samsung.android.intent.action.SIDE_KEY_LONG_PRESS_SETTINGS")
+        .takeIf { it.resolveActivity(context.packageManager) != null }
+
+/** Samsung stores the side key hold action as a global setting; 2 is the digital assistant. */
+private fun sideKeyHoldIsAssistant(context: Context) =
+    runCatching { Settings.Global.getInt(context.contentResolver, "function_key_config_longpress_type") }.getOrNull() == 2
 
 private fun granted(context: Context, permission: String) =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED

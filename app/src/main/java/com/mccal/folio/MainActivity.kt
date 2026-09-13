@@ -130,8 +130,11 @@ class MainActivity : ComponentActivity() {
                 onDispose { if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", false) }
             }
             val badgeCounts = androidx.compose.runtime.remember(notificationItems) { notificationItems.groupingBy { it.packageName }.eachCount() }
+            val wallpaperTone = rememberWallpaperTone(state.systemWallpaper)
+            val iconTint = if (state.iconTintFromWallpaper) wallpaperTone.primary?.let(::vividTint)?.toLong()?.and(0xFFFFFFFFL) ?: state.iconTint else state.iconTint
             androidx.compose.runtime.CompositionLocalProvider(
-                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(state.iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor),
+                LocalWallpaperTone provides wallpaperTone,
+                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor),
                 LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {

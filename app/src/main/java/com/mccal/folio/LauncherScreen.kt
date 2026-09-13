@@ -456,7 +456,9 @@ fun LauncherScreen(
     Box(Modifier.fillMaxSize().graphicsLayer {
         // The feed frame reuses the pager's render nodes in another window. Give Main
         // a complete render target so cross-window damage cannot erase stationary controls.
-        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        // Only Google Discover's hosted feed needs it; with Today View an extra offscreen pass just costs frames.
+        compositingStrategy = if (todayMode) androidx.compose.ui.graphics.CompositingStrategy.Auto
+            else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
     }.onSizeChanged { LiveDiscover.fullSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }.testTag("launcher-root").homeDragInput(drag,
         enabled = sheet.isEmpty() && !showFirstRun && selectedId == null && resizeSlot == null && pager.currentPage >= 0,
         page = pager.currentPage, eligiblePages = eligibleDragPages, onStart = {
@@ -470,11 +472,17 @@ fun LauncherScreen(
             if (drag.source?.folderId != null) openFolderId = null
         },
         onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
-        val homeInk = homeInkFor(state.homeInk, rememberWallpaperPrefersDarkText(state.systemWallpaper))
+        val tone = LocalWallpaperTone.current
+        val homeInk = homeInkFor(state.homeInk, tone.prefersDarkText)
+        val basePalette = LocalDuoPalette.current
+        val palette = if (state.tintedGlass) remember(basePalette, tone.primary) { basePalette.copy(glass = tintedGlass(basePalette.glass, tone.primary)) } else basePalette
         CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate,
-            LocalHomeInk provides homeInk) {
+            LocalHomeInk provides homeInk, LocalDuoPalette provides palette) {
         if (!state.systemWallpaper) DuneWallpaper()
         else SystemWallpaperParallax(nativePager)
+        // iOS "dark appearance dims wallpaper".
+        val dim by androidx.compose.animation.core.animateFloatAsState(if (state.dimWallpaperDark && appearance.dark) .3f else 0f, label = "wallpaper dim")
+        if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
         BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets()))) {
@@ -575,8 +583,12 @@ fun LauncherScreen(
             val pagerModifier = Modifier.align(if (state.leftHanded) Alignment.TopEnd else Alignment.TopStart)
                 .fillMaxHeight().width(pagerWidth)
                 .drawWithContent {
-                    homeLayer.record { this@drawWithContent.drawContent() }
-                    drawLayer(homeLayer)
+                    // The recorded Home layer only feeds Google Discover's frame; Today View draws directly.
+                    if (todayMode) drawContent()
+                    else {
+                        homeLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(homeLayer)
+                    }
                     LiveDiscover.host.get()?.invalidateFrame()
                 }.testTag("app-pager")
                 .discoverSwipe(firstHome == 0 && pager.currentPage == 0 && !drag.active && sheet.isEmpty() &&

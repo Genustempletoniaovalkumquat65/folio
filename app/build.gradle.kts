@@ -62,7 +62,16 @@ android {
             )
             if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
         }
+        // Optimized like release (R8, no debuggable JIT slowdown) but signed with the local debug key, so it
+        // installs over a debug build and keeps Folio's data. Use this to judge real smoothness on the phone.
+        create("fast") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
+    // "fast" uses release's no-op tracing/diagnostic sources.
+    sourceSets { getByName("fast") { java.srcDir("src/release/java") } }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -72,6 +81,8 @@ android {
 }
 dependencies {
     implementation("androidx.window:window:1.5.1")
+    // Installs the baseline profiles that Compose and AndroidX ship, so hot paths are compiled ahead of time.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation(platform("androidx.compose:compose-bom:2025.06.01"))
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
