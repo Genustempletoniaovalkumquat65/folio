@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import kotlinx.coroutines.flow.first
 import android.graphics.Rect
 import android.view.ViewTreeObserver
@@ -129,7 +130,8 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
         val centerX = geometry.centerXPx
         val live = (content as? IslandContent.Live)?.activity
         // A new message opens straight into a small card (like an iPhone banner coming out of the island).
-        val open = (expanded && live != null) || message != null
+        val ringing = (live as? IslandActivity.Call)?.takeIf { it.incoming }
+        val open = (expanded && live != null) || message != null || ringing != null
         val cardW = 340.dp.coerceAtMost(windowWidth.toDp() - 16.dp)
         // One shape morphs between pill and card: width, corner radius and height all spring together,
         // anchored to the camera like the real Dynamic Island.
@@ -281,7 +283,11 @@ private fun LeadingGlyph(content: IslandContent, size: Dp) {
             is IslandEvent.Message -> MessageAvatar(e, size)
         }
         is IslandContent.Live -> when (val a = content.activity) {
-            is IslandActivity.Call -> CircleGlyph(Icons.Rounded.Call, Green, size)
+            is IslandActivity.Call -> if (a.incoming) CallAvatar(a, size) else Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Call, null, tint = Green, modifier = Modifier.size(size * .7f))
+                Spacer(Modifier.width(4.dp))
+                Chronometer(remember(a.key) { a.since ?: System.currentTimeMillis() }, countDown = false, color = Green)
+            }
             is IslandActivity.Timer -> CircleGlyph(Icons.Rounded.Timer, Orange, size)
             is IslandActivity.Navigation -> CircleGlyph(Icons.Rounded.TurnRight, Blue, size)
             else -> ((a as? IslandActivity.Media)?.art ?: a.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(size).clip(RoundedCornerShape(size * .28f)),
@@ -303,7 +309,7 @@ private fun TrailingGlyph(content: IslandContent, size: Dp) {
         is IslandContent.Live -> when (val a = content.activity) {
             is IslandActivity.Media -> Bars(a.playing)
             is IslandActivity.Progress -> Ring(a.fraction, size)
-            is IslandActivity.Call -> Chronometer(remember(a.key) { a.since ?: System.currentTimeMillis() }, countDown = false, color = Green)
+            is IslandActivity.Call -> Bars(playing = !a.incoming)
             is IslandActivity.Timer -> Chronometer(a.base, a.countDown, Orange)
             is IslandActivity.Navigation -> Text(a.subtitle ?: a.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -355,7 +361,8 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpen)) {
-            ((activity as? IslandActivity.Media)?.art ?: activity.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)),
+            if (activity is IslandActivity.Call) CallAvatar(activity, 44.dp)
+            else ((activity as? IslandActivity.Media)?.art ?: activity.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -364,12 +371,13 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
                     is IslandActivity.Media -> activity.subtitle
                     is IslandActivity.Progress -> activity.subtitle
                     is IslandActivity.Navigation -> activity.subtitle
+                    is IslandActivity.Call -> if (activity.incoming) "Incoming call" else null
                     else -> null
                 }
                 subtitle?.let { Text(it, color = Color.White.copy(alpha = .6f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
             when (activity) {
-                is IslandActivity.Call -> Chronometer(remember(activity.key) { activity.since ?: System.currentTimeMillis() }, false, Green, 20.sp)
+                is IslandActivity.Call -> if (!activity.incoming) Chronometer(remember(activity.key) { activity.since ?: System.currentTimeMillis() }, false, Green, 20.sp)
                 is IslandActivity.Timer -> Chronometer(activity.base, activity.countDown, Orange, 20.sp)
                 else -> Unit
             }
@@ -387,9 +395,46 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(Green))
                 }
             }
-            is IslandActivity.Call -> Text("Tap to return to the call", color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
+            is IslandActivity.Call -> CallButtons(activity)
             else -> Unit
         }
+    }
+}
+
+/** Caller photo, or the calling app's icon in a circle. */
+@Composable
+private fun CallAvatar(call: IslandActivity.Call, size: Dp) {
+    val bitmap = call.avatar ?: call.icon
+    if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.size(size).clip(CircleShape), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    else CircleGlyph(Icons.Rounded.Call, Green, size)
+}
+
+/** iPhone call controls: Decline/Accept while ringing; Mute, End and Speaker during the call. */
+@Composable
+private fun CallButtons(call: IslandActivity.Call) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    fun act(kind: CallControls.Kind) { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm); IslandListenerService.callAction(context, call.key, kind) }
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+        if (call.incoming) {
+            if (call.canDecline) CallButton(Icons.Rounded.CallEnd, "Decline", Red) { act(CallControls.Kind.DECLINE) }
+            if (call.canAnswer) CallButton(Icons.Rounded.Call, "Accept", Green) { act(CallControls.Kind.ANSWER) }
+        } else {
+            if (call.canMute) CallButton(Icons.Rounded.MicOff, "Mute", Color.White.copy(alpha = .22f)) { act(CallControls.Kind.MUTE) }
+            if (call.canHangUp) CallButton(Icons.Rounded.CallEnd, "End", Red) { act(CallControls.Kind.HANG_UP) }
+            if (call.canSpeaker) CallButton(Icons.AutoMirrored.Rounded.VolumeUp, "Speaker", Color.White.copy(alpha = .22f)) { act(CallControls.Kind.SPEAKER) }
+            if (!call.canHangUp && !call.canMute && !call.canSpeaker) Text("Tap to return to the call", color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun CallButton(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(52.dp).clip(CircleShape).background(color).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+            Icon(icon, label, tint = Color.White, modifier = Modifier.size(26.dp))
+        }
+        Text(label, color = Color.White.copy(alpha = .7f), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

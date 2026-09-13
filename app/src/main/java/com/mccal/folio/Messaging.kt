@@ -135,3 +135,41 @@ internal fun MessageActionPill(label: String, onClick: () -> Unit) {
         Text(label, color = Color.White, fontSize = 14.sp)
     }
 }
+
+/**
+ * Call notification buttons. Android 12+ CallStyle notifications carry answer/decline/hang-up intents directly;
+ * other calling apps are matched by their action labels.
+ */
+internal object CallControls {
+    enum class Kind { ANSWER, DECLINE, HANG_UP, MUTE, SPEAKER }
+
+    fun isCall(n: Notification) = n.category == Notification.CATEGORY_CALL ||
+        n.extras.getString(Notification.EXTRA_TEMPLATE)?.endsWith("CallStyle") == true
+
+    fun isIncoming(n: Notification): Boolean {
+        val type = n.extras.getInt(Notification.EXTRA_CALL_TYPE, 0)
+        if (type != 0) return type == 1 // CALL_TYPE_INCOMING
+        return intent(n, Kind.ANSWER) != null && intent(n, Kind.HANG_UP) == null
+    }
+
+    fun intent(n: Notification, kind: Kind): android.app.PendingIntent? {
+        val direct = when (kind) {
+            Kind.ANSWER -> androidx.core.os.BundleCompat.getParcelable(n.extras, Notification.EXTRA_ANSWER_INTENT, android.app.PendingIntent::class.java)
+            Kind.DECLINE -> androidx.core.os.BundleCompat.getParcelable(n.extras, Notification.EXTRA_DECLINE_INTENT, android.app.PendingIntent::class.java)
+            Kind.HANG_UP -> androidx.core.os.BundleCompat.getParcelable(n.extras, Notification.EXTRA_HANG_UP_INTENT, android.app.PendingIntent::class.java)
+            else -> null
+        }
+        if (direct != null) return direct
+        val words = when (kind) {
+            Kind.ANSWER -> listOf("answer", "accept")
+            Kind.DECLINE -> listOf("decline", "reject", "dismiss")
+            Kind.HANG_UP -> listOf("hang up", "end call", "end")
+            Kind.MUTE -> listOf("mute")
+            Kind.SPEAKER -> listOf("speaker")
+        }
+        return n.actions.orEmpty().firstOrNull { action ->
+            val label = action.title?.toString()?.lowercase()?.trim() ?: return@firstOrNull false
+            words.any { label == it || label.startsWith("$it ") }
+        }?.actionIntent
+    }
+}

@@ -93,7 +93,13 @@ sealed interface IslandActivity {
 
     /** Ongoing phone or VoIP call; [since] is when it started (for the running timer). */
     data class Call(override val packageName: String, override val title: String, override val icon: Bitmap?,
-        val since: Long?, val key: String) : IslandActivity
+        val since: Long?, val key: String,
+        /** Ringing (not yet answered). */
+        val incoming: Boolean = false,
+        /** Caller photo from the call notification, when the app provides one. */
+        val avatar: Bitmap? = null,
+        val canAnswer: Boolean = false, val canDecline: Boolean = false, val canHangUp: Boolean = false,
+        val canMute: Boolean = false, val canSpeaker: Boolean = false) : IslandActivity
 
     /** Countdown timer or stopwatch from a chronometer notification. [base] is wall-clock millis. */
     data class Timer(override val packageName: String, override val title: String, override val icon: Bitmap?,
@@ -255,10 +261,23 @@ class IslandListenerService : NotificationListenerService() {
         val ongoing = runCatching { activeNotifications }.getOrNull().orEmpty()
             .filter { it.isOngoing && it.packageName != packageName }.sortedByDescending { it.postTime }
         fun title(sbn: StatusBarNotification) = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-        ongoing.firstOrNull { it.notification.category == Notification.CATEGORY_CALL }?.let { sbn ->
+        // Calls first (ringing ones may not be marked ongoing), like iPhone.
+        (runCatching { activeNotifications }.getOrNull().orEmpty().filter { it.packageName != packageName && CallControls.isCall(it.notification) }
+            .sortedWith(compareByDescending<StatusBarNotification> { CallControls.isIncoming(it.notification) }.thenByDescending { it.postTime })
+            .firstOrNull())?.let { sbn ->
             val n = sbn.notification
-            val since = n.`when`.takeIf { n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || it > 0 }
-            return IslandActivity.Call(sbn.packageName, title(sbn) ?: "Call", appIcon(sbn.packageName), since, sbn.key)
+            val incoming = CallControls.isIncoming(n)
+            val since = n.`when`.takeIf { !incoming && (n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || it > 0) }
+            val person = runCatching { androidx.core.os.BundleCompat.getParcelable(n.extras, Notification.EXTRA_CALL_PERSON, android.app.Person::class.java) }.getOrNull()
+            val avatar = runCatching { person?.icon?.loadDrawable(this)?.toBitmap(96, 96) }.getOrNull()
+                ?: runCatching { n.getLargeIcon()?.loadDrawable(this)?.toBitmap(96, 96) }.getOrNull()
+            return IslandActivity.Call(sbn.packageName, person?.name?.toString() ?: title(sbn) ?: "Call", appIcon(sbn.packageName), since, sbn.key,
+                incoming = incoming, avatar = avatar,
+                canAnswer = CallControls.intent(n, CallControls.Kind.ANSWER) != null,
+                canDecline = CallControls.intent(n, CallControls.Kind.DECLINE) != null,
+                canHangUp = CallControls.intent(n, CallControls.Kind.HANG_UP) != null,
+                canMute = CallControls.intent(n, CallControls.Kind.MUTE) != null,
+                canSpeaker = CallControls.intent(n, CallControls.Kind.SPEAKER) != null)
         }
         ongoing.firstOrNull { it.notification.category == Notification.CATEGORY_NAVIGATION }?.let { sbn ->
             val extras = sbn.notification.extras
@@ -359,6 +378,12 @@ class IslandListenerService : NotificationListenerService() {
 
         fun dismiss(key: String) { runCatching { instance?.cancelNotification(key) } }
         private fun find(key: String) = runCatching { instance?.activeNotifications?.firstOrNull { it.key == key } }.getOrNull()
+        /** Answer, decline, hang up, mute or speaker through the call notification's own buttons. */
+        internal fun callAction(context: Context, key: String, kind: CallControls.Kind): Boolean {
+            val intent = find(key)?.notification?.let { CallControls.intent(it, kind) } ?: return false
+            // Answering usually opens the in-call screen, so allow it to start from here.
+            return sendAllowingLaunch(context, intent)
+        }
         /** Quick reply through the app's own reply action; false if the notification or action is gone. */
         fun reply(context: Context, key: String, text: String): Boolean =
             find(key)?.notification?.let(Messaging::replyAction)?.let { Messaging.sendReply(context, it, text) } == true
