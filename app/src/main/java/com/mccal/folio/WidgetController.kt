@@ -44,6 +44,9 @@ class WidgetController(
     private var pendingId = -1
     private var pendingOriginal: WidgetPlacement? = null
     private var pendingOptions: Bundle? = null
+    /** The pending widget joins the Smart Stack at its placement instead of replacing that widget. */
+    var pendingStack by mutableStateOf(false)
+        private set
     private val pendingStore = activity.getSharedPreferences("widget_pending", 0)
     private val reconfigureStore = activity.getSharedPreferences("widget_reconfigure_pending", 0)
     private val userManager = activity.getSystemService(UserManager::class.java)
@@ -69,7 +72,11 @@ class WidgetController(
             ?: restoredId.takeIf { it >= 0 }?.let(manager::getAppWidgetInfo)?.profile
         val restoredStatus = saved?.getString(PENDING_STATUS)?.let { runCatching { WidgetSetupStatus.valueOf(it) }.getOrNull() }
         val restoredOptions = saved?.getBundle(PENDING_OPTIONS)
-        val alreadyCommitted = restoredPlacement?.let { model.placement(it.slot) == it } == true
+        val restoredStack = saved?.getBoolean(PENDING_STACK, false) == true
+        // A stack add is committed once the id is in that stack; a placement add once Home shows it.
+        val alreadyCommitted = restoredPlacement?.let {
+            if (restoredStack) restoredId in model.stackCards(it.slot) else model.placement(it.slot) == it
+        } == true
         val validPending = restoredId >= 0 && restoredPlacement?.id == restoredId &&
             restoredId in host.appWidgetIds && restoredProvider != null && restoredProfile != null &&
             restoredStatus != null && (!hasOriginal || restoredOriginal != null)
@@ -85,6 +92,7 @@ class WidgetController(
             pendingProfile = restoredProfile
             setupStatus = restoredStatus
             pendingOptions = restoredOptions
+            pendingStack = restoredStack
             persistPending()
             onExternalSetupChanged(true)
         } else {
@@ -108,6 +116,7 @@ class WidgetController(
         pendingProvider?.let { bundle.putString(PENDING_PROVIDER, it.flattenToString()) }
         pendingProfile?.let { profile -> bundle.putLong(PENDING_PROFILE_SERIAL, userManager.getSerialNumberForUser(profile)) }
         setupStatus?.let { bundle.putString(PENDING_STATUS, it.name) }
+        bundle.putBoolean(PENDING_STACK, pendingStack)
         pendingOptions?.let { bundle.putBundle(PENDING_OPTIONS, it) }
         reconfigureWidgetId?.let { bundle.putInt(RECONFIGURE_ID, it) }
     }
@@ -181,13 +190,14 @@ class WidgetController(
         ?: legacyPlacement(slot, id))
 
     fun add(placement: WidgetPlacement, provider: AppWidgetProviderInfo, grid: WidgetGridSizing? = null,
-        contentSize: WidgetContentSize? = null) {
+        contentSize: WidgetContentSize? = null, stack: Boolean = false) {
         if (reconfigureWidgetId != null) {
             failureMessage = "Finish or cancel the open widget settings first."
             return
         }
         cancel()
         failureMessage = null
+        pendingStack = stack
         pendingId = host.allocateAppWidgetId()
         pendingPlacement = placement.copy(id = pendingId)
         pendingOriginal = model.placement(placement.slot)
@@ -212,6 +222,13 @@ class WidgetController(
 
     fun add(slot: Int, provider: AppWidgetProviderInfo) = add(model.placement(slot)
         ?: legacyPlacement(slot, EMPTY_WIDGET), provider)
+
+    /** Binds [provider] as a new widget in the Smart Stack at [slot], sized like that placement. */
+    fun addToStack(slot: Int, provider: AppWidgetProviderInfo, grid: WidgetGridSizing? = null): Boolean {
+        val placement = model.placement(slot) ?: return false
+        add(placement, provider, grid, stack = true)
+        return true
+    }
 
     private fun configure() {
         if (pendingId < 0) return
@@ -241,7 +258,9 @@ class WidgetController(
     private fun complete() {
         val placement = pendingPlacement ?: return cancel()
         val originalStillPresent = model.placement(placement.slot) == pendingOriginal
-        if (pendingId < 0 || !originalStillPresent || !model.placeWidget(placement)) {
+        val committed = originalStillPresent && pendingId >= 0 &&
+            if (pendingStack) model.addToStack(placement.slot, pendingId) else model.placeWidget(placement)
+        if (!committed) {
             failureMessage = if (!originalStillPresent) CHANGED else NO_ROOM
             cancel()
             return
@@ -289,6 +308,7 @@ class WidgetController(
     fun cancelPendingSetup() = cancel()
 
     private fun clearPending() {
+        pendingStack = false
         pendingId = -1
         pendingPlacement = null
         pendingOriginal = null
@@ -359,6 +379,7 @@ class WidgetController(
             .putString(PENDING_PROVIDER, provider.flattenToString())
             .putLong(PENDING_PROFILE_SERIAL, userManager.getSerialNumberForUser(profile))
             .putString(PENDING_STATUS, status.name)
+            .putBoolean(PENDING_STACK, pendingStack)
         pendingOptions?.let { options ->
             editor.putInt(PENDING_WIDTH, options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH))
                 .putInt(PENDING_HEIGHT, options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT))
@@ -378,6 +399,7 @@ class WidgetController(
             putString(PENDING_PROVIDER, pendingStore.getString(PENDING_PROVIDER, null))
             putLong(PENDING_PROFILE_SERIAL, pendingStore.getLong(PENDING_PROFILE_SERIAL, -1L))
             putString(PENDING_STATUS, pendingStore.getString(PENDING_STATUS, null))
+            putBoolean(PENDING_STACK, pendingStore.getBoolean(PENDING_STACK, false))
             if (pendingStore.contains(PENDING_WIDTH) && pendingStore.contains(PENDING_HEIGHT)) {
                 putBundle(PENDING_OPTIONS, sizeOptions(pendingStore.getInt(PENDING_WIDTH, 1), pendingStore.getInt(PENDING_HEIGHT, 1)))
             }
@@ -420,6 +442,7 @@ class WidgetController(
         private const val PENDING_OPTIONS = "pendingWidgetOptions"
         private const val PENDING_WIDTH = "pendingWidgetWidth"
         private const val PENDING_HEIGHT = "pendingWidgetHeight"
+        private const val PENDING_STACK = "pendingWidgetStack"
         private const val NO_ROOM = "There isn't room for this widget here."
         private const val CHANGED = "Home changed while the widget was being configured. Choose a space again."
     }

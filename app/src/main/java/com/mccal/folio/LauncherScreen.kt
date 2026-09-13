@@ -142,6 +142,8 @@ fun LauncherScreen(
     var widgetSlot by rememberSaveable { mutableIntStateOf(0) }
     var widgetTargetIndex by rememberSaveable { mutableIntStateOf(Int.MIN_VALUE) }
     var widgetExactTarget by rememberSaveable { mutableStateOf(false) }
+    /** Set while the widget picker is adding to the Smart Stack at this placement slot. */
+    var stackTargetSlot by rememberSaveable { mutableStateOf<Int?>(null) }
     var widgetPackage by rememberSaveable { mutableStateOf<String?>(null) }
     var widgetProfileSerial by rememberSaveable { mutableStateOf<Long?>(null) }
     var widgetSession by remember { mutableStateOf<WidgetPickerSession?>(null) }
@@ -157,7 +159,10 @@ fun LauncherScreen(
     var resizeAppPitch by remember { mutableFloatStateOf(1f) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var customizationPage by rememberSaveable { mutableStateOf(CustomizationPage.OVERVIEW) }
-    LaunchedEffect(sheet) { if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW }
+    LaunchedEffect(sheet) {
+        if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW
+        if (sheet != "widgets") stackTargetSlot = null
+    }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var createFolderFirstId by rememberSaveable { mutableStateOf<String?>(null) }
     var savedPage by rememberSaveable { mutableIntStateOf(0) }
@@ -438,6 +443,7 @@ fun LauncherScreen(
             if (drag.source?.folderId != null) openFolderId = null
         },
         onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
+        CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate) {
         DuneWallpaper()
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
@@ -517,6 +523,7 @@ fun LauncherScreen(
                         val screenPoint = point + gestureOriginInWindow +
                             Offset(rootOnScreen[0].toFloat(), rootOnScreen[1].toFloat())
                         !(region?.target is DropTarget.Dock && dockScroll.value > 0) &&
+                            !((region?.target as? DropTarget.Widget)?.index?.let { state.widgetStacks[it]?.isNotEmpty() } == true) &&
                             !nativeWidgetConsumesVerticalGesture(launcherRootView, screenPoint)
                     }
                 },
@@ -739,6 +746,14 @@ fun LauncherScreen(
                                 topRowHeightDp = topPitch, appRowHeightDp = geometry.rowHeight)
                             val constraints = widgets.manager.getAppWidgetInfo(placement.id)?.let { widgets.sizing(it, gridSizing) }
                             WidgetActions(placement, constraints,
+                                stackCards = model.stackCards(placement.slot), stackLabel = { widgetLabel(it, widgets) },
+                                stackRotate = state.stackRotate, onStackRotate = model::setStackRotate,
+                                onAddToStack = {
+                                    stackTargetSlot = placement.slot; widgetSlot = placement.slot
+                                    widgetPackage = null; widgetProfileSerial = null; widgetExactTarget = false; sheet = "widgets"
+                                },
+                                onRemoveFromStack = { model.removeFromStack(placement.slot, it) },
+                                onShowFirstInStack = { model.showFirstInStack(placement.slot, it) },
                                 canConfigure = widgets.canReconfigure(placement.id),
                                 onConfigure = { widgets.reconfigure(placement.id); sheet = "" },
                                 isValid = { x, y -> (x == placement.spanX && y == placement.spanY) || resizeWidget(state.layout, widgetSlot, x, y) != state.layout },
@@ -820,7 +835,18 @@ fun LauncherScreen(
                     onTurnOnWork = { model.turnOnWork(it) }, hiddenForDrag = widgetSession != null,
                     footprint = footprint,
                     onBack = widgetPickerBack,
-                    onTap = { provider ->
+                    onTap = tap@{ provider ->
+                        stackTargetSlot?.let { stackSlot ->
+                            val placement = model.placement(stackSlot)
+                            val min = widgets.sizing(provider, pickerSizing)?.minimum
+                            if (placement == null || (min != null && (min.width > placement.spanX || min.height > placement.spanY))) {
+                                widgetPlacementMessage = "This widget needs a bigger space than this stack. Resize the stack first."
+                            } else {
+                                widgets.addToStack(stackSlot, provider, pickerSizing)
+                                stackTargetSlot = null; sheet = ""; widgetPackage = null; widgetPlacementMessage = null
+                            }
+                            return@tap
+                        }
                         footprint(provider)?.let { preferredSpan ->
                             val existing = model.placement(widgetSlot)
                             val constraints = widgets.sizing(provider, pickerSizing)
@@ -858,6 +884,10 @@ fun LauncherScreen(
                         }
                     },
                     onBuiltin = builtin@{ builtinId ->
+                        stackTargetSlot?.let { stackSlot ->
+                            model.addToStack(stackSlot, builtinId); stackTargetSlot = null; sheet = ""; widgetPackage = null
+                            return@builtin
+                        }
                         val existing = model.placement(widgetSlot)
                         val special = existing?.takeIf { it.row + it.spanY > GRID_ROWS }
                         val span = existing?.let { WidgetSpan(it.spanX, it.spanY) } ?: WidgetSpan(2, 2)
@@ -886,7 +916,7 @@ fun LauncherScreen(
                         scope.launch { pager.scrollToPage(homeCellPage(free ?: requested).coerceIn(0, homePages)) }
                     },
                     onDragStart = { provider, point ->
-                        footprint(provider)?.let { span ->
+                        if (stackTargetSlot == null) footprint(provider)?.let { span ->
                             widgetSession = WidgetPickerSession(provider, widgetSlot, span, point, dragging = true)
                             widgetPlacementMessage = null
                             scope.launch { pager.scrollToPage(lastHomePage.coerceIn(0, homePages - 1)) }
@@ -1251,7 +1281,7 @@ fun LauncherScreen(
                     modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Cancel") } })
         }
         }
-    } }
+    } } }
 }
 
 @Composable
@@ -1878,30 +1908,75 @@ private fun MovableWidget(id: Int, slot: Int, controller: WidgetController, drag
     val edit = LocalHomeEdit.current
     // Built-in cards wiggle; provider widgets (Android views) only get the remove button, since moving
     // a hosted view every frame would re-lay it out constantly.
+    val cards = WidgetStacks.cards(id, LocalWidgetStacks.current[slot])
     Box(modifier.dropRegion(drag, cell, page = page, widgetId = id)) {
-    WidgetSlot(id, slot, controller, Modifier.fillMaxSize().then(if (id < 0) Modifier.jiggle("widget-$slot", .35f) else Modifier)
-        .alpha(if (drag.source?.target == cell) .3f else 1f)
-        .border(if (drag.active && target == cell) 2.dp else 0.dp,
-            if (drag.active && target == cell) Color.White else Color.Transparent, RoundedCornerShape(24.dp))
-        .semantics { onLongClick("Move or replace widget") { onAdd(); true } }, onAdd) {
-        when (id) {
-            CLOCK_WIDGET -> ClockCard(onAdd)
-            DATE_WIDGET -> DateCard(onAdd)
-            INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
-                Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
-                Text("Your widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)
-                Text("Tap to choose", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
-            }
-            else -> Surface(Modifier.fillMaxSize().clickable(onClick = onAdd), color = Glass.copy(alpha = .18f),
-                shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .25f))) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.Add, null, tint = Color.White)
-                    Text(if (id >= 0) "Widget unavailable" else "Add widget", color = Color.White, fontSize = 12.sp)
-                }
+        val chrome = Modifier.fillMaxSize().then(if (id < 0) Modifier.jiggle("widget-$slot", .35f) else Modifier)
+            .alpha(if (drag.source?.target == cell) .3f else 1f)
+            .border(if (drag.active && target == cell) 2.dp else 0.dp,
+                if (drag.active && target == cell) Color.White else Color.Transparent, RoundedCornerShape(24.dp))
+            .semantics { onLongClick("Move or replace widget") { onAdd(); true } }
+        if (cards.size > 1) SmartStack(cards, slot, controller, chrome, onAdd)
+        else WidgetSlot(id, slot, controller, chrome, onAdd) { BuiltinWidgetCard(id, slot, onAdd) }
+    if (edit.active && id != EMPTY_WIDGET && id != INFO_WIDGET) JiggleRemoveButton("Remove widget") { edit.onRemove(cell) }
+    }
+}
+
+@Composable
+private fun BuiltinWidgetCard(id: Int, slot: Int, onAdd: () -> Unit) {
+    when (id) {
+        CLOCK_WIDGET -> ClockCard(onAdd)
+        DATE_WIDGET -> DateCard(onAdd)
+        INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
+            Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Text("Your widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)
+            Text("Tap to choose", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
+        }
+        else -> Surface(Modifier.fillMaxSize().clickable(onClick = onAdd), color = Glass.copy(alpha = .18f),
+            shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .25f))) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Rounded.Add, null, tint = Color.White)
+                Text(if (id >= 0) "Widget unavailable" else "Add widget", color = Color.White, fontSize = 12.sp)
             }
         }
     }
-    if (edit.active && id != EMPTY_WIDGET && id != INFO_WIDGET) JiggleRemoveButton("Remove widget") { edit.onRemove(cell) }
+}
+
+/**
+ * iOS Smart Stack: swipe up or down between the widgets in one spot. Dots on the side show while flipping;
+ * with Smart Rotate on, the stack moves to its next widget every 30 minutes while Home is open.
+ */
+@Composable
+private fun SmartStack(cards: List<Int>, slot: Int, controller: WidgetController, modifier: Modifier, onAdd: () -> Unit) {
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { cards.size })
+    val rotate = LocalStackRotate.current
+    val haptic = LocalHapticFeedback.current
+    var lastSettled by remember { mutableIntStateOf(0) }
+    LaunchedEffect(pager.settledPage) {
+        if (pager.settledPage != lastSettled) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        lastSettled = pager.settledPage
+    }
+    LaunchedEffect(rotate, cards.size) {
+        if (rotate) while (true) {
+            delay(30 * 60_000L)
+            if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % cards.size)
+        }
+    }
+    var dotsVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(pager.isScrollInProgress) { if (pager.isScrollInProgress) dotsVisible = true else { delay(1_200); dotsVisible = false } }
+    Box(modifier) {
+        androidx.compose.foundation.pager.VerticalPager(pager, Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)),
+            key = { cards[it] }, beyondViewportPageCount = 0) { page ->
+            val card = cards[page]
+            WidgetSlot(card, slot, controller, Modifier.fillMaxSize(), onAdd) { BuiltinWidgetCard(card, slot, onAdd) }
+        }
+        val dotsAlpha by animateFloatAsState(if (dotsVisible) 1f else 0f, label = "stack dots")
+        Column(Modifier.align(Alignment.CenterEnd).padding(end = 5.dp).alpha(dotsAlpha)
+            .background(Color.Black.copy(alpha = .28f), RoundedCornerShape(50)).padding(horizontal = 3.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(cards.size) { index ->
+                Box(Modifier.size(5.dp).background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else .4f), CircleShape))
+            }
+        }
     }
 }
 
@@ -2062,6 +2137,13 @@ private fun WidgetActions(
     onReplace: () -> Unit,
     onRemove: () -> Unit,
     onClose: () -> Unit,
+    stackCards: List<Int> = emptyList(),
+    stackLabel: (Int) -> String = { "Widget" },
+    stackRotate: Boolean = true,
+    onStackRotate: (Boolean) -> Unit = {},
+    onAddToStack: () -> Unit = {},
+    onRemoveFromStack: (Int) -> Unit = {},
+    onShowFirstInStack: (Int) -> Unit = {},
 ) {
     val sheetMaxHeight = with(LocalDensity.current) {
         (LocalWindowInfo.current.containerSize.height * .88f).toDp()
@@ -2084,6 +2166,30 @@ private fun WidgetActions(
         }
         if (canConfigure) ActionRow(Icons.Rounded.Settings, "Widget settings", onConfigure,
             Modifier.testTag("widget-settings-${placement.slot}"))
+        // Smart Stack
+        Text("Smart Stack", style = MaterialTheme.typography.titleMedium)
+        ActionRow(Icons.Rounded.Layers, if (stackCards.size > 1) "Add Widget to Stack" else "Make a Stack (add another widget)", onAddToStack,
+            Modifier.testTag("widget-stack-add-${placement.slot}"))
+        if (stackCards.size > 1) {
+            stackCards.forEachIndexed { index, card ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${index + 1}. ${stackLabel(card)}", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (index > 0) TextButton(onClick = { onShowFirstInStack(card) }) { Text("Show first") }
+                    IconButton(onClick = { onRemoveFromStack(card) }) { Icon(Icons.Rounded.RemoveCircleOutline, "Remove ${stackLabel(card)} from stack",
+                        tint = MaterialTheme.colorScheme.error) }
+                }
+            }
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Smart Rotate")
+                    Text("Switch to the next widget every 30 minutes", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(stackRotate, onStackRotate)
+            }
+            Text("Swipe up or down on the stack to flip between widgets.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Text("Resize", style = MaterialTheme.typography.titleMedium)
         Button(enabled = feasible, onClick = { onStartResize(width, height) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Resize on Home") }
         if (!feasible) Text("Move this widget into the six-row grid before resizing.", color = MaterialTheme.colorScheme.error)

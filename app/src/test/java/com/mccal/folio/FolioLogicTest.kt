@@ -168,3 +168,37 @@ class BadgeAccentTest {
         assertNull(dominantAccent(icon(0x00FF0000)))
     }
 }
+
+class WidgetStacksTest {
+    @Test fun cardsListPrimaryFirst() {
+        assertEquals(listOf(5, 7, 9), WidgetStacks.cards(5, listOf(7, 9)))
+        assertEquals(listOf(5), WidgetStacks.cards(5, null))
+    }
+
+    @Test fun retainsOnlyStacksWhosePlacementExists() {
+        val stacks = mapOf(0 to listOf(11, CLOCK_WIDGET), 3 to listOf(12))
+        assertEquals(setOf(11), WidgetStacks.retained(stacks, setOf(0, 1)))
+        assertEquals(setOf(11, 12), WidgetStacks.retained(stacks, setOf(0, 3)))
+    }
+
+    @Test fun pruneDropsMissingAndEmpty() {
+        assertEquals(mapOf(0 to listOf(4)), WidgetStacks.prune(mapOf(0 to listOf(4), 1 to emptyList(), 2 to listOf(8)), setOf(0, 1)))
+    }
+
+    @Test fun addIgnoresDuplicates() {
+        assertEquals(listOf(7), WidgetStacks.add(listOf(7), 5, 7))
+        assertEquals(listOf(7), WidgetStacks.add(null, 5, 7).let { WidgetStacks.add(it, 5, 5) })
+    }
+
+    @Test fun removePromotesNextCardWhenPrimaryGoes() {
+        assertEquals(5 to listOf(9), WidgetStacks.remove(5, listOf(7, 9), 7))
+        assertEquals(7 to listOf(9), WidgetStacks.remove(5, listOf(7, 9), 5))
+        assertNull(WidgetStacks.remove(5, emptyList(), 5))
+        assertNull(WidgetStacks.remove(5, listOf(7), 42))
+    }
+
+    @Test fun showFirstReorders() {
+        assertEquals(9 to listOf(5, 7), WidgetStacks.showFirst(5, listOf(7, 9), 9))
+        assertNull(WidgetStacks.showFirst(5, listOf(7), 5))
+    }
+}

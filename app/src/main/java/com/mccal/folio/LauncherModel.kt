@@ -104,6 +104,10 @@ data class LauncherState(
     val ccCentered: Boolean = false,
     /** Unfolded: iPad-style Notification Center (clock left, notifications right). */
     val ncSplit: Boolean = true,
+    /** Smart Stacks: widget placement slot → extra widget ids stacked behind that placement's widget. */
+    val widgetStacks: Map<Int, List<Int>> = emptyMap(),
+    /** Smart Rotate: stacks flip to their next widget every so often. */
+    val stackRotate: Boolean = true,
     /** Optional tint per folder id (ARGB). */
     val folderColors: Map<String, Long> = emptyMap(),
     val islandEverywhere: Boolean = false,
@@ -420,6 +424,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.value = old.copy(homeSlots = preview.layout.slots, leadingSlots = preview.layout.leadingSlots, dock = preview.layout.dock,
             widgetPlacements = preview.layout.widgetPlacements, folders = preview.layout.folders,
             widgetRestores = preview.layout.widgetRestores, compact = preview.compact, expanded = preview.expanded,
+            widgetStacks = WidgetStacks.prune(old.widgetStacks, old.widgetPlacements.map { it.slot }.toSet()),
             labels = preview.labels, googleSearch = preview.googleSearch, verticalStatus = preview.verticalStatus,
             editRevision = old.editRevision + 1, canUndoEdit = true)
         persist()
@@ -434,7 +439,43 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun resizeWidget(slot: Int, spanX: Int, spanY: Int) = commitLayout(resizeWidget(mutable.value.layout, slot, spanX, spanY))
     fun placeWidget(placement: WidgetPlacement) = commitLayout(placeWidget(mutable.value.layout, placement))
     fun placement(slot: Int) = mutable.value.layout.placement(slot)
-    fun nextWidgetSlot() = (mutable.value.widgetPlacements.maxOfOrNull { it.slot } ?: -1) + 1
+    // Never reuse a slot number that a (possibly undoable) stack still refers to.
+    fun nextWidgetSlot() = maxOf(mutable.value.widgetPlacements.maxOfOrNull { it.slot } ?: -1,
+        mutable.value.widgetStacks.keys.maxOrNull() ?: -1) + 1
+
+    fun stackCards(slot: Int): List<Int> = mutable.value.layout.placement(slot)
+        ?.let { WidgetStacks.cards(it.id, mutable.value.widgetStacks[slot]) }.orEmpty()
+
+    /** Adds a bound (or built-in) widget behind the widget at [slot]. */
+    fun addToStack(slot: Int, id: Int): Boolean {
+        if (statePayloadInvalid) return false
+        val placement = mutable.value.layout.placement(slot) ?: return false
+        mutable.update { it.copy(widgetStacks = it.widgetStacks + (slot to WidgetStacks.add(it.widgetStacks[slot], placement.id, id))) }
+        persist()
+        return true
+    }
+
+    fun removeFromStack(slot: Int, id: Int) = rearrangeStack(slot) { primary, extras -> WidgetStacks.remove(primary, extras, id) }
+    fun showFirstInStack(slot: Int, id: Int) = rearrangeStack(slot) { primary, extras -> WidgetStacks.showFirst(primary, extras, id) }
+
+    private fun rearrangeStack(slot: Int, change: (Int, List<Int>) -> Pair<Int, List<Int>>?): Boolean {
+        if (statePayloadInvalid) return false
+        val old = mutable.value
+        val placement = old.layout.placement(slot) ?: return false
+        val (primary, extras) = change(placement.id, old.widgetStacks[slot].orEmpty()) ?: return false
+        // Changing which widget a placement shows isn't undoable (like replacing a widget); clearing undo keeps
+        // retained ids and the stack map consistent.
+        undoLayout = null
+        undoImportSettings = null
+        mutable.value = old.copy(
+            widgetPlacements = old.widgetPlacements.map { if (it.slot == slot) it.copy(id = primary) else it },
+            widgetStacks = if (extras.isEmpty()) old.widgetStacks - slot else old.widgetStacks + (slot to extras),
+            canUndoEdit = false, editRevision = old.editRevision + 1)
+        persist()
+        return true
+    }
+
+    fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
     fun removePlacement(source: DropTarget) = commitLayout(removePlacement(mutable.value.layout, source))
     private fun commitLayout(next: HomeLayout): Boolean {
         if (statePayloadInvalid) return false
@@ -445,6 +486,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.value = old.copy(homeSlots = next.slots, leadingSlots = next.leadingSlots, dock = next.dock,
             widgetPlacements = next.widgetPlacements, folders = next.folders,
             widgetRestores = next.widgetRestores,
+            // Keep stacks of the undoable previous layout too, so undoing a removal brings the whole stack back.
+            widgetStacks = WidgetStacks.prune(old.widgetStacks, (next.widgetPlacements + old.widgetPlacements).map { it.slot }.toSet()),
             editRevision = old.editRevision + 1, canUndoEdit = true)
         persist()
         return true
@@ -459,6 +502,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.value = old.copy(homeSlots = reconcileHomeSlots(before.slots, installed),
             leadingSlots = before.leadingSlots.map { it?.takeIf(installed::contains) },
             dock = before.dock.map { it?.takeIf(installed::contains) }, widgetPlacements = before.widgetPlacements, folders = before.folders,
+            widgetStacks = WidgetStacks.prune(old.widgetStacks, before.widgetPlacements.map { it.slot }.toSet()),
             widgetRestores = before.widgetRestores, compact = settings?.compact ?: old.compact,
             expanded = settings?.expanded ?: old.expanded, labels = settings?.labels ?: old.labels,
             googleSearch = settings?.googleSearch ?: old.googleSearch, verticalStatus = settings?.verticalStatus ?: old.verticalStatus,
@@ -521,8 +565,13 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.update { if (expanded) it.copy(expanded = value.sanitized(), canUndoEdit = false) else it.copy(compact = value.sanitized(), canUndoEdit = false) }
         persist()
     }
-    val retainedWidgetIds get() = (mutable.value.widgetPlacements.map { it.id } +
-        (if (mutable.value.canUndoEdit) undoLayout?.first?.widgetPlacements.orEmpty().map { it.id } else emptyList())).filter { it >= 0 }.toSet()
+    val retainedWidgetIds: Set<Int> get() {
+        val state = mutable.value
+        val undoPlacements = if (state.canUndoEdit) undoLayout?.first?.widgetPlacements.orEmpty() else emptyList()
+        val placements = state.widgetPlacements + undoPlacements
+        // Stacked widgets are retained exactly as long as their placement (or its undoable copy) exists.
+        return (placements.map { it.id }.filter { it >= 0 } + WidgetStacks.retained(state.widgetStacks, placements.map { it.slot }.toSet())).toSet()
+    }
     val canPruneWidgetIds get() = !statePayloadInvalid
     fun setWidget(slot: Int, id: Int) {
         if (statePayloadInvalid) return
@@ -547,7 +596,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.update { it.copy(homeSlots = reconcileHomeSlots(layout.slots, installed),
             leadingSlots = layout.slotsForPage(-1).map { id -> id?.takeIf { it in installed || isFolderId(it) } },
             dock = layout.dock.map { id -> id?.takeIf { it in installed || isFolderId(it) } }, widgetPlacements = layout.widgetPlacements,
-            folders = layout.folders, widgetRestores = layout.widgetRestores,
+            folders = layout.folders, widgetRestores = layout.widgetRestores, widgetStacks = emptyMap(),
             canUndoEdit = false, editRevision = it.editRevision + 1) }
         undoLayout = null
         undoImportSettings = null
@@ -601,6 +650,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put(SettingKeys.ISLAND_EVENTS_OFF, JSONArray(s.islandEventsOff.toList())).put("libraryCategories", s.libraryCategories).put("iconStyle", s.iconStyle.name).put("iconTint", s.iconTint)
             .put("iconShape", s.iconShape.name).put("iconPack", s.iconPack ?: JSONObject.NULL).put("badgeStyle", s.badgeStyle.name).put("badgeColor", s.badgeColor.name).put("searchPill", s.searchPill).put("swipeDownSearch", s.swipeDownSearch).put("messagesApp", s.messagesApp ?: JSONObject.NULL).put(SettingKeys.MESSAGES_AVOID_DOUBLE, s.messagesAvoidDouble).put("ccControls", JSONArray(s.ccControls))
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
+            .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
+            .put("stackRotate", s.stackRotate)
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
             .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
@@ -769,6 +820,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 ?: CcControl.DEFAULTS,
             ccSize = runCatching { PanelSize.valueOf(j.optString("ccSize")) }.getOrDefault(PanelSize.STANDARD),
             ccCentered = j.optBoolean("ccCentered", false), ncSplit = j.optBoolean("ncSplit", true),
+            widgetStacks = j.optJSONObject("widgetStacks")?.let { o -> o.keys().asSequence().mapNotNull { key ->
+                val ids = o.optJSONArray(key) ?: return@mapNotNull null
+                key.toIntOrNull()?.let { slot -> slot to (0 until ids.length()).map(ids::getInt) }
+            }.toMap() } ?: emptyMap(),
+            stackRotate = j.optBoolean("stackRotate", true),
             folderColors = j.optJSONObject("folderColors")?.let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } ?: emptyMap(),
             dockEverywhere = j.optBoolean("dockEverywhere", false), islandEverywhere = j.optBoolean("islandEverywhere", false))
     }.getOrElse {
