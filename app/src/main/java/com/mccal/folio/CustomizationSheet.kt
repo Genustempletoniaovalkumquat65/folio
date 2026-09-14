@@ -927,7 +927,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
     SheetGroup {
         state.focusModes.forEachIndexed { index, mode ->
             if (index > 0) MenuDivider()
-            TweakRow(mode.icon(), mode.color, mode.name, "focus-${mode.id}", if (state.activeFocus == mode.id) "On" else null) { onOpen(mode.id) }
+            TweakRow(mode.icon(), mode.color, mode.name, "focus-${mode.id}", if (state.activeFocus == mode.id) "On" else if (mode.schedule != null) "Scheduled" else null) { onOpen(mode.id) }
         }
     }
     Text("Focus lets you silence notifications, change how the phone looks and bring Home to the page you need. Turn one on here or from Control Center.",
@@ -951,6 +951,48 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             Spacer(Modifier.width(12.dp))
             Text(if (on) "On" else "Off", color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
             IosSwitch(on, { model.setFocus(if (it) mode.id else null) }, Modifier.testTag("focus-switch-${mode.id}"))
+        }
+    }
+    SettingsCard("Schedule") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val schedule = mode.schedule
+        SettingsSwitch("Turn On Automatically", schedule != null, { on ->
+            model.updateFocusMode(mode.copy(schedule = if (!on) null else when (mode.id) {
+                "sleep" -> FocusSchedule(22 * 60, 7 * 60)
+                "work" -> FocusSchedule(9 * 60, 17 * 60, setOf(1, 2, 3, 4, 5))
+                else -> FocusSchedule(9 * 60, 17 * 60)
+            }))
+        }, "focus-schedule")
+        if (schedule != null) {
+            val is24 = android.text.format.DateFormat.is24HourFormat(context)
+            fun label(minute: Int) = java.time.LocalTime.of(minute / 60, minute % 60).format(java.time.format.DateTimeFormatter.ofPattern(if (is24) "HH:mm" else "h:mm a"))
+            fun pick(minute: Int, onPicked: (Int) -> Unit) = android.app.TimePickerDialog(context, android.R.style.Theme_DeviceDefault_Dialog_Alert,
+                { _, h, m -> onPicked(h * 60 + m) }, minute / 60, minute % 60, is24).show()
+            listOf("From" to schedule.startMinute, "To" to schedule.endMinute).forEach { (name, minute) ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).clickable {
+                    pick(minute) { picked -> model.updateFocusMode(mode.copy(schedule = if (name == "From") schedule.copy(startMinute = picked) else schedule.copy(endMinute = picked))) }
+                }.testTag("focus-schedule-${name.lowercase()}"), verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, Modifier.weight(1f))
+                    Text(label(minute), color = IosBlue, fontSize = 17.sp)
+                }
+            }
+            // iOS day picker: one letter per day, filled when the schedule runs that day.
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                java.time.DayOfWeek.entries.forEach { day ->
+                    val on = day.value in schedule.days
+                    Box(Modifier.size(38.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(if (on) androidx.compose.ui.graphics.Color(mode.color) else androidx.compose.ui.graphics.Color.White.copy(alpha = .1f))
+                        .clickable(onClickLabel = day.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())) {
+                            val days = if (on) schedule.days - day.value else schedule.days + day.value
+                            if (days.isNotEmpty()) model.updateFocusMode(mode.copy(schedule = schedule.copy(days = days)))
+                        }, contentAlignment = Alignment.Center) {
+                        Text(day.getDisplayName(java.time.format.TextStyle.NARROW, java.util.Locale.getDefault()),
+                            color = androidx.compose.ui.graphics.Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Text("${mode.name} turns on and off at these times. Turning it off early keeps it off until the next time it starts.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     SettingsCard("Notifications") {

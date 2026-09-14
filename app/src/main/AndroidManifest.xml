@@ -94,6 +94,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <receiver android:name=".FocusScheduleReceiver" android:exported="false" />
         <!-- "Add to Home Screen" for widgets an app asks to pin (only delivered to the default Home app). -->
         <activity android:name=".PinWidgetActivity" android:exported="true" android:excludeFromRecents="true"
             android:theme="@style/Theme.Folio.FoldBridge" android:taskAffinity="com.mccal.folio.pin" android:noHistory="true">

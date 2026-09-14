@@ -604,6 +604,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
     fun updateFocusMode(mode: FocusMode) {
         updateSettings(soon = false) { it.copy(focusModes = FocusModes.update(it.focusModes, mode)) }
+        FocusScheduler.schedule(getApplication(), mutable.value.focusModes)
         if (mutable.value.activeFocus == mode.id) FocusController.apply(getApplication(), mutable.value.focusModes, mode)
     }
     /** Clears the Focus if its Do Not Disturb rule was turned off in Android (Quick Settings, a schedule…). */
@@ -827,8 +828,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
             .put("stackRotate", s.stackRotate).put("railActivitiesUnderStatus", s.railActivities).put("addNewAppsToHome", s.addNewAppsToHome)
-            .put("focusModes", JSONArray().apply { s.focusModes.forEach { m -> put(JSONObject().put("id", m.id).put("name", m.name).put("color", m.color)
-                .put("silence", m.silence).put("homePage", m.homePage ?: -1).put("dim", m.dimWallpaper).put("gray", m.grayscale).put("dark", m.darkTheme)) } })
+            .put("focusModes", focusModesToJson(s.focusModes))
             .put("activeFocus", s.activeFocus ?: "").put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
             .put("dimWallpaperDark", s.dimWallpaperDark).put("iconTintFromWallpaper", s.iconTintFromWallpaper)
             .put("tintNotifications", s.tintNotifications).put("tintMedia", s.tintMedia).put("dockMagnify", s.dockMagnify).put("appPanels", s.appPanels).put("haptics", s.haptics).put("lockCover", s.lockCover)
@@ -1011,11 +1011,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             stackRotate = j.optBoolean("stackRotate", true),
             railActivities = j.optBoolean("railActivitiesUnderStatus", false),
             addNewAppsToHome = j.optBoolean("addNewAppsToHome", false),
-            focusModes = FocusModes.withDefaults(j.optJSONArray("focusModes")?.let { a -> (0 until a.length()).mapNotNull { i ->
-                a.optJSONObject(i)?.let { o -> DEFAULT_FOCUS_MODES.firstOrNull { it.id == o.optString("id") }?.copy(
-                    silence = o.optBoolean("silence", true), homePage = o.optInt("homePage", -1).takeIf { it >= 0 },
-                    dimWallpaper = o.optBoolean("dim"), grayscale = o.optBoolean("gray"), darkTheme = o.optBoolean("dark")) }
-            } }.orEmpty()),
+            focusModes = focusModesFromJson(j.optJSONArray("focusModes")),
             activeFocus = j.optString("activeFocus").takeIf { it.isNotEmpty() },
             leftPage = j.optString("leftPage", "TODAY").takeIf { it == "TODAY" || it == "DISCOVER" } ?: "TODAY",
             todayUnfolded = j.optString("todayUnfolded", "PAGE").takeIf { it in setOf("PAGE", "BESIDE", "OFF") } ?: "PAGE",

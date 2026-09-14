@@ -29,7 +29,21 @@ data class FocusMode(
     val dimWallpaper: Boolean = false,
     val grayscale: Boolean = false,
     val darkTheme: Boolean = false,
+    /** Turns on and off by itself at these times, like an iOS Focus schedule; null for manual only. */
+    val schedule: FocusSchedule? = null,
 )
+
+/** Daily window in minutes after midnight (the end may be past midnight, e.g. 22:00–07:00), on ISO days 1 = Monday … 7 = Sunday. */
+data class FocusSchedule(val startMinute: Int, val endMinute: Int, val days: Set<Int> = (1..7).toSet()) {
+    /** Whether the window covers [time]. A window that crosses midnight belongs to the day it starts. */
+    fun covers(time: java.time.LocalDateTime): Boolean {
+        val minute = time.hour * 60 + time.minute
+        val today = time.dayOfWeek.value
+        val yesterday = if (today == 1) 7 else today - 1
+        return if (startMinute <= endMinute) today in days && minute in startMinute until endMinute
+        else (today in days && minute >= startMinute) || (yesterday in days && minute < endMinute)
+    }
+}
 
 internal val DEFAULT_FOCUS_MODES = listOf(
     FocusMode("dnd", "Do Not Disturb", 0xFF5E5CE6),
@@ -112,5 +126,90 @@ internal object FocusController {
         }
         @Suppress("DEPRECATION")
         return AutomaticZenRule(mode.name, null, settings, conditionId(mode), null, filter, true)
+    }
+}
+
+/** Focus schedules: which Focus a schedule wants now, and when to look again. Pure; unit-tested. */
+internal object FocusSchedules {
+    fun scheduledNow(modes: List<FocusMode>, now: java.time.LocalDateTime): FocusMode? = modes.firstOrNull { it.schedule?.covers(now) == true }
+
+    /** The next time any schedule starts or ends after [now], within the coming week. */
+    fun nextBoundary(modes: List<FocusMode>, now: java.time.LocalDateTime): java.time.LocalDateTime? {
+        val minutes = modes.mapNotNull { it.schedule }.flatMap { listOf(it.startMinute, it.endMinute) }.distinct()
+        if (minutes.isEmpty()) return null
+        return (0..7).flatMap { day -> minutes.map { m -> now.toLocalDate().plusDays(day.toLong()).atStartOfDay().plusMinutes(m.toLong()) } }
+            .filter { it.isAfter(now) }.minOrNull()
+    }
+
+    /**
+     * What the active Focus should be at a boundary: a scheduled Focus turns on; a Focus whose schedule just
+     * ended turns off; a Focus turned on by hand (no schedule, or outside it) is left alone.
+     */
+    fun activeAt(modes: List<FocusMode>, active: String?, now: java.time.LocalDateTime, previous: java.time.LocalDateTime): String? {
+        scheduledNow(modes, now)?.let { return it.id }
+        val current = modes.firstOrNull { it.id == active } ?: return active
+        val schedule = current.schedule ?: return active
+        return if (schedule.covers(previous) && !schedule.covers(now)) null else active
+    }
+}
+
+internal fun focusModesToJson(modes: List<FocusMode>) = org.json.JSONArray().apply {
+    modes.forEach { m -> put(org.json.JSONObject().put("id", m.id).put("name", m.name).put("color", m.color)
+        .put("silence", m.silence).put("homePage", m.homePage ?: -1).put("dim", m.dimWallpaper).put("gray", m.grayscale).put("dark", m.darkTheme)
+        .apply { m.schedule?.let { put("schedule", org.json.JSONObject().put("start", it.startMinute).put("end", it.endMinute)
+            .put("days", org.json.JSONArray(it.days.sorted()))) } }) }
+}
+
+internal fun focusModesFromJson(array: org.json.JSONArray?): List<FocusMode> = FocusModes.withDefaults(array?.let { a -> (0 until a.length()).mapNotNull { i ->
+    a.optJSONObject(i)?.let { o -> DEFAULT_FOCUS_MODES.firstOrNull { it.id == o.optString("id") }?.copy(
+        silence = o.optBoolean("silence", true), homePage = o.optInt("homePage", -1).takeIf { it >= 0 },
+        dimWallpaper = o.optBoolean("dim"), grayscale = o.optBoolean("gray"), darkTheme = o.optBoolean("dark"),
+        schedule = o.optJSONObject("schedule")?.let { s -> FocusSchedule(s.optInt("start").coerceIn(0, 1439), s.optInt("end").coerceIn(0, 1439),
+            s.optJSONArray("days")?.let { d -> (0 until d.length()).map { d.optInt(it) }.filter { it in 1..7 }.toSet() } ?: (1..7).toSet()) }) }
+} }.orEmpty())
+
+/** Turns scheduled Focuses on and off: an inexact alarm at each boundary (Folio doesn't need to be open). */
+class FocusScheduleReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+        FocusScheduler.run(context)
+    }
+}
+
+internal object FocusScheduler {
+    private fun local(instant: java.time.Instant) = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+
+    /** Applies what the schedules want now, then sets the alarm for the next boundary. */
+    fun run(context: android.content.Context, previous: java.time.Instant? = null) {
+        val now = java.time.Instant.now()
+        // Measured from the last check, so a boundary missed while the phone was off still takes effect.
+        val checks = context.getSharedPreferences("focus_rules", 0)
+        val since = previous ?: java.time.Instant.ofEpochMilli(checks.getLong("last_check", now.toEpochMilli() - 60_000))
+        checks.edit().putLong("last_check", now.toEpochMilli()).apply()
+        val live = FolioSettingsBridge.liveModel?.get()
+        val prefs = context.getSharedPreferences(SettingKeys.PREFS, 0)
+        val json = runCatching { org.json.JSONObject(prefs.getString(SettingKeys.STATE, null) ?: return) }.getOrNull() ?: return
+        val modes = live?.state?.value?.focusModes ?: focusModesFromJson(json.optJSONArray("focusModes"))
+        val active = live?.state?.value?.activeFocus ?: json.optString("activeFocus").takeIf { it.isNotEmpty() }
+        val wanted = FocusSchedules.activeAt(modes, active, local(now), local(since))
+        if (wanted != active) {
+            if (live != null) live.setFocus(wanted)
+            else {
+                prefs.edit().putString(SettingKeys.STATE, json.put("activeFocus", wanted ?: "").toString()).apply()
+                FocusController.apply(context, modes, modes.firstOrNull { it.id == wanted })
+            }
+        }
+        schedule(context, modes, now)
+    }
+
+    fun schedule(context: android.content.Context, modes: List<FocusMode>, now: java.time.Instant = java.time.Instant.now()) {
+        val alarms = context.getSystemService(android.app.AlarmManager::class.java) ?: return
+        val intent = android.content.Intent(context, FocusScheduleReceiver::class.java)
+        val pending = android.app.PendingIntent.getBroadcast(context, 7101, intent,
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val next = FocusSchedules.nextBoundary(modes, local(now))
+        if (next == null) { alarms.cancel(pending); return }
+        val at = next.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        // Inexact within a minute: no exact-alarm permission needed, and a Focus a few seconds late is fine.
+        alarms.setWindow(android.app.AlarmManager.RTC_WAKEUP, at, 60_000, pending)
     }
 }

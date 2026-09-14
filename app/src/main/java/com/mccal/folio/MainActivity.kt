@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setupExperience = SetupExperience(this)
         Installs.start(this); NewApps.load(this)
+        FocusScheduler.run(this)
         // USER_PRESENT is a protected system broadcast delivered to runtime receivers.
         androidx.core.content.ContextCompat.registerReceiver(this, unlockReceiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT),
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
