@@ -285,3 +285,12 @@ class FeatureScopesTest {
         assertEquals(ScopeValue.DEFAULT, FeatureScopes.value(scopes, "x", FolioScreen.COVER))
     }
 }
+
+class SettingsSearchTest {
+    @Test fun matchesAllWordsInTitleOrKeywords() {
+        assertTrue(settingsMatches("dock size", "Grid, icon size & dock", "layout"))
+        assertTrue(settingsMatches("CHATGPT", "Side Key", "assistant chatgpt"))
+        assertTrue(!settingsMatches("wallet blur", "Side Key", "wallet"))
+        assertTrue(!settingsMatches("   ", "Anything", ""))
+    }
+}

@@ -32,7 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -48,22 +48,28 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
     var tweakId by rememberSaveable { mutableStateOf("") }
+    var settingsQuery by rememberSaveable { mutableStateOf("") }
     val title = when (page) {
         CustomizationPage.OVERVIEW -> "Folio"
-        CustomizationPage.SETUP -> "Set up Folio"
-        CustomizationPage.WALLPAPER -> "Wallpaper & appearance"
-        CustomizationPage.HOME -> "Home layout"
-        CustomizationPage.STATUS -> "Status & side rail"
-        CustomizationPage.GESTURES -> "Gestures & search"
-        CustomizationPage.FOLD -> "Fold"
+        CustomizationPage.SETUP -> "Setup Checklist"
+        CustomizationPage.WALLPAPER -> "Wallpaper & Appearance"
+        CustomizationPage.HOME -> "Home Screen & Dock"
+        CustomizationPage.STATUS -> "Icons & Side Rail"
+        CustomizationPage.GESTURES -> "Gestures & Actions"
+        CustomizationPage.FOLD -> "Fold & Displays"
         CustomizationPage.BACKUP -> "Backup"
-        CustomizationPage.HELP -> "Help & setup"
+        CustomizationPage.HELP -> "Help"
         CustomizationPage.SIDE_KEY -> "Side Key"
         CustomizationPage.LOCK -> "Lock Cover"
         CustomizationPage.CREDITS -> "Credits"
         CustomizationPage.TWEAKS -> "Tweaks"
         CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.name ?: "Tweak"
         CustomizationPage.ADVANCED -> "Advanced"
+        CustomizationPage.NOTIFICATIONS -> "Notifications & Control Center"
+        CustomizationPage.SEARCH -> "Search & App Library"
+        CustomizationPage.TODAY -> "Today View"
+        CustomizationPage.ISLAND -> "Dynamic Island"
+        CustomizationPage.PERMISSIONS -> "Privacy & Permissions"
     }
     val bodyScroll = rememberScrollState()
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
@@ -86,7 +92,13 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (page) {
                 CustomizationPage.OVERVIEW -> {
-                    TweakBanner()
+                    // Like iOS Settings: the header gets out of the way while searching.
+                    if (settingsQuery.isBlank()) TweakBanner()
+                    SettingsSearchField(settingsQuery) { settingsQuery = it }
+                    if (settingsQuery.isNotBlank()) {
+                        SettingsSearchResults(settingsQuery, onOpen = { settingsQuery = ""; if (it == CustomizationPage.TWEAKS) onPage(it) else onPage(it) })
+                        return@Column
+                    }
                     if (!isDefaultHome) Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .testTag("default-home-settings")) { Text(stringResource(R.string.set_as_home_app)) }
                     if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
@@ -102,17 +114,26 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         MenuDivider()
                         TweakRow(Icons.Rounded.GridView, 0xFF0A84FF, "Home Screen & Dock", "customization-home") { onPage(CustomizationPage.HOME) }
                         MenuDivider()
-                        TweakRow(Icons.Rounded.ViewSidebar, 0xFF5E5CE6, "Icons, Status & Island", "customization-status") { onPage(CustomizationPage.STATUS) }
+                        TweakRow(Icons.Rounded.Today, 0xFFFF9F0A, "Today View", "customization-today") { onPage(CustomizationPage.TODAY) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Rail", "customization-status") { onPage(CustomizationPage.STATUS) }
                     }
                     SheetGroup {
-                        TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Gestures, Panels & Search", "customization-gestures") { onPage(CustomizationPage.GESTURES) }
+                        TweakRow(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "customization-island") { onPage(CustomizationPage.ISLAND) }
                         MenuDivider()
+                        TweakRow(Icons.Rounded.Notifications, 0xFFFF3B30, "Notifications & Control Center", "customization-notifications") { onPage(CustomizationPage.NOTIFICATIONS) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Search & App Library", "customization-search") { onPage(CustomizationPage.SEARCH) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Gesture, 0xFF30B0C7, "Gestures & Actions", "customization-gestures") { onPage(CustomizationPage.GESTURES) }
+                    }
+                    SheetGroup {
                         TweakRow(Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key", "customization-side-key") { onPage(CustomizationPage.SIDE_KEY) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Lock, 0xFF30D158, "Lock Cover", "customization-lock",
                             if (state.lockCover) "On" else "Off") { onPage(CustomizationPage.LOCK) }
                         MenuDivider()
-                        TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold", "customization-fold") { onPage(CustomizationPage.FOLD) }
+                        TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold & Displays", "customization-fold") { onPage(CustomizationPage.FOLD) }
                     }
                     SheetGroup {
                         TweakRow(Icons.Rounded.AutoAwesome, 0xFFBF5AF2, "Tweaks", "customization-tweaks",
@@ -123,6 +144,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             if (setupLeft > 0) "$setupLeft left" else null) { onPage(CustomizationPage.SETUP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup") { onPage(CustomizationPage.BACKUP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.PanTool, 0xFF0A84FF, "Privacy & Permissions", "customization-permissions") { onPage(CustomizationPage.PERMISSIONS) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Settings, 0xFF8E8E93, "Advanced", "customization-advanced") { onPage(CustomizationPage.ADVANCED) }
                     }
@@ -206,13 +229,13 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 }
                 CustomizationPage.HOME -> HomeLayoutSettings(state, wide, { wide = it }, model, homePage,
                     onEditPins, onWidget, onAddWidget, onRemoveWidget)
-                CustomizationPage.GESTURES -> {
-                    SettingsCard(stringResource(R.string.gestures)) {
+                CustomizationPage.GESTURES, CustomizationPage.NOTIFICATIONS, CustomizationPage.SEARCH, CustomizationPage.TODAY -> {
+                    if (page == CustomizationPage.GESTURES) SettingsCard(stringResource(R.string.gestures)) {
                         Text(stringResource(R.string.pull_down_from_the_top_left_for_notifica),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         SettingsSwitch(stringResource(R.string.iphone_style_control_center_and_notifica), state.folioPanels, model::setFolioPanels, "folio-panels-switch")
                     }
-                    if (state.folioPanels) SettingsCard(stringResource(R.string.panels)) {
+                    if ((page == CustomizationPage.NOTIFICATIONS) && state.folioPanels) SettingsCard(stringResource(R.string.panels)) {
                         CustomizationSlider("Background blur", "${(state.panelBlur * 100).toInt()}%", state.panelBlur, 0f..1f) { model.setPanelBlur(it) }
                         SettingsSwitch(stringResource(R.string.big_clock_in_notification_center), state.notificationClock, model::setNotificationClock, "notification-clock-switch")
                         SettingsSwitch(stringResource(R.string.stack_notifications_by_app), state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
@@ -229,7 +252,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         Text(stringResource(R.string.to_restyle_samsungs_own_pull_down_colors),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard(stringResource(R.string.side_key)) {
+                    if (page == CustomizationPage.SIDE_KEY) SettingsCard(stringResource(R.string.side_key)) {
                         val assistContext = androidx.compose.ui.platform.LocalContext.current
                         val held = remember(page) { AssistPickerActivity.isDefaultAssistant(assistContext) }
                         Text(if (held) "Holding the side key opens Folio\u2019s picker: ChatGPT, Claude, Perplexity, Gemini or search without AI."
@@ -239,7 +262,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             Text(stringResource(R.string.choose_folio_as_assistant))
                         }
                     }
-                    SettingsCard(stringResource(R.string.spotlight)) {
+                    if (page == CustomizationPage.SEARCH) SettingsCard(stringResource(R.string.spotlight)) {
                         Text(stringResource(R.string.search_with_enter), style = MaterialTheme.typography.labelLarge)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(WebSearchTarget.GOOGLE to "Google (no AI)", WebSearchTarget.DUCKDUCKGO to "DuckDuckGo").forEach { (target, label) ->
@@ -262,7 +285,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
-                    SettingsCard(stringResource(R.string.actions)) {
+                    if (page == CustomizationPage.GESTURES) SettingsCard(stringResource(R.string.actions)) {
                         Text(stringResource(R.string.pick_what_gestures_and_events_do_activat),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         var openTrigger by remember { mutableStateOf<FolioTrigger?>(null) }
@@ -282,7 +305,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
-                    SettingsCard(stringResource(R.string.left_of_home)) {
+                    if (page == CustomizationPage.TODAY) SettingsCard(stringResource(R.string.left_of_home)) {
                         val leftContext = androidx.compose.ui.platform.LocalContext.current
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover").forEach { (value, label) ->
@@ -311,10 +334,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    SettingsCard(stringResource(R.string.app_library)) {
+                    if (page == CustomizationPage.SEARCH) SettingsCard(stringResource(R.string.app_library)) {
                         SettingsSwitch(stringResource(R.string.group_apps_into_categories), state.libraryCategories, model::setLibraryCategories, "library-categories-switch")
                     }
-                    SettingsCard(stringResource(R.string.search)) {
+                    if (page == CustomizationPage.SEARCH) SettingsCard(stringResource(R.string.search)) {
                         SettingsSwitch(stringResource(R.string.search_button_on_home), state.searchPill, model::setSearchPill, "search-pill-switch")
                         SettingsSwitch(stringResource(R.string.swipe_down_on_home_for_spotlight), state.swipeDownSearch, model::setSwipeDownSearch, "swipe-search-switch")
                         SettingsSwitch(stringResource(R.string.drag_page_dots_to_flip_pages), state.pageScrub, model::setPageScrub, "page-scrub-switch")
@@ -324,10 +347,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                CustomizationPage.STATUS -> {
-                    MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
+                CustomizationPage.STATUS, CustomizationPage.ISLAND -> {
+                    if (page == CustomizationPage.STATUS) MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
                     val st = state.statusStyle
-                    SettingsCard(stringResource(R.string.app_icons)) {
+                    if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.app_icons)) {
                         val iconContext = androidx.compose.ui.platform.LocalContext.current
                         val packs = remember { IconPacks.installed(iconContext) }
                         Text(stringResource(R.string.icon_pack), style = MaterialTheme.typography.labelLarge)
@@ -385,14 +408,14 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
-                    SettingsCard(stringResource(R.string.side_rail)) {
+                    if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.side_rail)) {
                         SettingsSwitch(stringResource(R.string.left_handed_layout_rail_on_the_left), state.leftHanded, model::setLeftHanded, "left-handed-switch")
                         SettingsSwitch(stringResource(R.string.show_app_names), state.labels, model::setLabels, "label-switch")
                         CustomizationSlider("Frost", "${(st.railGlass * 100).toInt()}%", st.railGlass, 0f..0.8f) {
                             model.setStatusStyle(st.copy(railGlass = it))
                         }
                     }
-                    SettingsCard(stringResource(R.string.status)) {
+                    if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.status)) {
                         SettingsSwitch(stringResource(R.string.show_status_in_the_rail), state.verticalStatus, model::setVerticalStatus, "status-switch")
                         if (state.verticalStatus) {
                             Text(stringResource(R.string.icon_style), style = MaterialTheme.typography.labelLarge)
@@ -408,7 +431,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             SettingsSwitch(stringResource(R.string.color_battery_when_charging_or_low), st.colorfulBattery, { model.setStatusStyle(st.copy(colorfulBattery = it)) }, "status-color")
                         }
                     }
-                    SettingsCard(stringResource(R.string.in_every_app)) {
+                    if (page == CustomizationPage.ISLAND) SettingsCard(stringResource(R.string.in_every_app)) {
                         SettingsSwitch(stringResource(R.string.dock_handle_on_the_rail_edge), state.dockEverywhere, { on ->
                             model.setDockEverywhere(on); if (on && !SystemShadeAccessibilityService.isConnected()) onShadeSetup()
                         }, "dock-everywhere-switch")
@@ -418,7 +441,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         Text(stringResource(R.string.uses_folios_accessibility_service_the_sa),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard(stringResource(R.string.island)) {
+                    if (page == CustomizationPage.ISLAND) SettingsCard(stringResource(R.string.island)) {
                         val islandContext = androidx.compose.ui.platform.LocalContext.current
                         SettingsSwitch(stringResource(R.string.music_and_live_progress), state.island, { on ->
                             model.setIsland(on)
@@ -526,6 +549,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }
                     }
                 }
+                CustomizationPage.PERMISSIONS -> PermissionsPage(isDefaultHome, onMakeDefault, onShadeSetup)
                 CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.let { tweak -> TweakPage(tweak, state, model) }
                     ?: LaunchedEffect(Unit) { onPage(CustomizationPage.TWEAKS) }
             }
@@ -639,6 +663,122 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
         }
         if (done) Icon(Icons.Rounded.CheckCircle, "Done", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
         else TextButton(onClick = onOpen) { Text(stringResource(R.string.open)) }
+    }
+}
+
+/** iOS Settings search field. */
+@Composable private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .12f))
+        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Search, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f)) {
+            if (query.isEmpty()) Text("Search", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 17.sp)
+            androidx.compose.foundation.text.BasicTextField(query, onQuery, Modifier.fillMaxWidth().testTag("settings-search"), singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.White))
+        }
+        if (query.isNotEmpty()) Icon(Icons.Rounded.Cancel, "Clear search", tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f),
+            modifier = Modifier.size(20.dp).clickable { onQuery("") })
+    }
+}
+
+/** Where each setting lives, for Settings search (titles as shown, plus words people search for). */
+private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = listOf(
+    Triple("Background & wallpaper", "wallpaper photo dunes android image", CustomizationPage.WALLPAPER),
+    Triple("Text on Home", "light dark ink labels legibility", CustomizationPage.WALLPAPER),
+    Triple("Tint glass with wallpaper color", "glass tint frost blur", CustomizationPage.WALLPAPER),
+    Triple("Dark appearance dims wallpaper", "dim dark mode night", CustomizationPage.WALLPAPER),
+    Triple("Appearance (light, dark, sunset)", "theme dark light sunrise", CustomizationPage.WALLPAPER),
+    Triple("Grid, icon size & dock", "layout rows columns spacing icons dock", CustomizationPage.HOME),
+    Triple("Widgets", "widget stack smart", CustomizationPage.HOME),
+    Triple("Today View / Left of Home", "today discover google widgets page beside", CustomizationPage.TODAY),
+    Triple("Icon pack, shape & style", "icons pack squircle circle tinted dark", CustomizationPage.STATUS),
+    Triple("Notification badges", "badge dot count color soft", CustomizationPage.STATUS),
+    Triple("Live Clock and Calendar icons", "live clock calendar", CustomizationPage.STATUS),
+    Triple("Side rail & status", "rail status battery wifi time left-handed labels app names", CustomizationPage.STATUS),
+    Triple("Dynamic Island", "island pill camera pop-ups calls messages charging bluetooth", CustomizationPage.ISLAND),
+    Triple("Island and dock in every app", "overlay everywhere other apps handle", CustomizationPage.ISLAND),
+    Triple("Notification Center", "notifications clock stack group split blur", CustomizationPage.NOTIFICATIONS),
+    Triple("Control Center", "control center size centered toggles", CustomizationPage.NOTIFICATIONS),
+    Triple("Spotlight", "search engine google duckduckgo contacts calculator sections messages openbubbles", CustomizationPage.SEARCH),
+    Triple("App Library", "library categories hidden apps", CustomizationPage.SEARCH),
+    Triple("Search button & swipe down", "search pill swipe page dots scrub haptics", CustomizationPage.SEARCH),
+    Triple("Gestures & pull-downs", "gesture pull down panels iphone style", CustomizationPage.GESTURES),
+    Triple("Actions", "activator double tap two finger charging bluetooth headphones trigger", CustomizationPage.GESTURES),
+    Triple("Side Key", "side key assistant chatgpt claude wallet double press hold", CustomizationPage.SIDE_KEY),
+    Triple("Lock Cover", "lock screen unlock cover clock", CustomizationPage.LOCK),
+    Triple("Fold animation", "fold unfold animation blur fade duo timing", CustomizationPage.FOLD),
+    Triple("StandBy", "standby tent half open clock", CustomizationPage.FOLD),
+    Triple("Tweaks", "tweak jailbreak velox harbor axon velvet colorflow panels magnification tint album", CustomizationPage.TWEAKS),
+    Triple("Privacy & Permissions", "privacy permissions notification access accessibility contacts bluetooth", CustomizationPage.PERMISSIONS),
+    Triple("Safe Mode & crash reports", "safe mode crash report bug", CustomizationPage.ADVANCED),
+    Triple("Backup & restore", "backup restore export import layout", CustomizationPage.BACKUP),
+    Triple("Setup checklist", "setup checklist onboarding welcome", CustomizationPage.SETUP),
+    Triple("Credits", "credits thanks duolauncher jakesgoodapps license", CustomizationPage.CREDITS),
+)
+
+internal fun settingsMatches(query: String, title: String, keywords: String): Boolean {
+    val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val hay = "$title $keywords".lowercase()
+    return words.isNotEmpty() && words.all { it in hay }
+}
+
+@Composable private fun SettingsSearchResults(query: String, onOpen: (CustomizationPage) -> Unit) {
+    val results = SettingsIndex.filter { (title, keywords) -> settingsMatches(query, title, keywords) }
+    if (results.isEmpty()) Text("No Results for “${query.trim()}”", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f),
+        modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    else SheetGroup {
+        results.forEachIndexed { index, (title, _, page) ->
+            if (index > 0) MenuDivider()
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable { onOpen(page) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .3f))
+            }
+        }
+    }
+}
+
+/** Every permission Folio can use, whether it's allowed, and which features rely on it (shared ownership). */
+@Composable private fun PermissionsPage(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onShadeSetup: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { tick++ } }
+    fun open(intent: android.content.Intent) { runCatching { context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    val appSettings = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))
+    data class Perm(val name: String, val usedBy: String, val allowed: Boolean, val action: () -> Unit)
+    val perms = remember(tick, isDefaultHome) { listOf(
+        Perm("Home app", "Home button, folding, gestures", isDefaultHome, onMakeDefault),
+        Perm("Notification access", "Dynamic Island, Notification Center, quick reply, badges, app panels, Lock Cover",
+            IslandListenerService.hasAccess(context)) { open(IslandListenerService.accessSettingsIntent(context)) },
+        Perm("Gestures service (accessibility)", "Pull-down panels, island and dock in other apps, Lock Screen and Screenshot actions",
+            SystemShadeAccessibilityService.isConnected(), onShadeSetup),
+        Perm("Do Not Disturb access", "Control Center, Actions, Focus modes (soon)",
+            context.getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted) {
+            open(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) },
+        Perm("Modify system settings", "Control Center brightness and rotation lock", android.provider.Settings.System.canWrite(context)) {
+            open(android.content.Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) },
+        Perm("Contacts", "Spotlight contact search", context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) { open(appSettings) },
+        Perm("Nearby devices (Bluetooth)", "Device names in the Dynamic Island", context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED) { open(appSettings) },
+        Perm("Digital assistant", "Side key picker", AssistPickerActivity.isDefaultAssistant(context)) { open(AssistPickerActivity.settingsIntent()) },
+    ) }
+    Text("Everything stays on your phone. Folio has no ads or analytics, and nothing is sent anywhere unless you share a crash report.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    SheetGroup {
+        perms.forEachIndexed { index, perm ->
+            if (index > 0) MenuDivider()
+            Row(Modifier.fillMaxWidth().clickable(onClick = perm.action).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(perm.name, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp)
+                    Text("Used by: ${perm.usedBy}", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 13.sp)
+                }
+                Text(if (perm.allowed) "Allowed" else "Off", color = if (perm.allowed) androidx.compose.ui.graphics.Color(0xFF30D158)
+                    else androidx.compose.ui.graphics.Color.White.copy(alpha = .5f), fontSize = 15.sp)
+                Icon(Icons.Rounded.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .3f))
+            }
+        }
     }
 }
 

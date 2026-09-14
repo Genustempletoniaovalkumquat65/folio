@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,7 +92,8 @@ private fun FullScreenPage(onDismissRequest: () -> Unit, content: @Composable Co
                 translationX = size.width * slide.value
             }, color = Color.Black, contentColor = Color.White) {
                 androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding(), content = content)
+                    .windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.ime), content = content)
             }
         }
     }
