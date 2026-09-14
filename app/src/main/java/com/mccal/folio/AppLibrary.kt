@@ -142,6 +142,7 @@ internal fun AppLibrary(
                             Modifier.padding(top = 10.dp).testTag("turn-on-work")) { Text(stringResource(R.string.turn_on_work_apps)) }
                     }
                 }
+                if (!editing && query.isBlank()) item("downloading") { DownloadingApps(ink) }
                 if (!editing && query.isNotBlank()) item("web-search") {
                     WebSearchRow(query) { openWebSearch(context, it, query) }
                 }
@@ -181,7 +182,10 @@ internal fun AppLibrary(
                             .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             AppIcon(app, null, Modifier.size(40.dp)
                                 .onGloballyPositioned { launchBounds.set(it.boundsInWindow().toAndroidBounds()) }.clip(RoundedCornerShape(10.dp)))
-                            Text(app.label, Modifier.weight(1f).padding(start = 12.dp), maxLines = 2, fontSize = 14.sp)
+                            Row(Modifier.weight(1f).padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                NewAppDot(app.packageName, 7.dp)
+                                Text(app.label, maxLines = 2, fontSize = 14.sp)
+                            }
                             if (editing) IconButton(onClick = { onPin(app.id, !isPinned) }, Modifier.testTag("pin-${app.id}")) {
                                 // iOS selection: filled blue check when on Home, empty ring when not.
                                 Icon(if (isPinned) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,

@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         if (usesSystemWallpaper(this)) setTheme(R.style.Theme_Duo_Wallpaper)
         super.onCreate(savedInstanceState)
         setupExperience = SetupExperience(this)
+        Installs.start(this); NewApps.load(this)
         // USER_PRESENT is a protected system broadcast delivered to runtime receivers.
         androidx.core.content.ContextCompat.registerReceiver(this, unlockReceiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT),
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -133,6 +134,9 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.ui.graphics.BlurEffect(backdropBlurPx, backdropBlurPx, androidx.compose.ui.graphics.TileMode.Clamp)
             }
             DuoTheme(appearance.state.dark) { val notificationItems = IslandListenerService.notifications.collectAsStateWithLifecycle().value
+            val installSessions = Installs.active.collectAsStateWithLifecycle().value
+            val installProgress = androidx.compose.runtime.remember(installSessions) { installSessions.values.associate { it.packageName to it.progress } }
+            val newApps = NewApps.packages.collectAsStateWithLifecycle().value
             // The Discover host is a not-touchable window stacked above the keyboard; Android drops every key
             // tap "due to occlusion" while it exists. Remove it whenever a keyboard can be up.
             @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -162,7 +166,7 @@ class MainActivity : ComponentActivity() {
                 },
                 androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
                 LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
-                LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
+                LocalBadgeCounts provides badgeCounts, LocalInstallProgress provides installProgress, LocalNewApps provides newApps, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {
                     val p = overlayProgress
@@ -366,6 +370,7 @@ class MainActivity : ComponentActivity() {
 
     private fun launchApp(app: AppEntry, bounds: android.graphics.Rect? = null) {
         RecentApps.record(this, app.id)
+        NewApps.opened(this, app.packageName)
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
                 ?: throw IllegalStateException("Profile is unavailable")

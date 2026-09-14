@@ -179,6 +179,21 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
             }
             IconBadge(badgeCount, look.badges, color)
         }
+        // Updating: the icon dims under an iOS-style progress ring until the installer finishes.
+        LocalInstallProgress.current[app.component.packageName]?.let { progress -> InstallRing(progress, fill) }
+    }
+}
+
+/** iOS download progress over an icon: a dark veil with a white pie filling clockwise inside a thin ring. */
+@Composable
+internal fun InstallRing(progress: Float, modifier: Modifier) {
+    val shown by androidx.compose.animation.core.animateFloatAsState(progress.coerceIn(0f, 1f), label = "install progress")
+    Canvas(modifier.semantics { contentDescription = "Installing, ${(progress * 100).toInt()} percent" }) {
+        drawRect(Color.Black.copy(alpha = .45f))
+        val r = size.minDimension * .22f
+        val c = Offset(size.width / 2, size.height / 2)
+        drawCircle(Color.White.copy(alpha = .9f), r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(r * .14f))
+        drawArc(Color.White, -90f, 360f * shown, true, Offset(c.x - r * .78f, c.y - r * .78f), androidx.compose.ui.geometry.Size(r * 1.56f, r * 1.56f))
     }
 }
 

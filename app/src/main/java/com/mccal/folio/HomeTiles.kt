@@ -274,8 +274,10 @@ internal fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modi
             if (onRemove != null) JiggleRemoveButton("Remove ${app.label} from Home", onRemove)
         }
         val ink = LocalHomeInk.current
-        if (labels) Text(app.label, color = ink.primary, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-            style = TextStyle(shadow = ink.labelShadow), modifier = Modifier.padding(top = 4.dp))
+        if (labels) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            NewAppDot(app.packageName)
+            Text(app.label, color = ink.primary, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, style = TextStyle(shadow = ink.labelShadow))
+        }
     }
 }

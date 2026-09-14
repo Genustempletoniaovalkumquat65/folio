@@ -110,6 +110,8 @@ data class LauncherState(
     val stackRotate: Boolean = true,
     /** Live activities (music, calls, timers…) under the status in the side rail instead of at the camera. Off: the island stays on the camera. */
     val railActivities: Boolean = false,
+    /** iOS "Newly Downloaded Apps": false = App Library only (Android's way), true = also add to Home. */
+    val addNewAppsToHome: Boolean = false,
     val focusModes: List<FocusMode> = DEFAULT_FOCUS_MODES,
     /** The Focus that's on, by id; null when none. */
     val activeFocus: String? = null,
@@ -185,13 +187,22 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     private val invalidatedPackages = mutableSetOf<Pair<Long, String>>()
     private val removedPackages = mutableSetOf<Pair<Long, String>>()
     private val unavailablePackages = mutableSetOf<Pair<Long, String>>()
+    /** New downloads waiting for the refresh that brings their apps in (for "Add to Home Screen"). */
+    private val addedPackages = mutableSetOf<String>()
     // Accessed only in the serialized IO refresh. Returning Home reuses existing bitmaps.
     private val iconCache = mutableMapOf<String, AppEntry>()
     private var iconConfiguration = ""
     internal var completedRefreshes = 0
         private set
     private val callback = object : LauncherApps.Callback() {
-        override fun onPackageAdded(packageName: String, user: UserHandle) = refresh(packageName, user)
+        override fun onPackageAdded(packageName: String, user: UserHandle) {
+            // A package Folio didn't know is a new download (not an update or a profile coming back).
+            if (mutable.value.apps.none { it.packageName == packageName }) {
+                NewApps.mark(getApplication(), packageName)
+                addedPackages += packageName
+            }
+            refresh(packageName, user)
+        }
         override fun onPackageRemoved(packageName: String, user: UserHandle) {
             removedPackages += userManager.getSerialNumberForUser(user) to packageName
             refresh(packageName, user)
@@ -307,7 +318,15 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                         old.dock.filterNotNull() + old.folders.flatMap { it.appIds }, availableIds,
                         authoritative, temporarilyUnavailable, removed, userManager.getSerialNumberForUser(Process.myUserHandle()),
                         apps.removedProfiles)
-                    val validPins = pins.map { it?.takeUnless(removedIds::contains) }
+                    // iOS "Add to Home Screen": a newly downloaded app also goes to the first free spot on Home.
+                    val oldIds = old.apps.mapTo(mutableSetOf(), AppEntry::id)
+                    val arrivals = entries.filter { it.packageName in addedPackages && it.id !in oldIds && !it.isWork }
+                    addedPackages.removeAll(arrivals.map { it.packageName }.toSet())
+                    val withArrivals = if (!old.addNewAppsToHome) pins else arrivals.fold(pins) { slots, app ->
+                        if (app.id in old.dock || app.id in old.leadingSlots || old.folders.any { app.id in it.appIds }) slots
+                        else pinHomeApp(slots, app.id, true, old.widgetPlacements.filter { it.page >= 0 }.flatMap { it.coveredIndices() }.toSet())
+                    }
+                    val validPins = withArrivals.map { it?.takeUnless(removedIds::contains) }
                     val validDock = dock.map { it?.takeUnless(removedIds::contains) }
                     val reconciled = reconcileFolders(HomeLayout(validPins, validDock, old.widgetPlacements, old.folders,
                         old.widgetRestores, old.leadingSlots, old.minPages), removedIds)
@@ -520,6 +539,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
     fun setRailActivities(value: Boolean) = updateSettings(soon = false) { it.copy(railActivities = value) }
+    fun setAddNewAppsToHome(value: Boolean) = updateSettings(soon = false) { it.copy(addNewAppsToHome = value) }
     /** Turns a Focus on (or all off with null) and applies it to Android. */
     fun setFocus(id: String?) {
         updateSettings(soon = false) { it.copy(activeFocus = id?.takeIf { f -> it.focusModes.any { m -> m.id == f } }) }
@@ -750,7 +770,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("iconShape", s.iconShape.name).put("iconPack", s.iconPack ?: JSONObject.NULL).put("badgeStyle", s.badgeStyle.name).put("badgeColor", s.badgeColor.name).put("searchPill", s.searchPill).put("swipeDownSearch", s.swipeDownSearch).put("messagesApp", s.messagesApp ?: JSONObject.NULL).put(SettingKeys.MESSAGES_AVOID_DOUBLE, s.messagesAvoidDouble).put("ccControls", JSONArray(s.ccControls))
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
-            .put("stackRotate", s.stackRotate).put("railActivitiesUnderStatus", s.railActivities)
+            .put("stackRotate", s.stackRotate).put("railActivitiesUnderStatus", s.railActivities).put("addNewAppsToHome", s.addNewAppsToHome)
             .put("focusModes", JSONArray().apply { s.focusModes.forEach { m -> put(JSONObject().put("id", m.id).put("name", m.name).put("color", m.color)
                 .put("silence", m.silence).put("homePage", m.homePage ?: -1).put("dim", m.dimWallpaper).put("gray", m.grayscale).put("dark", m.darkTheme)) } })
             .put("activeFocus", s.activeFocus ?: "").put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
@@ -934,6 +954,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             }.toMap() } ?: emptyMap(),
             stackRotate = j.optBoolean("stackRotate", true),
             railActivities = j.optBoolean("railActivitiesUnderStatus", false),
+            addNewAppsToHome = j.optBoolean("addNewAppsToHome", false),
             focusModes = FocusModes.withDefaults(j.optJSONArray("focusModes")?.let { a -> (0 until a.length()).mapNotNull { i ->
                 a.optJSONObject(i)?.let { o -> DEFAULT_FOCUS_MODES.firstOrNull { it.id == o.optString("id") }?.copy(
                     silence = o.optBoolean("silence", true), homePage = o.optInt("homePage", -1).takeIf { it >= 0 },
