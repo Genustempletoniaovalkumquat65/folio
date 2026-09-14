@@ -80,6 +80,7 @@ class PinWidgetActivity : ComponentActivity() {
     /** Binds and places the widget; returns a message when it can't. */
     private fun add(request: LauncherApps.PinItemRequest, provider: android.appwidget.AppWidgetProviderInfo): String? {
         val model = FolioSettingsBridge.liveModel?.get() ?: return "Open Folio once, then try again."
+        FocusPages.lockingFocus(model.state.value)?.let { return "Turn off ${it.name} to add to Home Screen." }
         val layout = model.state.value.layout
         val density = resources.displayMetrics.density
         // Folio's usual Home pitch: about 90dp columns, widget-height top rows, app rows below.

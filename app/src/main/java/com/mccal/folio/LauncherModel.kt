@@ -654,6 +654,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
     private fun commitLayout(next: HomeLayout): Boolean {
         if (statePayloadInvalid) return false
+        // A Focus hiding Home pages locks editing: Home shows a filtered copy, so its positions aren't the real ones.
+        if (FocusPages.lockingFocus(mutable.value) != null) return false
         val old = mutable.value
         if (old.layout == next) return false
         undoLayout = old.layout to next
@@ -690,10 +692,10 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
     fun setLabels(value: Boolean) { if (statePayloadInvalid) return; undoLayout = null; undoImportSettings = null; mutable.update { it.copy(labels = value, canUndoEdit = false) }; persist() }
     /** Adds an empty Home page after the last one; returns its index. */
-    fun addPage(): Int { if (statePayloadInvalid) return -1; val next = state.value.homePages
+    fun addPage(): Int { if (statePayloadInvalid || FocusPages.lockingFocus(state.value) != null) return -1; val next = state.value.homePages
         undoLayout = null; mutable.update { it.copy(minPages = (next + 1).coerceAtMost(20), canUndoEdit = false) }; persist(); return next }
     /** Removes the last page when it has no apps or widgets. */
-    fun removeLastEmptyPage(): Boolean { if (statePayloadInvalid) return false; val s = state.value
+    fun removeLastEmptyPage(): Boolean { if (statePayloadInvalid || FocusPages.lockingFocus(state.value) != null) return false; val s = state.value
         if (s.homePages <= 1 || s.layout.contentPageCount >= s.homePages) return false
         undoLayout = null; mutable.update { it.copy(minPages = maxOf(1, it.homePages - 1), canUndoEdit = false) }; persist(); return true }
     fun setSpotlightSection(section: String, visible: Boolean) = updateSettings(soon = false) {

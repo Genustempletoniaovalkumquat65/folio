@@ -13,6 +13,17 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * An iOS-style Focus. Turning one on can silence notifications (an Android Do Not Disturb rule Folio owns),
@@ -31,6 +42,8 @@ data class FocusMode(
     val darkTheme: Boolean = false,
     /** Turns on and off by itself at these times, like an iOS Focus schedule; null for manual only. */
     val schedule: FocusSchedule? = null,
+    /** Home pages shown while this Focus is on (iOS "Customize Screens"); null shows them all. */
+    val pages: Set<Int>? = null,
 )
 
 /** Daily window in minutes after midnight (the end may be past midnight, e.g. 22:00–07:00), on ISO days 1 = Monday … 7 = Sunday. */
@@ -156,6 +169,7 @@ internal object FocusSchedules {
 internal fun focusModesToJson(modes: List<FocusMode>) = org.json.JSONArray().apply {
     modes.forEach { m -> put(org.json.JSONObject().put("id", m.id).put("name", m.name).put("color", m.color)
         .put("silence", m.silence).put("homePage", m.homePage ?: -1).put("dim", m.dimWallpaper).put("gray", m.grayscale).put("dark", m.darkTheme)
+        .apply { m.pages?.let { put("pages", org.json.JSONArray(it.sorted())) } }
         .apply { m.schedule?.let { put("schedule", org.json.JSONObject().put("start", it.startMinute).put("end", it.endMinute)
             .put("days", org.json.JSONArray(it.days.sorted()))) } }) }
 }
@@ -164,6 +178,7 @@ internal fun focusModesFromJson(array: org.json.JSONArray?): List<FocusMode> = F
     a.optJSONObject(i)?.let { o -> DEFAULT_FOCUS_MODES.firstOrNull { it.id == o.optString("id") }?.copy(
         silence = o.optBoolean("silence", true), homePage = o.optInt("homePage", -1).takeIf { it >= 0 },
         dimWallpaper = o.optBoolean("dim"), grayscale = o.optBoolean("gray"), darkTheme = o.optBoolean("dark"),
+        pages = o.optJSONArray("pages")?.let { p -> (0 until p.length()).map { p.optInt(it) }.filter { it >= 0 }.toSet().ifEmpty { null } },
         schedule = o.optJSONObject("schedule")?.let { s -> FocusSchedule(s.optInt("start").coerceIn(0, 1439), s.optInt("end").coerceIn(0, 1439),
             s.optJSONArray("days")?.let { d -> (0 until d.length()).map { d.optInt(it) }.filter { it in 1..7 }.toSet() } ?: (1..7).toSet()) }) }
 } }.orEmpty())
@@ -222,5 +237,67 @@ internal object FocusScheduler {
         val at = next.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
         // Inexact within a minute: no exact-alarm permission needed, and a Focus a few seconds late is fine.
         alarms.setWindow(android.app.AlarmManager.RTC_WAKEUP, at, 60_000, pending)
+    }
+}
+
+/**
+ * iOS Focus "Customize Screens": while a Focus limits Home to some pages, Home shows only those, in order. The saved
+ * layout is never rewritten; Home just draws a filtered copy, so editing is locked until the Focus ends (an edit to
+ * the copy would land on the wrong page of the real layout).
+ */
+internal object FocusPages {
+    /** The Focus that's hiding Home pages right now, if any. */
+    fun lockingFocus(state: LauncherState): FocusMode? = state.focusModes.firstOrNull { it.id == state.activeFocus }
+        ?.takeIf { mode -> mode.pages?.let { pages -> (0 until state.layout.pageCount).any { it !in pages } } == true }
+
+    /** Home's layout with only [pages] (in order, renumbered from 0); the unfolded-only page and the dock stay. */
+    fun filter(layout: HomeLayout, pages: Set<Int>): HomeLayout {
+        val kept = pages.filter { it in 0 until layout.pageCount }.sorted().ifEmpty { listOf(0) }
+        val slots = kept.flatMap { page -> List(HOME_CELLS) { local -> layout.slots.getOrNull(homeCellIndex(page, local)) } }
+        val placements = layout.widgetPlacements.mapNotNull { w ->
+            if (w.page < 0) w else kept.indexOf(w.page).takeIf { it >= 0 }?.let { w.copy(page = it) }
+        }
+        val slotsKept = placements.map { it.slot }.toSet()
+        return layout.copy(slots = slots.dropLastWhile { it == null }, widgetPlacements = placements,
+            widgetRestores = layout.widgetRestores.filter { it.slot in slotsKept }, minPages = kept.size)
+    }
+
+    /** What Home draws: the filtered layout while a Focus hides pages, otherwise [state] unchanged. */
+    fun effective(state: LauncherState): LauncherState {
+        val focus = lockingFocus(state) ?: return state
+        val filtered = filter(state.layout, focus.pages!!)
+        return state.copy(homeSlots = filtered.slots, widgetPlacements = filtered.widgetPlacements,
+            widgetRestores = filtered.widgetRestores, minPages = filtered.minPages, canUndoEdit = false)
+    }
+
+    /** A Focus's opening page as it's numbered on the filtered Home. */
+    fun openPage(mode: FocusMode?, realPages: Int): Int? {
+        val real = FocusModes.homePage(mode, realPages) ?: return null
+        val pages = mode?.pages ?: return real
+        return pages.filter { it in 0 until realPages }.sorted().indexOf(real).takeIf { it >= 0 } ?: 0
+    }
+}
+
+/** The Focus locking Home editing (it hides pages) and how many pages the real Home has; provided by MainActivity. */
+internal data class FocusLock(val mode: FocusMode, val realPages: Int)
+internal val LocalFocusLock = androidx.compose.runtime.staticCompositionLocalOf<FocusLock?> { null }
+
+/** A short pill at the top: "Turn off Work to edit Home Screen". Shows for a moment each time [trigger] changes. */
+@androidx.compose.runtime.Composable
+internal fun FocusLockNotice(trigger: Int, mode: FocusMode?, modifier: androidx.compose.ui.Modifier) {
+    var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(trigger) { if (trigger > 0 && mode != null) { visible = true; kotlinx.coroutines.delay(2_600); visible = false } }
+    androidx.compose.animation.AnimatedVisibility(visible && mode != null, modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.folioSafeTop).padding(top = 12.dp),
+        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it }) {
+        val m = mode ?: return@AnimatedVisibility
+        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+            .background(androidx.compose.ui.graphics.Color(0xFF1C1C1E).copy(alpha = .95f))
+            .padding(horizontal = 16.dp, vertical = 10.dp).testTag("focus-lock-notice"), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(m.icon(), null, tint = androidx.compose.ui.graphics.Color(m.color), modifier = androidx.compose.ui.Modifier.size(18.dp))
+            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(8.dp))
+            androidx.compose.material3.Text("Turn off ${m.name} to edit Home Screen", color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        }
     }
 }

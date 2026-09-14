@@ -77,6 +77,8 @@ internal fun loadQuickActions(context: android.content.Context, app: AppEntry, l
 @Composable
 internal fun AppContextMenu(
     app: AppEntry, onHome: Boolean, hidden: Boolean,
+    /** The Focus locking Home editing, if any: editing rows are replaced by a note. */
+    lockedBy: String? = null,
     onDismiss: () -> Unit, onMove: () -> Unit, onAddOrRemove: () -> Unit, onCreateFolder: () -> Unit,
     onWidgets: (() -> Unit)?, onToggleHidden: () -> Unit, onInfo: () -> Unit,
 ) {
@@ -157,6 +159,11 @@ internal fun AppContextMenu(
                     if (i == actions.lastIndex) Box(Modifier.fillMaxWidth().height(8.dp).background(Color.Black.copy(alpha = .25f)))
                     else MenuDivider()
                 }
+                if (lockedBy != null) {
+                    Text("Home editing is off while $lockedBy is on", color = Color.White.copy(alpha = .55f), fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                    MenuDivider()
+                } else {
                 MenuRow("Edit Home Screen", Icons.Rounded.AppRegistration) { onMove() }
                 MenuDivider()
                 // A shortcut exists only as this icon, so removing it deletes it (like iOS's "Delete Bookmark").
@@ -164,10 +171,11 @@ internal fun AppContextMenu(
                     if (onHome || app.isShortcut) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.AddCircleOutline,
                     destructive = onHome || app.isShortcut) { onAddOrRemove() }
                 MenuDivider()
+                }
                 // iOS keeps context menus short: the less common actions sit behind "More".
                 if (!more) MenuRow("More", Icons.Rounded.MoreHoriz) { more = true }
                 else {
-                    MenuRow("Create Folder", Icons.Rounded.CreateNewFolder) { onCreateFolder() }
+                    if (lockedBy == null) MenuRow("Create Folder", Icons.Rounded.CreateNewFolder) { onCreateFolder() }
                     onWidgets?.let { MenuDivider(); MenuRow("Widgets", Icons.Rounded.Widgets) { it() } }
                     MenuDivider()
                     MenuRow(if (hidden) "Show in App Library" else "Hide from App Library", if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff) { onToggleHidden() }

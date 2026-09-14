@@ -184,9 +184,14 @@ fun LauncherScreen(
     val haptic = LocalHapticFeedback.current
     val homeEdit = remember { HomeEditMode() }
     homeEdit.onRemove = { target -> if (target is DropTarget.Widget) widgets.remove(target.index) else model.removePlacement(target) }
+    // While a Focus hides Home pages, editing is locked; trying explains why instead.
+    val focusLock = LocalFocusLock.current
+    var lockNotice by remember { mutableIntStateOf(0) }
+    LaunchedEffect(focusLock) { if (focusLock != null) homeEdit.stop() }
     // Long-press on empty Home starts jiggle mode (iPhone); a second long-press opens the Home options.
     val onEmptyLongPress: (Int) -> Unit = { index ->
-        if (homeEdit.active) emptyCellIndex = index
+        if (focusLock != null) { haptic.performHapticFeedback(HapticFeedbackType.Reject); lockNotice++ }
+        else if (homeEdit.active) emptyCellIndex = index
         else { homeEdit.lastEmptyIndex = index; haptic.performHapticFeedback(HapticFeedbackType.LongPress); homeEdit.start() }
     }
     val homePages = state.homePages
@@ -292,7 +297,8 @@ fun LauncherScreen(
     LaunchedEffect(homeRequests) { if (homeRequests > 0) {
         // An app can pause Home after the destination is visible but before its settle completes.
         // A Focus with its own Home page brings Home back there, like iOS Focus pages.
-        val page = FocusModes.homePage(state.focusModes.firstOrNull { it.id == state.activeFocus }, homePages)
+        val active = state.focusModes.firstOrNull { it.id == state.activeFocus }
+        val page = (focusLock?.let { FocusPages.openPage(active, it.realPages) } ?: FocusModes.homePage(active, homePages))
             ?: pager.currentPage.takeIf { it in 0 until homePages }
             ?: lastHomePage.coerceIn(0, homePages - 1)
         drag.clear(); widgetSession = null; resizeSlot = null; sheet = ""; widgetPackage = null
@@ -303,7 +309,8 @@ fun LauncherScreen(
     } }
     // Turning on a Focus with a Home page goes straight there.
     LaunchedEffect(state.activeFocus) {
-        FocusModes.homePage(state.focusModes.firstOrNull { it.id == state.activeFocus }, homePages)?.let { pager.animateScrollToPage(it) }
+        val active = state.focusModes.firstOrNull { it.id == state.activeFocus }
+        (focusLock?.let { FocusPages.openPage(active, it.realPages) } ?: FocusModes.homePage(active, homePages))?.let { pager.animateScrollToPage(it) }
     }
     LaunchedEffect(settingsRequests) { if (settingsRequests > 0) {
         drag.clear(); widgetSession = null; resizeSlot = null; selectedId = null; homeEdit.stop(); sheet = "settings"
@@ -359,6 +366,7 @@ fun LauncherScreen(
     LaunchedEffect(drag.active, drag.moved) {
         val source = drag.source
         val id = source?.appId
+        if (focusLock != null && drag.active && drag.moved) { drag.clear(); selectedId = null; lockNotice++; return@LaunchedEffect }
         if (drag.active && drag.moved && id != null && selectedId == id) { selectedId = null; homeEdit.start() }
         // Dragging out of the App Library heads to Home only once the app actually moves (holding just shows the menu).
         if (drag.active && drag.moved && source?.target is DropTarget.Library) {
@@ -443,7 +451,7 @@ fun LauncherScreen(
             if (!moved && !cancelled) {
                 // A held dock app already shows its menu; only an empty slot opens the app chooser.
                 if (source.target is DropTarget.Dock) { if (source.appId == null) { dockSlot = source.target.index; sheet = "dock" } else selectedId = source.appId }
-                else if (source.target is DropTarget.Widget) { widgetSlot = source.target.index; sheet = "widgetActions" }
+                else if (source.target is DropTarget.Widget) { if (focusLock != null) lockNotice++ else { widgetSlot = source.target.index; sheet = "widgetActions" } }
                 else if (source.appId?.let(::isFolderId) == true) openFolderId = source.appId
                 else if (source.folderId == null) selectedId = source.appId
             }
@@ -638,7 +646,7 @@ fun LauncherScreen(
                         libraryQuery = libraryQuery, onLibraryQuery = { libraryQuery = it },
                         onLaunch = onLaunch, onLaunchFrom = onLaunchFrom, onPinned = model::setPinned,
                         onTurnOnWork = { model.turnOnWork(it) },
-                        onActions = { selectedId = it.id }, onWidget = { widgetSlot = it; sheet = "widgetActions" },
+                        onActions = { selectedId = it.id }, onWidget = { if (focusLock != null) lockNotice++ else { widgetSlot = it; sheet = "widgetActions" } },
                         onFolder = { openFolderId = it },
                         onEmptyWidget = onEmptyLongPress,
                         onRefresh = model::refresh,
@@ -668,7 +676,7 @@ fun LauncherScreen(
                             HomePagePane(page, state, previewLayout.slots, previewLayout.leadingSlots, previewLayout.widgetPlacements, appsById, geometry, contentHeight,
                                 bottomSpace, widgets, drag, target, insertionTarget, showLargeWidget = false,
                                 onLaunch = onLaunchFrom, onActions = { selectedId = it.id },
-                                onWidget = { widgetSlot = it; sheet = "widgetActions" },
+                                onWidget = { if (focusLock != null) lockNotice++ else { widgetSlot = it; sheet = "widgetActions" } },
                                 onFolder = { openFolderId = it },
                                 onEmptyWidget = onEmptyLongPress,
                                 onRefresh = model::refresh)
@@ -890,6 +898,8 @@ fun LauncherScreen(
                     }
                 }
             }
+            // iOS-style notice when editing is locked by a Focus.
+            FocusLockNotice(lockNotice, focusLock?.mode, Modifier.align(Alignment.TopCenter))
             if (showFirstRun) {
                 // Full-screen, iOS Setup Assistant style; Back steps back, Skip Setup or Get Started finishes.
                 ModalBottomSheet(onDismissRequest = onFinishFirstRun, modifier = Modifier.testTag("first-run-setup"), fullScreen = true) {
@@ -1286,6 +1296,7 @@ fun LauncherScreen(
             }} else null
             // iPhone-style menu next to the icon; "Edit Home Screen" starts jiggle mode for moving.
             AppContextMenu(app, onHome = pinned, hidden = app.id in state.hiddenApps,
+                lockedBy = focusLock?.mode?.name,
                 onDismiss = { selectedId = null }, onMove = { selectedId = null; homeEdit.start() },
                 onAddOrRemove = { if (app.isShortcut) model.deleteShortcut(app) else model.setPinned(app.id, !pinned); selectedId = null },
                 onCreateFolder = { createFolderFirstId = app.id; selectedId = null },

@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val savedState = model.state.collectAsStateWithLifecycle().value
             val safeMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(SafeMode.active) }
-            val state = if (safeMode.value) SafeMode.effective(savedState) else savedState
+            val state = FocusPages.effective(if (safeMode.value) SafeMode.effective(savedState) else savedState)
             androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(31_000); SafeMode.markStable(this@MainActivity) }
             val safeAcknowledged = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             if (safeMode.value && !safeAcknowledged.value) AlertDialog(onDismissRequest = {},
@@ -167,6 +167,7 @@ class MainActivity : ComponentActivity() {
                 },
                 androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
                 LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
+                LocalFocusLock provides FocusPages.lockingFocus(savedState)?.let { FocusLock(it, savedState.layout.pageCount) },
                 LocalBadgeCounts provides badgeCounts, LocalInstallProgress provides installProgress, LocalNewApps provides newApps, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {

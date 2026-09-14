@@ -1001,11 +1001,26 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     SettingsCard("Home Screen") {
-        val pages = state.homePages
+        // The real page count: while a Focus hides pages, Home's own state is the filtered copy.
+        val pages = model.state.value.layout.pageCount
+        Text("Show Pages", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IosChip(mode.pages == null, { model.updateFocusMode(mode.copy(pages = null)) }, label = { Text("All") })
+            repeat(pages) { page ->
+                val shown = mode.pages?.contains(page) == true
+                IosChip(shown, {
+                    val next = (mode.pages ?: emptySet()).let { if (shown) it - page else it + page }
+                    model.updateFocusMode(mode.copy(pages = next.ifEmpty { null }))
+                }, label = { Text("Page ${page + 1}") }, modifier = Modifier.testTag("focus-page-$page"))
+            }
+        }
+        Text("Only these pages show while ${mode.name} is on. Editing Home is paused until it ends, so nothing moves on the hidden pages.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Open On", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 10.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IosChip(mode.homePage == null, { model.updateFocusMode(mode.copy(homePage = null)) }, label = { Text("Any Page") })
             repeat(pages) { page ->
-                IosChip(mode.homePage == page, { model.updateFocusMode(mode.copy(homePage = page)) }, label = { Text("Page ${page + 1}") })
+                if (mode.pages == null || page in mode.pages) IosChip(mode.homePage == page, { model.updateFocusMode(mode.copy(homePage = page)) }, label = { Text("Page ${page + 1}") })
             }
         }
         Text("Home opens on this page while ${mode.name} is on.",
