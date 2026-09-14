@@ -162,6 +162,13 @@ class MainActivity : ComponentActivity() {
                 LocalWallpaperTone provides wallpaperTone,
                 LocalReduceMotion provides reduceMotion,
                 LocalHinge provides rememberHinge(this@MainActivity),
+                // Tablets and desktop windows draw Folio proportionally larger instead of a phone-sized layout lost in a
+                // big window; phones and foldables stay at exactly the system density (see uiScale).
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.platform.LocalDensity.current.let { d ->
+                    val config = androidx.compose.ui.platform.LocalConfiguration.current
+                    val scale = uiScale(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat())
+                    if (scale == 1f) d else androidx.compose.ui.unit.Density(d.density * scale, d.fontScale)
+                },
                 LocalTintOptions provides androidx.compose.ui.platform.LocalConfiguration.current.let { config ->
                     val screen = screenFor(isRegularSize(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat()))
                     TintOptions(FeatureScopes.on(state.featureScopes, "tintNotifications", state.tintNotifications, screen),

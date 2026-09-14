@@ -224,3 +224,15 @@ fun foldDisplacement(cells: HomeCellLayout, rows: Int, gridTop: Float, hingeTop:
     val shift = hingeBottom + margin - (gridTop + cells.y(start))
     return if (shift > 0f) start to shift else null
 }
+
+/**
+ * How much larger Folio draws on big screens (tablets, desktop windows, large foldables), so Home, the dock, panels
+ * and sheets fill the space like iPad does instead of looking like a phone layout floating in a big window.
+ * Exactly 1 on phones, flip phones and the Galaxy Z Fold's inner screen; grows with the smaller of the two sides.
+ */
+fun uiScale(widthDp: Float, heightDp: Float): Float {
+    if (!isRegularSize(widthDp, heightDp)) return 1f
+    val long = maxOf(widthDp, heightDp)
+    val short = minOf(widthDp, heightDp)
+    return minOf(long / 960f, short / 700f).coerceIn(1f, 1.45f)
+}
