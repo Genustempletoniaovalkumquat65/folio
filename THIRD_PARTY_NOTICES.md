@@ -26,3 +26,9 @@ Private design-study images, copied reference files, device captures, and probe 
 | [iphone-duo](https://github.com/chuspeeism/iphone-duo) | chuspeeism | MIT | Fold blur/darkening curves and hinge-angle progress model (re-implemented as an AGSL shader) |
 | Galaxy Z Fold 8 iPhone Duo animation demo (r/GalaxyFold) | u/moomanjohnny | — (no code released) | Screenshot + shader + hinge-sensor approach behind the screenshot-morph fold style |
 | [QuickLaunch](https://github.com/AhmedTheGeek/QuickLaunch) | AhmedTheGeek | GPL-3.0 | Spotlight ideas: keyboard after first frame, frecency ranking (7-day half-life), drag to split screen. Independently re-implemented; no source copied |
+| Velox (iOS jailbreak tweak) | Phillip Tennen; Velox Reloaded by DanielVolt | Proprietary (idea only) | Swipe up on an app icon for a small panel with that app's shortcuts, notifications and media |
+| Activator (iOS jailbreak tweak) | Ryan Petrich | Proprietary (idea only) | Gestures and events (charging, Bluetooth, headphones) that trigger any action |
+| Axon (iOS jailbreak tweak) | Nepeta | Proprietary (idea only) | Row of app icons above notifications to filter them by app |
+| Velvet (iOS jailbreak tweak) | NoisyFlake & HiMyNameisUbik | Proprietary (idea only) | Notification cards tinted with their app's color |
+| ColorFlow (iOS jailbreak tweak) | David Goldman; successor ChromaFlow by Ryan Nair | Proprietary (idea only) | Music player colors taken from the album art |
+| Harbor (iOS jailbreak tweak) | Evan Swick | Proprietary (idea only) | macOS-style dock magnification under the finger |

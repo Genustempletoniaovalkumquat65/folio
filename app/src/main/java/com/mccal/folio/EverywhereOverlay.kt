@@ -110,7 +110,8 @@ internal class EverywhereOverlay(private val service: AccessibilityService) {
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate + scopeJob)
         foregroundJob = scope.launch { FolioForeground.visible.collect { sync() } }
         scope.launch {
-            kotlinx.coroutines.flow.combine(IslandListenerService.activity, IslandEvents.latest) { a, e -> a to e }
+            kotlinx.coroutines.flow.combine(IslandListenerService.activity, IslandEvents.latest) { a, e ->
+                a?.takeUnless { it is IslandActivity.Call && "CALL" in settings.value.eventsOff } to e }
                 .collectLatest { (activity, eventPair) ->
                     val remaining = eventPair?.takeIf { it.first.kind !in settings.value.eventsOff }
                         ?.let { IslandEvents.showMs(it.first) - (System.currentTimeMillis() - it.second) } ?: 0L

@@ -55,7 +55,19 @@ internal object IconBounds {
     fun of(id: String): Rect? = bounds[id]
 }
 
-private data class QuickAction(val label: String, val icon: Bitmap?, val info: ShortcutInfo)
+internal data class QuickAction(val label: String, val icon: Bitmap?, val info: ShortcutInfo)
+
+/** The app's own shortcuts (Folio can read them as the default Home app). Call off the main thread. */
+internal fun loadQuickActions(context: android.content.Context, app: AppEntry, limit: Int = 4): List<QuickAction> = runCatching {
+    val apps = context.getSystemService(LauncherApps::class.java)
+    if (!apps.hasShortcutHostPermission()) return@runCatching emptyList()
+    val query = LauncherApps.ShortcutQuery().setPackage(app.component.packageName).setActivity(app.component)
+        .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC)
+    apps.getShortcuts(query, app.user).orEmpty().filter { it.isEnabled }.sortedBy { it.rank }.take(limit).map { info ->
+        QuickAction((info.shortLabel ?: info.longLabel ?: "").toString(),
+            runCatching { apps.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)?.toBitmap(96, 96) }.getOrNull(), info)
+    }
+}.getOrDefault(emptyList())
 
 /**
  * iPhone-style long-press menu: the icon lifts where it is, Home blurs behind, and a compact menu
@@ -73,21 +85,7 @@ internal fun AppContextMenu(
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .72f, stiffness = Spring.StiffnessMediumLow)) }
     DisposableEffect(Unit) { LauncherSheetsOpen.intValue++; onDispose { LauncherSheetsOpen.intValue-- } }
 
-    // The app's own shortcuts (Folio can read them as the default Home app).
-    val actions by produceState(emptyList<QuickAction>(), app.id) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val apps = context.getSystemService(LauncherApps::class.java)
-                if (!apps.hasShortcutHostPermission()) return@runCatching emptyList()
-                val query = LauncherApps.ShortcutQuery().setPackage(app.component.packageName).setActivity(app.component)
-                    .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC)
-                apps.getShortcuts(query, app.user).orEmpty().filter { it.isEnabled }.sortedBy { it.rank }.take(4).map { info ->
-                    QuickAction((info.shortLabel ?: info.longLabel ?: "").toString(),
-                        runCatching { apps.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)?.toBitmap(96, 96) }.getOrNull(), info)
-                }
-            }.getOrDefault(emptyList())
-        }
-    }
+    val actions by produceState(emptyList<QuickAction>(), app.id) { value = withContext(Dispatchers.IO) { loadQuickActions(context, app) } }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val view = LocalView.current

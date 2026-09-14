@@ -134,7 +134,9 @@ class MainActivity : ComponentActivity() {
             val iconTint = if (state.iconTintFromWallpaper) wallpaperTone.primary?.let(::vividTint)?.toLong()?.and(0xFFFFFFFFL) ?: state.iconTint else state.iconTint
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperTone provides wallpaperTone,
-                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor),
+                LocalTintOptions provides TintOptions(state.tintNotifications, state.tintMedia, state.notificationAppRow),
+                androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
+                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
                 LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {
@@ -159,7 +161,8 @@ class MainActivity : ComponentActivity() {
                     onShadeSetup = ::showShadeSetup)
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
-                if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value, state.islandEventsOff) {
+                if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value
+                    ?.takeUnless { it is IslandActivity.Call && "CALL" in state.islandEventsOff }, state.islandEventsOff) {
                     IslandListenerService.open(this@MainActivity, it)
                 }
                 TopPanels(topPanel.value, { overlayProgress }, deviceStatus, onClose = { topPanel.value = null },
@@ -207,7 +210,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         FolioForeground.visible.value = true
+        FolioActions.home = java.lang.ref.WeakReference(this)
         if (SpotlightRequest.consume()) openSpotlight()
+        FolioActions.pendingPanel?.let { FolioActions.pendingPanel = null; showPanel(it) }
         if (returningFromShadeSettings) {
             returningFromShadeSettings = false
             releaseShadeSetupOwnership()
@@ -226,6 +231,9 @@ class MainActivity : ComponentActivity() {
     /** Folio's own iOS-style panels on Home; the Android shade when that setting is off. */
     internal val topPanel = androidx.compose.runtime.mutableStateOf<ShadePanel?>(null)
     internal val spotlightVisible = androidx.compose.runtime.mutableStateOf(false)
+    /** Opens Spotlight, Notification Center or Control Center (Folio's own panels when enabled). */
+    internal fun showPanel(panel: ShadePanel) { if (panel == ShadePanel.SEARCH) openSpotlight() else openSystemShade(panel) }
+
     internal fun openSpotlight() { topPanel.value = null; spotlightVisible.value = true }
     private fun closeOverlays() { topPanel.value = null; spotlightVisible.value = false }
 

@@ -145,7 +145,11 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
     val now = remember(tick) { LocalDateTime.now() }
     val clock = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
     var expandedGroup by remember { mutableStateOf<String?>(null) }
-    val groups = remember(items) { items.groupBy { it.packageName }.values.sortedByDescending { g -> g.maxOf { it.postTime } } }
+    // Axon-style: a row of app icons above the list; tap one to show just that app, tap again for all.
+    var filterApp by remember { mutableStateOf<String?>(null) }
+    val allGroups = remember(items) { items.groupBy { it.packageName }.values.sortedByDescending { g -> g.maxOf { it.postTime } } }
+    LaunchedEffect(allGroups) { if (filterApp != null && allGroups.none { it.first().packageName == filterApp }) filterApp = null }
+    val groups = remember(allGroups, filterApp) { if (filterApp == null) allGroups else allGroups.filter { it.first().packageName == filterApp } }
 
     // Keyboard for quick reply pushes the list up instead of covering it.
     Column(modifier.windowInsetsPadding(WindowInsets.imeAnimationTarget).testTag("notification-center"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -175,7 +179,26 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
             }
             items.isEmpty() -> Text("No Notifications", color = Color.White.copy(alpha = .6f), fontSize = 15.sp,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            else -> LazyColumn(Modifier.fillMaxWidth().then(if (tall) Modifier.weight(1f, fill = false) else Modifier.heightIn(max = 620.dp)),
+            else -> {
+            if (allGroups.size > 1 && LocalTintOptions.current.notificationAppRow) androidx.compose.foundation.lazy.LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)) {
+                items(allGroups, key = { it.first().packageName }) { group ->
+                    val first = group.first()
+                    val selected = filterApp == first.packageName
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(13.dp))
+                        .background(if (selected) Color.White.copy(alpha = .3f) else Color.Transparent)
+                        .clickable(onClickLabel = "Show ${first.appLabel} notifications") { filterApp = if (selected) null else first.packageName }
+                        .padding(5.dp)) {
+                        first.icon?.let { Image(it.asImageBitmap(), first.appLabel, Modifier.fillMaxSize().clip(RoundedCornerShape(9.dp))
+                            .graphicsLayer { alpha = if (filterApp == null || selected) 1f else .45f }) }
+                        if (group.size > 1) Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp).heightIn(min = 16.dp).widthIn(min = 16.dp)
+                            .background(Color(0xFFFF3B30), CircleShape).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                            Text("${group.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, lineHeight = 12.sp)
+                        }
+                    }
+                }
+            }
+            LazyColumn(Modifier.fillMaxWidth().then(if (tall) Modifier.weight(1f, fill = false) else Modifier.heightIn(max = 620.dp)),
                 verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
                 groups.forEach { group ->
                     val pkg = group.first().packageName
@@ -194,6 +217,7 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
                         StackedNotification(group, Modifier.animateItem()) { expandedGroup = pkg }
                     }
                 }
+            }
             }
         }
     }
@@ -244,7 +268,8 @@ private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCo
         var cardBounds by remember { mutableStateOf(android.graphics.Rect()) }
         Box(Modifier.onGloballyPositioned { cardBounds = it.boundsInWindow().let { b -> android.graphics.Rect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt()) } }) {
         if (options) NotificationOptions(item, cardBounds) { options = false }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(NotifGlass)
+        val cardAccent = if (LocalTintOptions.current.notifications) rememberAccent(item.icon) else null
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(mixColor(NotifGlass, cardAccent, .32f))
             .border(FolioGlass.edge, RoundedCornerShape(22.dp))
             .combinedClickable(onClick = { if (swipe.value < -1f) settle(0f) else onOpen() }, onLongClick = {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); options = true
@@ -631,7 +656,9 @@ private fun MediaProgress(media: IslandActivity.Media) {
 /** Now Playing (2×2): album art, title and transport controls. */
 @Composable
 private fun MediaModule(media: IslandActivity.Media?, modifier: Modifier, cell: Dp, onOpen: () -> Unit) {
-    Module(modifier.clickable(enabled = media != null, onClick = onOpen)) {
+    val artAccent = if (LocalTintOptions.current.media) rememberAccent(media?.art) else null
+    val tint by androidx.compose.animation.animateColorAsState(mixColor(ModuleGlass, artAccent, .45f), label = "music tint")
+    Module(modifier.clickable(enabled = media != null, onClick = onOpen), color = tint) {
         Column(Modifier.fillMaxSize().padding(cell * .16f), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.Top) {
                 Box(Modifier.size(cell * .62f).clip(RoundedCornerShape(cell * .14f)).background(FolioGlass.raised), contentAlignment = Alignment.Center) {
@@ -661,8 +688,8 @@ private fun MediaModule(media: IslandActivity.Media?, modifier: Modifier, cell: 
 }
 
 @Composable
-private fun Module(modifier: Modifier, content: @Composable BoxScope.() -> Unit) =
-    Box(modifier.clip(RoundedCornerShape(26.dp)).background(ModuleGlass)
+private fun Module(modifier: Modifier, color: Color = ModuleGlass, content: @Composable BoxScope.() -> Unit) =
+    Box(modifier.clip(RoundedCornerShape(26.dp)).background(color)
         .border(FolioGlass.edge, RoundedCornerShape(26.dp)), content = content)
 
 @Composable

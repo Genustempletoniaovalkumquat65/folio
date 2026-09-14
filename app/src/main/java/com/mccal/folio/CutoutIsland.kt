@@ -307,7 +307,7 @@ private fun TrailingGlyph(content: IslandContent, size: Dp) {
             is IslandEvent.Message -> e.appIcon?.let { Image(it.asImageBitmap(), null, Modifier.size(size * .8f).clip(RoundedCornerShape(size * .22f))) }
         }
         is IslandContent.Live -> when (val a = content.activity) {
-            is IslandActivity.Media -> Bars(a.playing)
+            is IslandActivity.Media -> Bars(a.playing, if (LocalTintOptions.current.media) rememberAccent(a.art)?.let { mixColor(it, Color.White, .25f) } ?: Green else Green)
             is IslandActivity.Progress -> Ring(a.fraction, size)
             is IslandActivity.Call -> Bars(playing = !a.incoming)
             is IslandActivity.Timer -> Chronometer(a.base, a.countDown, Orange)
@@ -456,7 +456,7 @@ private fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: 
 }
 
 @Composable
-private fun Bars(playing: Boolean) {
+private fun Bars(playing: Boolean, color: Color = Green) {
     // No infinite animation while paused: a paused session must not redraw forever.
     val phase = if (playing) {
         val transition = rememberInfiniteTransition(label = "island-bars")
@@ -467,7 +467,7 @@ private fun Bars(playing: Boolean) {
         for (i in 0 until 4) {
             val wave = if (playing) (kotlin.math.sin(phase * 2 * Math.PI + i * 1.3).toFloat() + 1f) / 2f else .15f
             val h = size.height * (.3f + .7f * wave)
-            drawLine(Green, Offset(w * (1 + i * 1.7f), size.height / 2 + h / 2), Offset(w * (1 + i * 1.7f), size.height / 2 - h / 2),
+            drawLine(color, Offset(w * (1 + i * 1.7f), size.height / 2 + h / 2), Offset(w * (1 + i * 1.7f), size.height / 2 - h / 2),
                 strokeWidth = w, cap = StrokeCap.Round)
         }
     }

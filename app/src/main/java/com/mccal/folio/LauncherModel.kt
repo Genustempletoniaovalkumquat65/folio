@@ -123,6 +123,25 @@ data class LauncherState(
     val dimWallpaperDark: Boolean = true,
     /** Tinted icons use the wallpaper's color instead of [iconTint]. */
     val iconTintFromWallpaper: Boolean = false,
+    /** Velvet-style: notification cards take on their app icon's color. */
+    val tintNotifications: Boolean = false,
+    /** ColorFlow-style: music cards and the island's sound bars take on the album art's color. */
+    val tintMedia: Boolean = true,
+    /** Harbor-style: dock icons magnify under your finger. */
+    val dockMagnify: Boolean = false,
+    /** Velox-style: swipe up on a Home app icon for its quick panel. */
+    val appPanels: Boolean = true,
+    /** Activator-style trigger → action (names of [FolioTrigger] → [FolioAction]). */
+    val triggerActions: Map<String, String> = emptyMap(),
+    val haptics: Boolean = true,
+    /** Axon-style app icon row above notifications. */
+    val notificationAppRow: Boolean = true,
+    /** Drag along the Search pill or page dots to scrub pages. */
+    val pageScrub: Boolean = true,
+    /** Android wallpaper shifts slightly as pages change. */
+    val wallpaperMotion: Boolean = true,
+    /** Live Clock and Calendar icons. */
+    val liveIcons: Boolean = true,
     /** Optional tint per folder id (ARGB). */
     val folderColors: Map<String, Long> = emptyMap(),
     val islandEverywhere: Boolean = false,
@@ -498,6 +517,18 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun setTintedGlass(value: Boolean) = updateSettings(soon = false) { it.copy(tintedGlass = value) }
     fun setDimWallpaperDark(value: Boolean) = updateSettings(soon = false) { it.copy(dimWallpaperDark = value) }
     fun setIconTintFromWallpaper(value: Boolean) = updateSettings(soon = false) { it.copy(iconTintFromWallpaper = value) }
+    fun setTintNotifications(value: Boolean) = updateSettings(soon = false) { it.copy(tintNotifications = value) }
+    fun setTintMedia(value: Boolean) = updateSettings(soon = false) { it.copy(tintMedia = value) }
+    fun setDockMagnify(value: Boolean) = updateSettings(soon = false) { it.copy(dockMagnify = value) }
+    fun setAppPanels(value: Boolean) = updateSettings(soon = false) { it.copy(appPanels = value) }
+    fun setHaptics(value: Boolean) = updateSettings(soon = false) { it.copy(haptics = value) }
+    fun setNotificationAppRow(value: Boolean) = updateSettings(soon = false) { it.copy(notificationAppRow = value) }
+    fun setPageScrub(value: Boolean) = updateSettings(soon = false) { it.copy(pageScrub = value) }
+    fun setWallpaperMotion(value: Boolean) = updateSettings(soon = false) { it.copy(wallpaperMotion = value) }
+    fun setLiveIcons(value: Boolean) = updateSettings(soon = false) { it.copy(liveIcons = value) }
+    fun setTriggerAction(trigger: FolioTrigger, action: FolioAction) = updateSettings(soon = false) {
+        it.copy(triggerActions = if (action == FolioAction.NONE) it.triggerActions - trigger.name else it.triggerActions + (trigger.name to action.name))
+    }
     fun addTodayWidget(id: Int, size: TodaySize): Boolean {
         if (statePayloadInvalid) return false
         updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.add(it.todayWidgets, TodayWidget(id, size))) }
@@ -683,6 +714,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
             .put("stackRotate", s.stackRotate).put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
             .put("dimWallpaperDark", s.dimWallpaperDark).put("iconTintFromWallpaper", s.iconTintFromWallpaper)
+            .put("tintNotifications", s.tintNotifications).put("tintMedia", s.tintMedia).put("dockMagnify", s.dockMagnify).put("appPanels", s.appPanels).put("haptics", s.haptics).put("notificationAppRow", s.notificationAppRow)
+            .put("pageScrub", s.pageScrub).put("wallpaperMotion", s.wallpaperMotion).put("liveIcons", s.liveIcons)
+            .put("triggerActions", JSONObject().apply { s.triggerActions.forEach { (k, v) -> put(k, v) } })
             .put("todayWidgets", JSONArray().apply { s.todayWidgets.forEach { put(JSONObject().put("id", it.id).put("size", it.size.name)) } })
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
             .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
@@ -863,6 +897,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             homeInk = j.optString("homeInk", "AUTO").takeIf { it in setOf("AUTO", "LIGHT", "DARK") } ?: "AUTO",
             tintedGlass = j.optBoolean("tintedGlass", true), dimWallpaperDark = j.optBoolean("dimWallpaperDark", true),
             iconTintFromWallpaper = j.optBoolean("iconTintFromWallpaper", false),
+            tintNotifications = j.optBoolean("tintNotifications", false), tintMedia = j.optBoolean("tintMedia", true),
+            dockMagnify = j.optBoolean("dockMagnify", false), appPanels = j.optBoolean("appPanels", true), haptics = j.optBoolean("haptics", true),
+            notificationAppRow = j.optBoolean("notificationAppRow", true), pageScrub = j.optBoolean("pageScrub", true),
+            wallpaperMotion = j.optBoolean("wallpaperMotion", true), liveIcons = j.optBoolean("liveIcons", true),
+            triggerActions = j.optJSONObject("triggerActions")?.let { o -> o.keys().asSequence().associateWith { o.getString(it) } } ?: emptyMap(),
             todayWidgets = j.optJSONArray("todayWidgets")?.let { a -> (0 until a.length()).mapNotNull { i ->
                 a.optJSONObject(i)?.let { o -> runCatching { TodayWidget(o.getInt("id"), TodaySize.valueOf(o.getString("size"))) }.getOrNull() }
             } } ?: DEFAULT_TODAY_WIDGETS,

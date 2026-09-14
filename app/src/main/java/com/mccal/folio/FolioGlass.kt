@@ -53,3 +53,8 @@ internal val WindowInsets.Companion.folioSafeTop: WindowInsets
 
 /** Per-folder tint colors, provided from saved settings. */
 internal val LocalFolderColors = androidx.compose.runtime.compositionLocalOf { emptyMap<String, Long>() }
+
+/** Velvet/ColorFlow tint options, provided from settings. */
+@androidx.compose.runtime.Immutable
+internal data class TintOptions(val notifications: Boolean = false, val media: Boolean = true, val notificationAppRow: Boolean = true)
+internal val LocalTintOptions = androidx.compose.runtime.staticCompositionLocalOf { TintOptions() }

@@ -67,3 +67,8 @@ internal fun IosSlider(value: Float, onValueChange: (Float) -> Unit, valueRange:
         thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = .22f),
         activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent))
 }
+
+/** Used when haptic feedback is turned off in settings. */
+internal object NoHaptics : androidx.compose.ui.hapticfeedback.HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}

@@ -82,7 +82,7 @@ enum class BadgeColor(val label: String) { RED("Red"), APP("Match icon"), SOFT("
 /** Icon look for the whole launcher, provided from the saved settings. */
 internal data class IconLook(val style: IconStyle = IconStyle.DEFAULT, val tint: Color = Color(0xFFFFB340),
     val shape: IconShape = IconShape.DEFAULT, val pack: String? = null, val badges: BadgeStyle = BadgeStyle.DOT,
-    val badgeColor: BadgeColor = BadgeColor.RED)
+    val badgeColor: BadgeColor = BadgeColor.RED, val liveIcons: Boolean = true)
 
 /** Unread notification counts per package, for icon badges. */
 internal val LocalBadgeCounts = androidx.compose.runtime.compositionLocalOf { emptyMap<String, Int>() }
@@ -137,7 +137,8 @@ private fun filterFor(look: IconLook): androidx.compose.ui.graphics.ColorFilter?
 internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape? = null, badge: Boolean = shape != null) {
     val context = LocalContext.current
-    val kind = remember(app.component.packageName) { LiveIcons.kind(context, app.component.packageName) }
+    val look0 = LocalIconLook.current
+    val kind = remember(app.component.packageName, look0.liveIcons) { if (look0.liveIcons) LiveIcons.kind(context, app.component.packageName) else null }
     val look = LocalIconLook.current
     val accent = if (look.style == IconStyle.TINTED) look.tint else null
     val lookShape = remember(look.shape) { look.shape.toShape() }
@@ -371,3 +372,18 @@ internal fun dominantAccent(pixels: IntArray): Int? {
     fun channel(sum: Float) = kotlin.math.round(sum / weight[best] * 255f).toInt().coerceIn(0, 255)
     return (0xFF shl 24) or (channel(rs[best]) shl 16) or (channel(gs[best]) shl 8) or channel(bs[best])
 }
+
+/** Main color of an icon or album art (cached), for Velvet/ColorFlow-style tinting; null until known or for gray images. */
+@Composable
+internal fun rememberAccent(bitmap: android.graphics.Bitmap?): Color? {
+    if (bitmap == null) return null
+    val accent by produceState(BadgeAccents.cached(bitmap), bitmap) {
+        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { BadgeAccents.of(bitmap) }
+    }
+    return accent?.let { Color(it) }
+}
+
+/** [base] mixed toward [accent] by [amount], keeping [base]'s alpha. */
+internal fun mixColor(base: Color, accent: Color?, amount: Float): Color = if (accent == null) base else
+    Color(base.red + (accent.red - base.red) * amount, base.green + (accent.green - base.green) * amount,
+        base.blue + (accent.blue - base.blue) * amount, base.alpha)

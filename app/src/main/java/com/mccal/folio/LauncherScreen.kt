@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
@@ -161,6 +163,7 @@ fun LauncherScreen(
     var resizeTopPitch by remember { mutableFloatStateOf(1f) }
     var resizeAppPitch by remember { mutableFloatStateOf(1f) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var panelAppId by rememberSaveable { mutableStateOf<String?>(null) }
     var customizationPage by rememberSaveable { mutableStateOf(CustomizationPage.OVERVIEW) }
     LaunchedEffect(sheet) {
         if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW
@@ -471,15 +474,21 @@ fun LauncherScreen(
             }
             if (drag.source?.folderId != null) openFolderId = null
         },
-        onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)) { ProvideJiggle(homeEdit) {
+        onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)
+        .twoFingerSwipeDown(FolioAction.entries.firstOrNull { it.name == state.triggerActions[FolioTrigger.TWO_FINGER_DOWN.name] }
+            ?.takeIf { it != FolioAction.NONE && sheet.isEmpty() && !homeEdit.active }) { FolioActions.run(launcherActivity, it) }) { ProvideJiggle(homeEdit) {
         val tone = LocalWallpaperTone.current
         val homeInk = homeInkFor(state.homeInk, tone.prefersDarkText)
         val basePalette = LocalDuoPalette.current
         val palette = if (state.tintedGlass) remember(basePalette, tone.primary) { basePalette.copy(glass = tintedGlass(basePalette.glass, tone.primary)) } else basePalette
         CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate,
-            LocalHomeInk provides homeInk, LocalDuoPalette provides palette) {
+            LocalHomeInk provides homeInk, LocalDuoPalette provides palette,
+            // Remembered so every icon isn't recomposed each time Home recomposes (a new lambda changes the local).
+            LocalAppPanel provides remember(state.appPanels, homeEdit.active, haptic) {
+                if (state.appPanels && !homeEdit.active) { app: AppEntry -> haptic.performHapticFeedback(HapticFeedbackType.ContextClick); panelAppId = app.id } else null
+            }) {
         if (!state.systemWallpaper) DuneWallpaper()
-        else SystemWallpaperParallax(nativePager)
+        else if (state.wallpaperMotion) SystemWallpaperParallax(nativePager)
         // iOS "dark appearance dims wallpaper".
         val dim by androidx.compose.animation.core.animateFloatAsState(if (state.dimWallpaperDark && appearance.dark) .3f else 0f, label = "wallpaper dim")
         if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
@@ -573,7 +582,7 @@ fun LauncherScreen(
                             !nativeWidgetConsumesVerticalGesture(launcherRootView, screenPoint)
                     }
                 },
-                canStartGesture = { point -> geometry.expanded || homePages < 2 || !scrubberBounds.contains(point + gestureOriginInRoot) },
+                canStartGesture = { point -> geometry.expanded || homePages < 2 || !state.pageScrub || !scrubberBounds.contains(point + gestureOriginInRoot) },
                 onDownwardSwipe = { panel ->
                     if (panel == ShadePanel.SEARCH) { if (state.swipeDownSearch) launcherActivity.openSpotlight() }
                     else launcherActivity.openSystemShade(panel)
@@ -666,17 +675,19 @@ fun LauncherScreen(
                     },
                 compact = contentHeight < 500.dp, iconSize = dockIconSize(geometry.iconSize).dp, style = state.statusStyle,
                 island = null)
-            Surface(Modifier.align(railTop(state.leftHanded)).railEdge(state.leftHanded, 12.dp).offset(y = geometry.dockTop.dp)
+            // Background and border without clipping, so Harbor-style magnified icons can grow past the rail.
+            Box(Modifier.align(railTop(state.leftHanded)).railEdge(state.leftHanded, 12.dp).offset(y = geometry.dockTop.dp)
                 .width(preset.dockWidth.dp).height(geometry.dockHeight.dp).graphicsLayer {
-                    // Composite the stationary dock independently of the shared pager layer.
-                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-                }.testTag("dock"),
-                shape = RoundedCornerShape(30.dp), color = Glass.copy(alpha = state.statusStyle.railGlass),
-                border = androidx.compose.foundation.BorderStroke(1.dp, RailBorder)) {
+                    // Composite the stationary dock independently of the shared pager layer (not while magnifying: it would clip).
+                    compositingStrategy = if (state.dockMagnify) androidx.compose.ui.graphics.CompositingStrategy.Auto
+                        else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                }.background(Glass.copy(alpha = state.statusStyle.railGlass), RoundedCornerShape(30.dp))
+                .border(1.dp, RailBorder, RoundedCornerShape(30.dp)).testTag("dock")) {
                 Column(Modifier.padding(vertical = 8.dp).verticalScroll(dockScroll)) {
                     DockAppColumn(state.dock, previewLayout.dock, appsById, geometry.dockRowHeight,
                         dockIconSize(geometry.iconSize), drag, insertionTarget,
-                        onLaunch = onLaunchFrom, onChoose = { dockSlot = it; sheet = "dock" })
+                        onLaunch = onLaunchFrom, onChoose = { dockSlot = it; sheet = "dock" },
+                        magnify = state.dockMagnify, leftHanded = state.leftHanded)
                 }
             }
             Column(Modifier.align(if (state.leftHanded) Alignment.BottomEnd else Alignment.BottomStart).width(pagerWidth)
@@ -696,7 +707,7 @@ fun LauncherScreen(
                         !nativePager.isScrollInProgress && pager.currentPage in 0 until homePages
                     androidx.compose.animation.AnimatedContent(showSearchPill, label = "search pill",
                         // Cover screen only: unfolded, Home already shows two pages side by side.
-                        modifier = if (geometry.expanded || homePages < 2) Modifier else Modifier.onGloballyPositioned { scrubberBounds = it.boundsInRoot() }.pointerInput(homePages) {
+                        modifier = if (geometry.expanded || homePages < 2 || !state.pageScrub) Modifier else Modifier.onGloballyPositioned { scrubberBounds = it.boundsInRoot() }.pointerInput(homePages) {
                             var startPage = 0
                             var travel = 0f
                             detectHorizontalDragGestures(
@@ -1248,6 +1259,9 @@ fun LauncherScreen(
                 }
             }
         }
+        appsById[panelAppId]?.let { app ->
+            AppPanel(app, onDismiss = { panelAppId = null }, onOpen = { panelAppId = null; onLaunchFrom(app, IconBounds.of(app.id)) })
+        }
         appsById[selectedId]?.let { app ->
             val pinned = state.layout.indexOfShortcut(app.id) != null
             val packageName = app.packageName
@@ -1551,9 +1565,17 @@ private fun HomePagePane(
         }
     }
     val edit = LocalHomeEdit.current
+    val context = LocalContext.current
+    val doubleTapAction = FolioAction.entries.firstOrNull { it.name == state.triggerActions[FolioTrigger.DOUBLE_TAP.name] } ?: FolioAction.NONE
     Box(modifier.testTag("home-page-$page")
         // Jiggle mode: a tap on empty space (not on an icon, which handles its own taps) finishes editing.
-        .pointerInput(edit.active) { if (edit.active) detectTapGestures(onTap = { edit.stop() }) }
+        .pointerInput(edit.active, doubleTapAction) {
+            when {
+                edit.active -> detectTapGestures(onTap = { edit.stop() })
+                // Activator-style double-tap on empty Home.
+                doubleTapAction != FolioAction.NONE -> detectTapGestures(onDoubleTap = { FolioActions.run(context, doubleTapAction) })
+            }
+        }
         .semantics {
             onLongClick("Home options") {
                 if (!drag.active) onEmptyWidget(backgroundTarget)
@@ -1752,6 +1774,8 @@ private fun DockAppColumn(
     target: DropTarget?,
     onLaunch: (AppEntry, android.graphics.Rect?) -> Unit,
     onChoose: (Int) -> Unit,
+    magnify: Boolean = false,
+    leftHanded: Boolean = false,
 ) {
     val draggedId = drag.source?.appId
     val edit = LocalHomeEdit.current
@@ -1774,7 +1798,25 @@ private fun DockAppColumn(
     }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { rowHeight.dp.toPx() }
-    Box(Modifier.fillMaxWidth().height((rowHeight * savedDock.size).dp)) {
+    // Harbor-style magnification: icons swell under the finger as it slides along the dock (touches pass through).
+    var touchY by remember { mutableStateOf<Float?>(null) }
+    val haptic = LocalHapticFeedback.current
+    Box(Modifier.fillMaxWidth().height((rowHeight * savedDock.size).dp).then(if (!magnify) Modifier else Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            touchY = down.position.y
+            var lastRow = (down.position.y / rowHeightPx).toInt()
+            while (true) {
+                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                touchY = change.position.y
+                val row = (change.position.y / rowHeightPx).toInt()
+                if (row != lastRow) { lastRow = row; haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
+            }
+            touchY = null
+        }
+    })) {
         savedDock.indices.forEach { index ->
             val cell = DropTarget.Dock(index)
             val savedApp = appsById[savedDock[index]]
@@ -1819,8 +1861,15 @@ private fun DockAppColumn(
                     Box(Modifier.size(iconSize.dp).testTag("dock-icon-$id")
                         .onGloballyPositioned { if (savedIndex >= 0) { launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(id, launchBounds[savedIndex]) } }
                         .jiggle(id)) {
-                        AppIcon(app, null, Modifier.fillMaxSize().graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] },
-                            shape = RoundedCornerShape(11.dp))
+                        val magnification by animateFloatAsState(touchY?.let { y ->
+                            val center = (renderIndex + .5f) * rowHeightPx
+                            1f + .38f * (1f - kotlin.math.abs(center - y) / (rowHeightPx * 1.5f)).coerceAtLeast(0f)
+                        } ?: 1f, androidx.compose.animation.core.spring(dampingRatio = .75f, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "dock magnify $id")
+                        AppIcon(app, null, Modifier.fillMaxSize().graphicsLayer {
+                            val s = slotScales[renderIndex] * magnification; scaleX = s; scaleY = s
+                            // Grow toward the screen, away from the edge the dock sits on.
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (leftHanded) 0f else 1f, .5f)
+                        }, shape = RoundedCornerShape(11.dp))
                         if (edit.active && savedIndex >= 0) JiggleRemoveButton("Remove ${app.label} from dock") { edit.onRemove(DropTarget.Dock(savedIndex)) }
                     }
                 }
@@ -1868,7 +1917,9 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
         androidx.compose.animation.core.spring(dampingRatio = .55f, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "app press")
     val iconSize by animateDpAsState(size.dp, label = "icon size")
     val bounds = remember { android.graphics.Rect() }
+    val openPanel = LocalAppPanel.current
     Column(modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = app.label }
+        .swipeUpForPanel(openPanel?.let { { it(app) } })
         .clickable(interactionSource = interaction, indication = null,
             role = Role.Button, onClick = { onClick(bounds) })
         .semantics { onLongClick("App options") { onLongClick(); true } }.padding(horizontal = 2.dp),

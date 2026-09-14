@@ -1,5 +1,8 @@
 package com.mccal.folio
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -128,6 +131,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         SettingsSwitch("Tint glass with wallpaper color", state.tintedGlass, model::setTintedGlass, "tinted-glass-switch")
                         SettingsSwitch("Dark appearance dims wallpaper", state.dimWallpaperDark, model::setDimWallpaperDark, "dim-wallpaper-switch")
+                        if (state.systemWallpaper) SettingsSwitch("Wallpaper moves with pages", state.wallpaperMotion, model::setWallpaperMotion, "wallpaper-motion-switch")
                     }
                     if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
@@ -174,6 +178,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         CustomizationSlider("Background blur", "${(state.panelBlur * 100).toInt()}%", state.panelBlur, 0f..1f) { model.setPanelBlur(it) }
                         SettingsSwitch("Big clock in Notification Center", state.notificationClock, model::setNotificationClock, "notification-clock-switch")
                         SettingsSwitch("Stack notifications by app", state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
+                        SettingsSwitch("Tint notifications with app colors", state.tintNotifications, model::setTintNotifications, "tint-notifications-switch")
+                        SettingsSwitch("Tint music with album art", state.tintMedia, model::setTintMedia, "tint-media-switch")
+                        SettingsSwitch("App icons row above notifications", state.notificationAppRow, model::setNotificationAppRow, "notification-app-row-switch")
                         SettingsSwitch("Unfolded: clock beside notifications", state.ncSplit, model::setNcSplit, "notification-split-switch")
                         Text("Control Center size", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -220,6 +227,26 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
+                    SettingsCard("Actions") {
+                        Text("Pick what gestures and events do, Activator-style. Events run while Folio’s Home or gestures service is active.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        var openTrigger by remember { mutableStateOf<FolioTrigger?>(null) }
+                        FolioTrigger.entries.forEach { trigger ->
+                            val current = FolioAction.entries.firstOrNull { it.name == state.triggerActions[trigger.name] } ?: FolioAction.NONE
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { openTrigger = if (openTrigger == trigger) null else trigger },
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(trigger.label, Modifier.weight(1f))
+                                Text(current.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (openTrigger == trigger) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FolioAction.entries.forEach { action ->
+                                    IosChip(selected = current == action, onClick = { model.setTriggerAction(trigger, action); openTrigger = null },
+                                        label = { Text(action.label) })
+                                }
+                            }
+                        }
+                    }
                     SettingsCard("Left of Home") {
                         val leftContext = androidx.compose.ui.platform.LocalContext.current
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -255,12 +282,15 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     SettingsCard("Search") {
                         SettingsSwitch("Search button on Home", state.searchPill, model::setSearchPill, "search-pill-switch")
                         SettingsSwitch("Swipe down on Home for Spotlight", state.swipeDownSearch, model::setSwipeDownSearch, "swipe-search-switch")
+                        SettingsSwitch("Drag page dots to flip pages", state.pageScrub, model::setPageScrub, "page-scrub-switch")
+                        SettingsSwitch("Haptic feedback", state.haptics, model::setHaptics, "haptics-switch")
                         SettingsSwitch("Search button opens the Google app", state.googleSearch, model::setGoogleSearch, "google-search-switch")
                         Text("When off, the search button opens Spotlight: apps, contacts, settings, a calculator, Google without AI, and ChatGPT, Claude or Perplexity.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 CustomizationPage.STATUS -> {
+                    MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
                     val st = state.statusStyle
                     SettingsCard("App icons") {
                         val iconContext = androidx.compose.ui.platform.LocalContext.current
@@ -275,6 +305,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }
                         if (packs.isEmpty()) Text("Install any icon pack made for Nova-style launchers to use it here.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SettingsSwitch("Live Clock and Calendar icons", state.liveIcons, model::setLiveIcons, "live-icons-switch")
                         Text("Shape", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconShape.entries.forEach { shape ->
@@ -322,6 +353,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     SettingsCard("Side rail") {
                         SettingsSwitch("Left-handed layout (rail on the left)", state.leftHanded, model::setLeftHanded, "left-handed-switch")
                         SettingsSwitch("Show app names", state.labels, model::setLabels, "label-switch")
+                        SettingsSwitch("Magnify dock icons under your finger", state.dockMagnify, model::setDockMagnify, "dock-magnify-switch")
+                        SettingsSwitch("Swipe up on an app for its quick panel", state.appPanels, model::setAppPanels, "app-panels-switch")
                         CustomizationSlider("Frost", "${(st.railGlass * 100).toInt()}%", st.railGlass, 0f..0.8f) {
                             model.setStatusStyle(st.copy(railGlass = it))
                         }
@@ -367,7 +400,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             TextButton(onClick = { IslandPosition.reset(islandContext) }) { Text("Put the island back at the camera") }
                             Text("Brief pop-ups", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                            listOf("CHARGING" to "Charging", "SILENT" to "Silent mode", "FOCUS" to "Do Not Disturb", "BLUETOOTH" to "Bluetooth devices", "MESSAGE" to "New messages (with quick reply)").forEach { (kind, label) ->
+                            listOf("CHARGING" to "Charging", "SILENT" to "Silent mode", "FOCUS" to "Do Not Disturb", "BLUETOOTH" to "Bluetooth devices", "MESSAGE" to "New messages (with quick reply)", "CALL" to "Calls (answer, decline, end)").forEach { (kind, label) ->
                                 SettingsSwitch(label, kind !in state.islandEventsOff, { model.setIslandEvent(kind, it) }, "island-event-${kind.lowercase()}")
                             }
                             if ("MESSAGE" !in state.islandEventsOff) MessageBannerSettings(state.messagesAvoidDouble, model::setMessagesAvoidDouble)
@@ -477,6 +510,11 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
     }
 }
 
+/**
+ * Live preview of Home built from real data only: your Home and dock apps (with the current icon shape, pack,
+ * tint, badges and live icons), your text, glass and dimming settings, and your background. Android's wallpaper
+ * image can't be read by apps, so in that mode the preview uses the wallpaper's own reported colors and says so.
+ */
 @Composable private fun MiniHomePreview(stagedBitmap: android.graphics.Bitmap?, state: LauncherState,
     previewHeight: androidx.compose.ui.unit.Dp) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -486,28 +524,57 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
     val apps = remember(state.apps) { state.apps.associateBy { it.id } }
     val homeIcons = state.homeSlots.mapNotNull { id -> id?.let(apps::get) }.take(8)
     val dockIcons = state.dock.mapNotNull { id -> id?.let(apps::get) }.take(5)
+    val tone = LocalWallpaperTone.current
+    val ink = homeInkFor(state.homeInk, tone.prefersDarkText)
+    val basePalette = LocalDuoPalette.current
+    val glass = if (state.tintedGlass) tintedGlass(basePalette.glass, tone.primary) else basePalette.glass
     val scale = previewHeight.value * .632f / 250f
     fun unit(value: Float) = (value * scale).dp
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.height(previewHeight).width(previewHeight * .632f).clip(RoundedCornerShape(unit(24f)))
             .testTag("customization-home-preview")) {
-            DuneWallpaper()
-            bitmap?.let { Image(it.asImageBitmap(), null, Modifier.matchParentSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
-            Column(Modifier.fillMaxSize().padding(start = unit(16f), top = unit(18f), end = unit(54f)),
-                verticalArrangement = Arrangement.spacedBy(unit(10f))) {
-                Box(Modifier.fillMaxWidth().height(unit(42f)).background(MaterialTheme.colorScheme.surface.copy(alpha = .38f), RoundedCornerShape(unit(12f))))
-                homeIcons.chunked(4).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    row.forEach { app -> AppIcon(app, null, Modifier.size(unit(24f)).clip(RoundedCornerShape(unit(7f)))) }
-                } }
+            if (state.systemWallpaper) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
+                androidx.compose.ui.graphics.Color(tone.primary ?: 0xFF5A6B78.toInt()), androidx.compose.ui.graphics.Color(tone.secondary ?: tone.primary ?: 0xFF2E3A42.toInt())))))
+            else {
+                DuneWallpaper()
+                bitmap?.let { Image(it.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
             }
-            Column(Modifier.align(Alignment.CenterEnd).padding(end = unit(10f)).width(unit(36f))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = .42f), RoundedCornerShape(unit(18f)))
+            if (state.dimWallpaperDark && basePalette.dark) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .3f)))
+            CompositionLocalProvider(LocalHomeInk provides ink) {
+                Column(Modifier.fillMaxSize().padding(start = unit(14f), top = unit(18f), end = unit(52f)),
+                    verticalArrangement = Arrangement.spacedBy(unit(8f))) {
+                    Box(Modifier.fillMaxWidth().height(unit(42f)).background(glass.copy(alpha = .26f), RoundedCornerShape(unit(12f)))
+                        .padding(unit(6f))) {
+                        val tick by rememberMinuteTick()
+                        val time = remember(tick) { java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(
+                            if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm")) }
+                        Text(time, color = ink.primary, fontSize = (13 * scale).sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    homeIcons.chunked(4).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        row.forEach { app ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                AppIcon(app, null, Modifier.size(unit(24f)), shape = RoundedCornerShape(unit(6f)))
+                                if (state.labels) Text(app.label, color = ink.primary, fontSize = (5.5f * scale).sp, maxLines = 1,
+                                    modifier = Modifier.width(unit(28f)), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        }
+                    } }
+                }
+            }
+            Column(Modifier.align(Alignment.CenterEnd).padding(end = unit(8f)).width(unit(36f))
+                .background(glass.copy(alpha = state.statusStyle.railGlass), RoundedCornerShape(unit(18f)))
                 .padding(vertical = unit(8f)), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(unit(8f))) {
-                dockIcons.forEach { app -> AppIcon(app, null, Modifier.size(unit(22f)).clip(RoundedCornerShape(unit(7f)))) }
+                dockIcons.forEach { app -> AppIcon(app, null, Modifier.size(unit(22f)), shape = RoundedCornerShape(unit(6f))) }
+            }
+            if (state.searchPill) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = unit(10f), end = unit(40f))
+                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (ink.dark) .45f else .2f), RoundedCornerShape(50))
+                .padding(horizontal = unit(10f), vertical = unit(3f))) {
+                Text("Search", color = ink.primary, fontSize = (7 * scale).sp)
             }
         }
+        if (state.systemWallpaper) Text("Colors from your Android wallpaper (apps can’t show its image here)",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

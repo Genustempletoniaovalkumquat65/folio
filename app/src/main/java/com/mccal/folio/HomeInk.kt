@@ -40,11 +40,11 @@ internal fun WallpaperColors?.prefersDarkText(): Boolean =
 
 /** What Folio knows about the wallpaper behind Home, without reading its pixels. */
 @Immutable
-internal data class WallpaperTone(val prefersDarkText: Boolean = false, val primary: Int? = null)
+internal data class WallpaperTone(val prefersDarkText: Boolean = false, val primary: Int? = null, val secondary: Int? = null)
 
 internal val LocalWallpaperTone = staticCompositionLocalOf { WallpaperTone() }
 
-internal fun WallpaperColors?.tone() = WallpaperTone(prefersDarkText(), this?.primaryColor?.toArgb())
+internal fun WallpaperColors?.tone() = WallpaperTone(prefersDarkText(), this?.primaryColor?.toArgb(), this?.secondaryColor?.toArgb())
 
 /**
  * The wallpaper's tone. Android's wallpaper: the system's own colors and hints (no permission needed, updates

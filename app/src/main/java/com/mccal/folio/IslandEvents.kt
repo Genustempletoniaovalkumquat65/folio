@@ -41,7 +41,7 @@ class IslandEvents private constructor(private val context: Context) {
                     val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
                     val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 }
                         ?.let { it * 100 / intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1) }
-                    if (lastCharging == false && charging) emit(IslandEvent.Charging(level))
+                    if (lastCharging == false && charging) { emit(IslandEvent.Charging(level)); FolioActions.onTrigger(c, FolioTrigger.CHARGING) }
                     lastCharging = charging
                 }
                 AudioManager.RINGER_MODE_CHANGED_ACTION -> {
@@ -58,6 +58,11 @@ class IslandEvents private constructor(private val context: Context) {
                     val name = if (ContextCompat.checkSelfPermission(c, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
                         runCatching { androidx.core.content.IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)?.name }.getOrNull() else null
                     emit(IslandEvent.Bluetooth(name))
+                    FolioActions.onTrigger(c, FolioTrigger.BLUETOOTH)
+                }
+                AudioManager.ACTION_HEADSET_PLUG -> {
+                    // The sticky state delivered on registration isn't a new plug-in.
+                    if (!isInitialStickyBroadcast && intent.getIntExtra("state", 0) == 1) FolioActions.onTrigger(c, FolioTrigger.HEADPHONES)
                 }
             }
         }
@@ -70,6 +75,7 @@ class IslandEvents private constructor(private val context: Context) {
         ContextCompat.registerReceiver(context, receiver, IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED); addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
             addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED); addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(AudioManager.ACTION_HEADSET_PLUG)
         }, ContextCompat.RECEIVER_NOT_EXPORTED) // all four are protected system broadcasts
         registered = true
     }
