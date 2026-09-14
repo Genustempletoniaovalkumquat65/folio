@@ -499,7 +499,10 @@ fun LauncherScreen(
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
         BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets())
-            .union(rememberSideIslandInsets(state.island)))) {
+            // Short windows run the rail the full height, so keep the upright island's strip clear there. Regular-size
+            // windows (unfolded portrait) keep Home centered: the island sits below the status and beside the dock bar.
+            .union(rememberSideIslandInsets(state.island && androidx.compose.ui.platform.LocalConfiguration.current.let {
+                !isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) })))) {
             val wide = maxWidth.value >= 650f && maxHeight.value >= REGULAR_MIN_HEIGHT_DP
             val preset = if (wide) state.expanded else state.compact
             val density = LocalDensity.current
