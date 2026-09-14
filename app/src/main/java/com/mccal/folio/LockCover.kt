@@ -101,6 +101,18 @@ internal fun LockCover(visible: Boolean, onDismiss: () -> Unit) {
                     Text(it, color = Color.White.copy(alpha = .8f), fontSize = 15.sp)
                 }
             }
+            // Up Next, like the Calendar widget iPhone puts under the Lock Screen clock.
+            val next by produceState<UpNextEvent?>(null, tick) { value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { UpNext.events(context, limit = 1).firstOrNull() } }
+            next?.let { e ->
+                val begin = LocalDateTime.ofInstant(Instant.ofEpochMilli(e.begin), ZoneId.systemDefault())
+                Row(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).clickable { onDismiss(); UpNext.openEvent(context, e) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(width = 3.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(e.color?.let { Color(it) } ?: Color(0xFF0A84FF)))
+                    Spacer(Modifier.width(6.dp))
+                    Text("${e.title} · ${if (e.allDay) "All Day" else begin.format(DateTimeFormatter.ofPattern(if (is24) "HH:mm" else "h:mm a"))}",
+                        color = Color.White.copy(alpha = .85f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
             Spacer(Modifier.height(24.dp))
             notifications.take(room).forEach { item ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF2A2A2E).copy(alpha = .8f))
