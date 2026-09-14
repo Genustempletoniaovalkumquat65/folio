@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 
@@ -29,7 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -44,7 +45,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
     val title = when (page) {
-        CustomizationPage.OVERVIEW -> "Make it yours"
+        CustomizationPage.OVERVIEW -> "Folio"
         CustomizationPage.SETUP -> "Set up Folio"
         CustomizationPage.WALLPAPER -> "Wallpaper & appearance"
         CustomizationPage.HOME -> "Home layout"
@@ -53,20 +54,32 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.FOLD -> "Fold"
         CustomizationPage.BACKUP -> "Backup"
         CustomizationPage.HELP -> "Help & setup"
+        CustomizationPage.SIDE_KEY -> "Side Key"
+        CustomizationPage.LOCK -> "Lock Cover"
+        CustomizationPage.CREDITS -> "Credits"
     }
     val bodyScroll = rememberScrollState()
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
-    Column(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(horizontal = 20.dp).padding(bottom = 12.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (page != CustomizationPage.OVERVIEW) IconButton(onClick = { onPage(CustomizationPage.OVERVIEW) },
-                Modifier.testTag("customization-back")) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close customization") }
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        // iOS navigation bar: "‹ Folio" back on sub-pages, Done on the right, large title below.
+        Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+            if (page != CustomizationPage.OVERVIEW) Row(Modifier.align(Alignment.CenterStart).clip(RoundedCornerShape(10.dp))
+                .clickable { onPage(CustomizationPage.OVERVIEW) }.padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(28.dp))
+                Text("Folio", color = IosBlue, fontSize = 17.sp)
+            }
+            Text("Done", color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
+                    .padding(horizontal = 8.dp, vertical = 8.dp).semantics { contentDescription = "Close customization" })
         }
+        if (page != CustomizationPage.OVERVIEW) Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 32.sp,
+            fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
         Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (page) {
                 CustomizationPage.OVERVIEW -> {
+                    TweakBanner()
                     if (!isDefaultHome) Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .testTag("default-home-settings")) { Text("Set as home app") }
                     if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
@@ -76,24 +89,33 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
                         "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.SETUP) }
                     MiniHomePreview(backgrounds.previewBitmap, state, 176.dp)
-                    CustomizationDestination(Icons.Rounded.Wallpaper, "Wallpaper & appearance",
-                        if (backgrounds.previewPending) "Photo ready to review" else "Background, colors, and light",
-                        "customization-wallpaper") { onPage(CustomizationPage.WALLPAPER) }
-                    CustomizationDestination(Icons.Rounded.GridView, "Home layout",
-                        "Icons, spacing, dock, and widgets", "customization-home") { onPage(CustomizationPage.HOME) }
-                    CustomizationDestination(Icons.Rounded.ViewSidebar, "Status & side rail",
-                        "Status icons, island, frost, left-handed", "customization-status") { onPage(CustomizationPage.STATUS) }
-                    CustomizationDestination(Icons.Rounded.Search, "Gestures & search",
-                        "Control Center, notifications, Spotlight", "customization-gestures") { onPage(CustomizationPage.GESTURES) }
-                    CustomizationDestination(Icons.Rounded.Devices, "Fold",
-                        "Unfold animation and staying awake", "customization-fold") { onPage(CustomizationPage.FOLD) }
-                    CustomizationDestination(Icons.Rounded.Save, "Backup",
-                        "Save or restore this layout", "customization-backup") { onPage(CustomizationPage.BACKUP) }
-                    if (setupLeft == 0) CustomizationDestination(Icons.Rounded.Checklist, "Setup checklist",
-                        "Permissions and Samsung settings Folio uses", "customization-setup-all") { onPage(CustomizationPage.SETUP) }
-                    CustomizationDestination(Icons.Rounded.HelpOutline, "Help & setup",
-                        "Home app, widgets, gestures, and Discover", "customization-help") {
-                        onPage(CustomizationPage.HELP)
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Wallpaper, 0xFF32ADE6, "Wallpaper & Appearance", "customization-wallpaper",
+                            if (backgrounds.previewPending) "Photo ready" else null) { onPage(CustomizationPage.WALLPAPER) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.GridView, 0xFF0A84FF, "Home Screen & Dock", "customization-home") { onPage(CustomizationPage.HOME) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.ViewSidebar, 0xFF5E5CE6, "Icons, Status & Island", "customization-status") { onPage(CustomizationPage.STATUS) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Gestures, Panels & Search", "customization-gestures") { onPage(CustomizationPage.GESTURES) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key", "customization-side-key") { onPage(CustomizationPage.SIDE_KEY) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Lock, 0xFF30D158, "Lock Cover", "customization-lock",
+                            if (state.lockCover) "On" else "Off") { onPage(CustomizationPage.LOCK) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold", "customization-fold") { onPage(CustomizationPage.FOLD) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Checklist, 0xFF30D158, "Setup Checklist", if (setupLeft == 0) "customization-setup-all" else "customization-setup",
+                            if (setupLeft > 0) "$setupLeft left" else null) { onPage(CustomizationPage.SETUP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup") { onPage(CustomizationPage.BACKUP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help") { onPage(CustomizationPage.HELP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits") { onPage(CustomizationPage.CREDITS) }
                     }
                     if (isDefaultHome) TextButton(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .testTag("default-home-settings")) { Text("Change home app") }
@@ -456,6 +478,15 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     Text("Restore shows a review before changing Home.", style = MaterialTheme.typography.bodySmall)
                 }
+                CustomizationPage.SIDE_KEY -> SideKeyPage()
+                CustomizationPage.LOCK -> {
+                    SettingsCard("Lock Cover") {
+                        SettingsSwitch("Show after unlocking", state.lockCover, model::setLockCover, "lock-cover-switch")
+                        Text("Android doesn’t let apps replace the real lock screen. When you unlock straight to Home, Folio shows an iPhone-style cover with the time, next alarm and notifications. Swipe up to open Home.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                CustomizationPage.CREDITS -> CreditsPage()
                 CustomizationPage.HELP -> LauncherHelp(
                     isDefaultHome = isDefaultHome,
                     onHomeSettings = onMakeDefault,
@@ -509,6 +540,96 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
+
+/** Tweak-style header: Folio's icon, name and version, like a jailbreak tweak's preference banner. */
+@Composable private fun TweakBanner() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(androidx.compose.ui.graphics.Color(0xFF5E5CE6), androidx.compose.ui.graphics.Color(0xFF0A84FF)))),
+            contentAlignment = Alignment.Center) {
+            Text("F", color = androidx.compose.ui.graphics.Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+        }
+        Text("Folio", color = androidx.compose.ui.graphics.Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        Text("iPhone Duo for your Fold · v$version", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 14.sp)
+    }
+}
+
+/** iOS Settings row: colored rounded icon square, title, optional value, chevron. */
+@Composable private fun TweakRow(icon: ImageVector, color: Long, title: String, tag: String, value: String? = null, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(androidx.compose.ui.graphics.Color(color)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+        value?.let { Text(it, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f), fontSize = 17.sp) }
+        Icon(Icons.Rounded.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .3f))
+    }
+}
+
+/** Guided side key setup: hold → Folio's assistant picker, double press → Google Wallet. Samsung doesn't let apps change these, so each row checks and opens the right screen. */
+@Composable private fun SideKeyPage() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { tick++ } }
+    fun open(intent: android.content.Intent?) { intent?.let { runCatching { context.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
+    val assistant = remember(tick) { AssistPickerActivity.isDefaultAssistant(context) }
+    val hold = remember(tick) { sideKeyHoldIsAssistant(context) }
+    val wallet = remember(tick) { sideKeyDoublePressIsWallet(context) }
+    SettingsCard("Press and Hold") {
+        SideKeyStep("1. Folio is your digital assistant", "Settings › Apps › Default apps › Digital assistant app › Folio", assistant) { open(AssistPickerActivity.settingsIntent()) }
+        SideKeyStep("2. Hold the side key: Digital assistant", "Side button › Press and hold › Digital assistant", hold) { open(sideKeySettings(context)) }
+        Text("Then holding the side key opens Folio’s picker: ChatGPT, Claude, Perplexity, Gemini or Google without AI.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    SettingsCard("Double Press") {
+        SideKeyStep("Double press: Google Wallet", "Side button › Double press › Open app › Wallet", wallet) { open(sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) }
+        Text("Like double-clicking the side button for Apple Pay. If Wallet isn’t listed, choose “Open app” and pick Wallet.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable private fun SideKeyStep(title: String, path: String, done: Boolean, onOpen: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            Text(path, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (done) Icon(Icons.Rounded.CheckCircle, "Done", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
+        else TextButton(onClick = onOpen) { Text("Open") }
+    }
+}
+
+@Composable private fun CreditsPage() {
+    val credits = listOf(
+        "DuoLauncher" to "jakesgoodapps (github.com/jakesgoodapps/DuoLauncher) · MIT · Folio’s starting codebase: iPhone Duo-style Home layouts for both screens, widgets, folders, work profile, wallpapers and Discover",
+        "iphone-duo" to "chuspeeism · MIT · fold blur and darkening model",
+        "iPhone Duo on Galaxy Z Fold 8 demo" to "u/moomanjohnny · screenshot + shader idea (no code)",
+        "QuickLaunch" to "AhmedTheGeek · Spotlight ideas (no code)",
+        "Velox" to "Phillip Tennen · app panels idea",
+        "Activator" to "Ryan Petrich · gestures and events idea",
+        "Axon" to "Nepeta · notification app row idea",
+        "Velvet" to "NoisyFlake & HiMyNameisUbik · tinted notifications idea",
+        "ColorFlow" to "David Goldman · album art colors idea",
+        "Harbor" to "Evan Swick · dock magnification idea",
+    )
+    SettingsCard("Thanks to") {
+        credits.forEach { (name, detail) ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Text(name)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+    Text("Tweak ideas were re-created from scratch; no tweak code is included. Apple, iPhone and Samsung are trademarks of their owners.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
 }
 
 @Composable private fun CustomizationDestination(icon: ImageVector, title: String, detail: String, tag: String, onClick: () -> Unit) {

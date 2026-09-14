@@ -782,7 +782,7 @@ fun LauncherScreen(
                     sheet = ""; widgetPackage = null; widgetExactTarget = false
                 }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                     properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
-                    containerColor = MaterialTheme.colorScheme.surface) {
+                    containerColor = MaterialTheme.colorScheme.surface, fullScreen = sheet.startsWith("settings")) {
                     ModalDialogBackHandler {
                         if ((sheet == "settings" || sheet == "settings:wallpaper") &&
                             activeCustomizationPage != CustomizationPage.OVERVIEW) {

@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
         if (usesSystemWallpaper(this)) setTheme(R.style.Theme_Duo_Wallpaper)
         super.onCreate(savedInstanceState)
         setupExperience = SetupExperience(this)
+        // USER_PRESENT is a protected system broadcast delivered to runtime receivers.
+        androidx.core.content.ContextCompat.registerReceiver(this, unlockReceiver, android.content.IntentFilter(Intent.ACTION_USER_PRESENT),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         showFirstRun.value = setupExperience.entryDecision(SetupExperience.hadLauncherState(this)) ==
             SetupEntryDecision.SHOW
         returningFromShadeSettings = savedInstanceState?.getBoolean(SHADE_SETTINGS_PENDING) == true
@@ -112,7 +115,7 @@ class MainActivity : ComponentActivity() {
                     else show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 }
             }
-            val overlayOpen = topPanel.value != null || spotlightVisible.value || LauncherSheetsOpen.intValue > 0
+            val overlayOpen = topPanel.value != null || spotlightVisible.value || LauncherSheetsOpen.intValue > 0 || lockCoverVisible.value
             val overlayProgress by androidx.compose.animation.core.animateFloatAsState(if (overlayOpen) 1f else 0f, OverlaySpring, label = "overlay")
             val backdropBlurPx = with(androidx.compose.ui.platform.LocalDensity.current) { (state.panelBlur * 32).dp.toPx() }
             val backdropBlur = androidx.compose.runtime.remember(backdropBlurPx) {
@@ -161,6 +164,7 @@ class MainActivity : ComponentActivity() {
                     onShadeSetup = ::showShadeSetup)
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
+                LockCover(lockCoverVisible.value && state.lockCover) { lockCoverVisible.value = false }
                 if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value
                     ?.takeUnless { it is IslandActivity.Call && "CALL" in state.islandEventsOff }, state.islandEventsOff) {
                     IslandListenerService.open(this@MainActivity, it)
@@ -197,6 +201,7 @@ class MainActivity : ComponentActivity() {
         widgets.host.stopListening(); super.onStop()
     }
     override fun onDestroy() {
+        runCatching { unregisterReceiver(unlockReceiver) }
         recreatingShadeSetup = isChangingConfigurations
         shadeSetupDialog?.dismiss()
         if (!isChangingConfigurations) releaseShadeSetupOwnership()
@@ -211,6 +216,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         FolioForeground.visible.value = true
         FolioActions.home = java.lang.ref.WeakReference(this)
+        // Unlock arrived just before Home resumed: show the cover now.
+        if (unlockedAt > 0 && android.os.SystemClock.uptimeMillis() - unlockedAt < 2_000 && model.state.value.lockCover) lockCoverVisible.value = true
+        unlockedAt = 0L
         if (SpotlightRequest.consume()) openSpotlight()
         FolioActions.pendingPanel?.let { FolioActions.pendingPanel = null; showPanel(it) }
         if (returningFromShadeSettings) {
@@ -231,6 +239,16 @@ class MainActivity : ComponentActivity() {
     /** Folio's own iOS-style panels on Home; the Android shade when that setting is off. */
     internal val topPanel = androidx.compose.runtime.mutableStateOf<ShadePanel?>(null)
     internal val spotlightVisible = androidx.compose.runtime.mutableStateOf(false)
+    /** Lock Cover: shown when the phone is unlocked straight to Home. */
+    private val lockCoverVisible = androidx.compose.runtime.mutableStateOf(false)
+    private var unlockedAt = 0L
+    private val unlockReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            if (!model.state.value.lockCover) return
+            unlockedAt = android.os.SystemClock.uptimeMillis()
+            if (FolioForeground.visible.value) lockCoverVisible.value = true
+        }
+    }
     /** Opens Spotlight, Notification Center or Control Center (Folio's own panels when enabled). */
     internal fun showPanel(panel: ShadePanel) { if (panel == ShadePanel.SEARCH) openSpotlight() else openSystemShade(panel) }
 

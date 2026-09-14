@@ -93,13 +93,25 @@ internal fun rememberSetupSteps(isDefaultHome: Boolean, onMakeDefault: () -> Uni
 }
 
 /** Samsung's "Side button › Press and hold" screen, when this phone has it. */
-private fun sideKeySettings(context: Context): Intent? =
+internal fun sideKeySettings(context: Context): Intent? =
     Intent("com.samsung.android.intent.action.SIDE_KEY_LONG_PRESS_SETTINGS")
         .takeIf { it.resolveActivity(context.packageManager) != null }
 
 /** Samsung stores the side key hold action as a global setting; 2 is the digital assistant. */
-private fun sideKeyHoldIsAssistant(context: Context) =
+internal fun sideKeyHoldIsAssistant(context: Context) =
     runCatching { Settings.Global.getInt(context.contentResolver, "function_key_config_longpress_type") }.getOrNull() == 2
+
+/** Samsung's "Side button › Double press" screen, when this phone has it. */
+internal fun sideKeyDoublePressSettings(context: Context): Intent? =
+    Intent("com.samsung.android.intent.action.SIDE_KEY_DOUBLE_PRESS_SETTINGS")
+        .takeIf { it.resolveActivity(context.packageManager) != null }
+
+/** Whether Samsung's double press opens Google Wallet (its settings name the app it launches). */
+internal fun sideKeyDoublePressIsWallet(context: Context): Boolean = runCatching {
+    val r = context.contentResolver
+    listOf("function_key_config_doublepress_value", "function_key_config_doublepress_intent")
+        .any { Settings.Global.getString(r, it)?.contains("com.google.android.apps.walletnfcrel") == true }
+}.getOrDefault(false)
 
 private fun granted(context: Context, permission: String) =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED

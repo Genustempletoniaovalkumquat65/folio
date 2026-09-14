@@ -1,6 +1,6 @@
 # Third-party notices
 
-Folio (derived from Duo Launcher) uses the MIT license in LICENSE. Dependencies retain their own licenses. The app includes this notice and the Apache 2.0 license text under `assets/licenses/`.
+Folio is derived from [Duo Launcher](https://github.com/jakesgoodapps/DuoLauncher) by [jakesgoodapps](https://github.com/jakesgoodapps) (MIT, commit `f1bc0f1`) and uses the MIT license in LICENSE. Dependencies retain their own licenses. The app includes this notice and the Apache 2.0 license text under `assets/licenses/`.
 
 | Component family | Source | License |
 | --- | --- | --- |
