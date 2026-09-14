@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.sp
@@ -31,7 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -46,6 +47,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
     onShowWelcome: () -> Unit = {},
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
+    var tweakId by rememberSaveable { mutableStateOf("") }
     val title = when (page) {
         CustomizationPage.OVERVIEW -> "Folio"
         CustomizationPage.SETUP -> "Set up Folio"
@@ -59,6 +61,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.SIDE_KEY -> "Side Key"
         CustomizationPage.LOCK -> "Lock Cover"
         CustomizationPage.CREDITS -> "Credits"
+        CustomizationPage.TWEAKS -> "Tweaks"
+        CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.name ?: "Tweak"
+        CustomizationPage.ADVANCED -> "Advanced"
     }
     val bodyScroll = rememberScrollState()
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
@@ -66,10 +71,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         // iOS navigation bar: "‹ Folio" back on sub-pages, Done on the right, large title below.
         Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
             if (page != CustomizationPage.OVERVIEW) Row(Modifier.align(Alignment.CenterStart).clip(RoundedCornerShape(10.dp))
-                .clickable { onPage(CustomizationPage.OVERVIEW) }.padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
+                .clickable { onPage(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else CustomizationPage.OVERVIEW) }.padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(28.dp))
-                Text(stringResource(R.string.folio), color = IosBlue, fontSize = 17.sp)
+                Text(if (page == CustomizationPage.TWEAK) "Tweaks" else stringResource(R.string.folio), color = IosBlue, fontSize = 17.sp)
             }
             Text(stringResource(R.string.done), color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
@@ -110,11 +115,18 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold", "customization-fold") { onPage(CustomizationPage.FOLD) }
                     }
                     SheetGroup {
+                        TweakRow(Icons.Rounded.AutoAwesome, 0xFFBF5AF2, "Tweaks", "customization-tweaks",
+                            "${TweakFeatures.count { it.get(state) }} on") { onPage(CustomizationPage.TWEAKS) }
+                    }
+                    SheetGroup {
                         TweakRow(Icons.Rounded.Checklist, 0xFF30D158, "Setup Checklist", if (setupLeft == 0) "customization-setup-all" else "customization-setup",
                             if (setupLeft > 0) "$setupLeft left" else null) { onPage(CustomizationPage.SETUP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup") { onPage(CustomizationPage.BACKUP) }
                         MenuDivider()
+                        TweakRow(Icons.Rounded.Settings, 0xFF8E8E93, "Advanced", "customization-advanced") { onPage(CustomizationPage.ADVANCED) }
+                    }
+                    SheetGroup {
                         TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help") { onPage(CustomizationPage.HELP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding") { onClose(); onShowWelcome() }
@@ -204,9 +216,6 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         CustomizationSlider("Background blur", "${(state.panelBlur * 100).toInt()}%", state.panelBlur, 0f..1f) { model.setPanelBlur(it) }
                         SettingsSwitch(stringResource(R.string.big_clock_in_notification_center), state.notificationClock, model::setNotificationClock, "notification-clock-switch")
                         SettingsSwitch(stringResource(R.string.stack_notifications_by_app), state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
-                        SettingsSwitch(stringResource(R.string.tint_notifications_with_app_colors), state.tintNotifications, model::setTintNotifications, "tint-notifications-switch")
-                        SettingsSwitch(stringResource(R.string.tint_music_with_album_art), state.tintMedia, model::setTintMedia, "tint-media-switch")
-                        SettingsSwitch(stringResource(R.string.app_icons_row_above_notifications), state.notificationAppRow, model::setNotificationAppRow, "notification-app-row-switch")
                         SettingsSwitch(stringResource(R.string.unfolded_clock_beside_notifications), state.ncSplit, model::setNcSplit, "notification-split-switch")
                         Text(stringResource(R.string.control_center_size), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -379,8 +388,6 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     SettingsCard(stringResource(R.string.side_rail)) {
                         SettingsSwitch(stringResource(R.string.left_handed_layout_rail_on_the_left), state.leftHanded, model::setLeftHanded, "left-handed-switch")
                         SettingsSwitch(stringResource(R.string.show_app_names), state.labels, model::setLabels, "label-switch")
-                        SettingsSwitch(stringResource(R.string.magnify_dock_icons_under_your_finger), state.dockMagnify, model::setDockMagnify, "dock-magnify-switch")
-                        SettingsSwitch(stringResource(R.string.swipe_up_on_an_app_for_its_quick_panel), state.appPanels, model::setAppPanels, "app-panels-switch")
                         CustomizationSlider("Frost", "${(st.railGlass * 100).toInt()}%", st.railGlass, 0f..0.8f) {
                             model.setStatusStyle(st.copy(railGlass = it))
                         }
@@ -498,8 +505,29 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         onAddWidget = { onAddWidget(homePage) },
                         onShadeSetup = onShadeSetup,
                     )
+                }
+                CustomizationPage.ADVANCED -> {
+                    SettingsCard("Safe Mode") {
+                        Text(if (SafeMode.active) "Folio is running in Safe Mode: optional features are paused for this session."
+                            else "If Folio closes unexpectedly twice right after starting, it starts in Safe Mode with optional features paused. Your settings are never changed.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     CrashReportsCard()
                 }
+                CustomizationPage.TWEAKS -> {
+                    Text("Features inspired by iOS jailbreak tweaks, re-created for Folio. Each can be turned on or off, or set per screen.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+                    SheetGroup {
+                        TweakFeatures.forEachIndexed { index, tweak ->
+                            if (index > 0) MenuDivider()
+                            TweakRow(tweak.icon, tweak.color, tweak.name, "tweak-${tweak.id}", if (tweak.get(state)) "On" else "Off") {
+                                tweakId = tweak.id; onPage(CustomizationPage.TWEAK)
+                            }
+                        }
+                    }
+                }
+                CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.let { tweak -> TweakPage(tweak, state, model) }
+                    ?: LaunchedEffect(Unit) { onPage(CustomizationPage.TWEAKS) }
             }
         }
     }
@@ -611,6 +639,36 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
         }
         if (done) Icon(Icons.Rounded.CheckCircle, "Done", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
         else TextButton(onClick = onOpen) { Text(stringResource(R.string.open)) }
+    }
+}
+
+/** Tweak preference page: main switch first, per-screen overrides (dimmed when off), credit, reset. */
+@Composable private fun TweakPage(tweak: TweakFeature, state: LauncherState, model: LauncherModel) {
+    val on = tweak.get(state)
+    SettingsCard(tweak.name) {
+        SettingsSwitch("Enabled", on, { tweak.set(model, it) }, "tweak-enabled-${tweak.id}")
+        Text(tweak.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    SettingsCard("Use On") {
+        Column(Modifier.alpha(if (on) 1f else .4f)) {
+            FolioScreen.entries.forEach { screen ->
+                val value = FeatureScopes.value(state.featureScopes, tweak.id, screen)
+                Text(screen.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ScopeValue.entries.forEach { option ->
+                        IosChip(selected = value == option, onClick = { if (on) model.setFeatureScope(tweak.id, screen, option) },
+                            label = { Text(option.label) }, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        Text("Default follows Enabled. On or Off applies only to that screen.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    SettingsCard("About") {
+        Text("Inspired by ${tweak.inspiredBy}. Re-created from scratch; no tweak code is included.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = { model.resetTweak(tweak) }) { Text("Reset ${tweak.name}") }
     }
 }
 

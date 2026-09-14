@@ -27,7 +27,7 @@
         <intent><action android:name="com.novalauncher.THEME" /></intent>
         <intent><action android:name="com.teslacoilsw.launcher.THEME" /></intent>
     </queries>
-    <application android:label="Folio" android:icon="@drawable/ic_launcher"
+    <application android:label="Folio" android:icon="@mipmap/ic_launcher"
         android:name=".DuoApplication"
         android:theme="@style/Theme.Duo" android:allowBackup="false" android:supportsRtl="true">
         <property android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED" android:value="true" />

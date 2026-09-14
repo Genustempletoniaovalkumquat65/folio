@@ -18,8 +18,10 @@ internal object CrashLog {
     fun install(context: Context) {
         val app = context.applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
+        SafeMode.onStart(app)
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching { write(app, thread, error) }
+            runCatching { SafeMode.onCrash(app) }
             previous?.uncaughtException(thread, error)
         }
     }
@@ -55,4 +57,45 @@ internal object CrashLog {
     fun shareIntent(file: File): Intent = Intent.createChooser(
         Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, "Folio crash report")
             .putExtra(Intent.EXTRA_TEXT, file.readText().take(60_000)), "Share crash report")
+}
+
+/**
+ * Jailbreak-style Safe Mode: if Folio crashes twice within 30 seconds of starting, the next start pauses optional
+ * features (without changing any settings) and asks whether to continue safely or restart normally.
+ */
+internal object SafeMode {
+    private const val PREFS = "safe_mode"
+    private const val QUICK_CRASHES = "quickCrashes"
+    private const val WINDOW_MS = 30_000L
+    private var startedAt = 0L
+    @Volatile var active = false
+        private set
+
+    fun onStart(context: Context) {
+        startedAt = android.os.SystemClock.elapsedRealtime()
+        active = context.getSharedPreferences(PREFS, 0).getInt(QUICK_CRASHES, 0) >= 2
+    }
+
+    fun onCrash(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, 0)
+        val quick = android.os.SystemClock.elapsedRealtime() - startedAt < WINDOW_MS
+        prefs.edit().putInt(QUICK_CRASHES, if (quick) prefs.getInt(QUICK_CRASHES, 0) + 1 else 1).commit()
+    }
+
+    /** Folio ran a while without crashing: forget earlier quick crashes (called from Home). */
+    fun markStable(context: Context) {
+        if (android.os.SystemClock.elapsedRealtime() - startedAt < WINDOW_MS) return
+        context.getSharedPreferences(PREFS, 0).edit().remove(QUICK_CRASHES).apply()
+    }
+
+    fun exit(context: Context) {
+        context.getSharedPreferences(PREFS, 0).edit().remove(QUICK_CRASHES).commit()
+        active = false
+    }
+
+    /** Settings as they apply while in Safe Mode; saved settings are untouched. */
+    fun effective(state: LauncherState): LauncherState = if (!active) state else state.copy(
+        appPanels = false, dockMagnify = false, tintNotifications = false, tintMedia = false, triggerActions = emptyMap(),
+        foldEffect = false, lockCover = false, islandEverywhere = false, dockEverywhere = false, widgetStacks = state.widgetStacks,
+        stackRotate = false, notificationAppRow = false)
 }

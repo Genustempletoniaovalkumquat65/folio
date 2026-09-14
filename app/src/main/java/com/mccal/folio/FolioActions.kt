@@ -42,6 +42,7 @@ internal object FolioActions {
     }.getOrDefault(FolioAction.NONE)
 
     fun onTrigger(context: Context, trigger: FolioTrigger) {
+        if (SafeMode.active) return
         val action = actionFor(context, trigger)
         if (action != FolioAction.NONE) run(context.applicationContext, action)
     }

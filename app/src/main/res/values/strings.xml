@@ -45,9 +45,6 @@
     <string name="panels">Panels</string>
     <string name="big_clock_in_notification_center">Big clock in Notification Center</string>
     <string name="stack_notifications_by_app">Stack notifications by app</string>
-    <string name="tint_notifications_with_app_colors">Tint notifications with app colors</string>
-    <string name="tint_music_with_album_art">Tint music with album art</string>
-    <string name="app_icons_row_above_notifications">App icons row above notifications</string>
     <string name="unfolded_clock_beside_notifications">Unfolded: clock beside notifications</string>
     <string name="control_center_size">Control Center size</string>
     <string name="unfolded_control_center_in_the_middle">Unfolded: Control Center in the middle</string>
@@ -83,8 +80,6 @@
     <string name="side_rail">Side rail</string>
     <string name="left_handed_layout_rail_on_the_left">Left-handed layout (rail on the left)</string>
     <string name="show_app_names">Show app names</string>
-    <string name="magnify_dock_icons_under_your_finger">Magnify dock icons under your finger</string>
-    <string name="swipe_up_on_an_app_for_its_quick_panel">Swipe up on an app for its quick panel</string>
     <string name="status">Status</string>
     <string name="show_status_in_the_rail">Show status in the rail</string>
     <string name="icon_style">Icon style</string>

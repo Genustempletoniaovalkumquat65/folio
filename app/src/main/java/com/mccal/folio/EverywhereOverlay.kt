@@ -145,7 +145,7 @@ internal class EverywhereOverlay(private val service: AccessibilityService) {
     }.getOrDefault(Settings(false, false, false, emptyList()))
 
     private fun sync() {
-        val s = settings.value
+        val s = settings.value.let { if (SafeMode.active) it.copy(dockEverywhere = false, islandEverywhere = false) else it }
         val home = FolioForeground.visible.value
         if (s.dockEverywhere && !home) addHandle(s.leftHanded) else { removeHandle(); removeDock() }
         val content = islandContent.value

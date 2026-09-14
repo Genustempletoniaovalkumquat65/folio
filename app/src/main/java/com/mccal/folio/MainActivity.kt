@@ -104,7 +104,18 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
         intent.removeExtra("duo_destination")
         setContent {
-            val state = model.state.collectAsStateWithLifecycle().value
+            val savedState = model.state.collectAsStateWithLifecycle().value
+            val safeMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(SafeMode.active) }
+            val state = if (safeMode.value) SafeMode.effective(savedState) else savedState
+            androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(31_000); SafeMode.markStable(this@MainActivity) }
+            val safeAcknowledged = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            if (safeMode.value && !safeAcknowledged.value) androidx.compose.material3.AlertDialog(onDismissRequest = {},
+                title = { androidx.compose.material3.Text("Folio Started in Safe Mode") },
+                text = { androidx.compose.material3.Text("Folio closed unexpectedly twice, so optional features are paused: app panels, Actions, the fold animation, Lock Cover, the island and dock over other apps, and tinting. Your settings haven’t changed.") },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { SafeMode.exit(this@MainActivity); safeMode.value = false }) {
+                    androidx.compose.material3.Text("Restart Normally") } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { safeAcknowledged.value = true }) {
+                    androidx.compose.material3.Text("Continue in Safe Mode") } })
             val deviceStatus = status.state.collectAsStateWithLifecycle().value
             // Folio shows its own status in the rail, so hide Android's status bar on Home (it
             // stays in apps, and a swipe from the very top edge reveals it briefly).
@@ -142,7 +153,12 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperTone provides wallpaperTone,
                 LocalReduceMotion provides reduceMotion,
-                LocalTintOptions provides TintOptions(state.tintNotifications, state.tintMedia, state.notificationAppRow),
+                LocalTintOptions provides androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.let { w ->
+                    val screen = screenFor(w >= 600)
+                    TintOptions(FeatureScopes.on(state.featureScopes, "tintNotifications", state.tintNotifications, screen),
+                        FeatureScopes.on(state.featureScopes, "tintMedia", state.tintMedia, screen),
+                        FeatureScopes.on(state.featureScopes, "notificationAppRow", state.notificationAppRow, screen))
+                },
                 androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
                 LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
                 LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
