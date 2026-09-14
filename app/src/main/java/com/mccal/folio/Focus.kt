@@ -191,14 +191,25 @@ internal object FocusScheduler {
         val modes = live?.state?.value?.focusModes ?: focusModesFromJson(json.optJSONArray("focusModes"))
         val active = live?.state?.value?.activeFocus ?: json.optString("activeFocus").takeIf { it.isNotEmpty() }
         val wanted = FocusSchedules.activeAt(modes, active, local(now), local(since))
-        if (wanted != active) {
-            if (live != null) live.setFocus(wanted)
-            else {
-                prefs.edit().putString(SettingKeys.STATE, json.put("activeFocus", wanted ?: "").toString()).apply()
-                FocusController.apply(context, modes, modes.firstOrNull { it.id == wanted })
-            }
-        }
+        if (wanted != active) setActive(context, wanted)
         schedule(context, modes, now)
+    }
+
+    /** Turns a Focus on (or all off) from anywhere: through Home when it's running, otherwise straight to the saved state. */
+    fun setActive(context: android.content.Context, id: String?) {
+        FolioSettingsBridge.liveModel?.get()?.let { it.setFocus(id); return }
+        val prefs = context.getSharedPreferences(SettingKeys.PREFS, 0)
+        val json = runCatching { org.json.JSONObject(prefs.getString(SettingKeys.STATE, null) ?: return) }.getOrNull() ?: return
+        val modes = focusModesFromJson(json.optJSONArray("focusModes"))
+        prefs.edit().putString(SettingKeys.STATE, json.put("activeFocus", id ?: "").toString()).apply()
+        FocusController.apply(context, modes, modes.firstOrNull { it.id == id })
+    }
+
+    fun toggle(context: android.content.Context, id: String) {
+        val active = FolioSettingsBridge.liveModel?.get()?.state?.value?.activeFocus
+            ?: runCatching { org.json.JSONObject(context.getSharedPreferences(SettingKeys.PREFS, 0).getString(SettingKeys.STATE, "{}") ?: "{}")
+                .optString("activeFocus").takeIf { it.isNotEmpty() } }.getOrNull()
+        setActive(context, if (active == id) null else id)
     }
 
     fun schedule(context: android.content.Context, modes: List<FocusMode>, now: java.time.Instant = java.time.Instant.now()) {
