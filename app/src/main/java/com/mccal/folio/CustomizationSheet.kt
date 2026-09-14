@@ -448,7 +448,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             if (on && !IslandListenerService.hasAccess(islandContext))
                                 runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }, "island-switch")
-                        if (state.island && state.verticalStatus) SettingsSwitch("Live Activities in the Side Rail", state.railActivities, model::setRailActivities, "rail-activities-switch")
+                        if (state.island && state.verticalStatus) SettingsSwitch("Live Activities Under the Status", state.railActivities, model::setRailActivities, "rail-activities-switch")
                         if (state.island && !IslandListenerService.hasAccess(islandContext)) TextButton(onClick = {
                             runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }) { Text(stringResource(R.string.allow_notification_access)) }

@@ -108,8 +108,8 @@ data class LauncherState(
     val widgetStacks: Map<Int, List<Int>> = emptyMap(),
     /** Smart Rotate: stacks flip to their next widget every so often. */
     val stackRotate: Boolean = true,
-    /** iPhone Duo: live activities (music, calls, timers…) grow the side rail under the status instead of the camera island. */
-    val railActivities: Boolean = true,
+    /** Live activities (music, calls, timers…) under the status in the side rail instead of at the camera. Off: the island stays on the camera. */
+    val railActivities: Boolean = false,
     /** The page left of Home: "TODAY" (Folio's Today View) or "DISCOVER" (Google Discover). */
     val leftPage: String = "TODAY",
     val todayWidgets: List<TodayWidget> = DEFAULT_TODAY_WIDGETS,
@@ -731,7 +731,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("iconShape", s.iconShape.name).put("iconPack", s.iconPack ?: JSONObject.NULL).put("badgeStyle", s.badgeStyle.name).put("badgeColor", s.badgeColor.name).put("searchPill", s.searchPill).put("swipeDownSearch", s.swipeDownSearch).put("messagesApp", s.messagesApp ?: JSONObject.NULL).put(SettingKeys.MESSAGES_AVOID_DOUBLE, s.messagesAvoidDouble).put("ccControls", JSONArray(s.ccControls))
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
-            .put("stackRotate", s.stackRotate).put("railActivities", s.railActivities).put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
+            .put("stackRotate", s.stackRotate).put("railActivitiesUnderStatus", s.railActivities).put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
             .put("dimWallpaperDark", s.dimWallpaperDark).put("iconTintFromWallpaper", s.iconTintFromWallpaper)
             .put("tintNotifications", s.tintNotifications).put("tintMedia", s.tintMedia).put("dockMagnify", s.dockMagnify).put("appPanels", s.appPanels).put("haptics", s.haptics).put("lockCover", s.lockCover)
             .put("featureScopes", JSONObject().apply { s.featureScopes.forEach { (id, m) -> put(id, JSONObject(m as Map<*, *>)) } }).put("notificationAppRow", s.notificationAppRow)
@@ -911,7 +911,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 key.toIntOrNull()?.let { slot -> slot to (0 until ids.length()).map(ids::getInt) }
             }.toMap() } ?: emptyMap(),
             stackRotate = j.optBoolean("stackRotate", true),
-            railActivities = j.optBoolean("railActivities", true),
+            railActivities = j.optBoolean("railActivitiesUnderStatus", false),
             leftPage = j.optString("leftPage", "TODAY").takeIf { it == "TODAY" || it == "DISCOVER" } ?: "TODAY",
             todayUnfolded = j.optString("todayUnfolded", "PAGE").takeIf { it in setOf("PAGE", "BESIDE", "OFF") } ?: "PAGE",
             systemWallpaper = j.optBoolean("systemWallpaper", false),

@@ -119,6 +119,13 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
     val context = androidx.compose.ui.platform.LocalContext.current
     val wide = with(density) { windowWidth.toDp() } >= 600.dp
     val landscape = windowWidth > windowHeight
+    // Camera on a side edge (a screen turned sideways): the island stands upright around it, like iPhone Duo's.
+    val side = cameraSideEdge(cutout, windowWidth, windowHeight)
+    if (side != null && IslandPosition.load(context, wide, landscape) == null) {
+        VerticalIsland(content, cutout!!, side, windowWidth, windowHeight, onOpen = onOpen,
+            onMessage = { m -> eventVisible = null; IslandListenerService.openKey(context, m.key, m.packageName) })
+        return
+    }
     // A spot the user dragged the island to on this screen and orientation (needed on the inner screen, whose
     // under-display camera isn't reported by Android). Null = wrap the reported camera cutout.
     var custom by remember(wide, landscape) { mutableStateOf(IslandPosition.load(context, wide, landscape)) }
