@@ -253,10 +253,13 @@ internal fun islandGeometry(cutoutLtrb: IntArray?, windowWidthPx: Int, density: 
 /** The inside of the compact pill: glyph left of the camera, detail right of it. */
 @Composable
 internal fun IslandPillContent(content: IslandContent, camW: Dp, pillH: Dp) {
-    Row(Modifier.fillMaxSize().padding(horizontal = pillH * .22f), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { LeadingGlyph(content, pillH - 10.dp) }
+    // One inset on every side, like Apple's island: the leading glyph sits as far from the left end as from the
+    // top and bottom, and the trailing glyph mirrors it on the right.
+    val inset = (pillH * .17f).coerceIn(5.dp, 8.dp)
+    Row(Modifier.fillMaxSize().padding(horizontal = inset), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { LeadingGlyph(content, pillH - inset * 2) }
         Spacer(Modifier.width(camW + 6.dp))
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { TrailingGlyph(content, pillH - 12.dp) }
+        Box(Modifier.weight(1f).padding(end = inset * .5f), contentAlignment = Alignment.CenterEnd) { TrailingGlyph(content, pillH - inset * 2 - 4.dp) }
     }
 }
 
