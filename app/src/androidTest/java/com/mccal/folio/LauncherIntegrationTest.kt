@@ -203,7 +203,8 @@ class LauncherIntegrationTest {
         )
         row.assertIsDisplayed().performSemanticsAction(SemanticsActions.OnLongClick)
         compose.onNodeWithText("Add to dock").assertDoesNotExist()
-        compose.onNodeWithText("App info").assertIsDisplayed()
+        compose.onNodeWithText("More").performClick()
+        compose.onNodeWithText("App Info").assertIsDisplayed()
     }
 
     @Test fun defaultHomeActionRemainsAvailableAfterVisitingHomeLayout() {

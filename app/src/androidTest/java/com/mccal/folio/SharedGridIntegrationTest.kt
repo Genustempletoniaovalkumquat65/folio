@@ -139,11 +139,11 @@ class SharedGridIntegrationTest {
             compose.onNodeWithContentDescription("Home page 2").performClick()
             compose.waitForIdle()
             compose.onNodeWithTag("widget-slot-$slot").performTouchInput { longClick() }
-            compose.onNodeWithText("Widget options").assertIsDisplayed()
+            compose.onNodeWithText("Resize on Home").assertIsDisplayed()
             pressBack()
-            compose.onNodeWithText("Widget options").assertDoesNotExist()
+            compose.onNodeWithText("Resize on Home").assertDoesNotExist()
             compose.onNodeWithTag("widget-slot-$slot").performTouchInput { longClick() }
-            compose.onNodeWithText("Widget options").assertIsDisplayed()
+            compose.onNodeWithText("Resize on Home").assertIsDisplayed()
             compose.onNodeWithText("Resize on Home").performClick()
             compose.onNodeWithTag("widget-resize-preview-$slot").assertIsDisplayed()
             compose.onNodeWithTag("widget-resize-handle-$slot").performTouchInput {

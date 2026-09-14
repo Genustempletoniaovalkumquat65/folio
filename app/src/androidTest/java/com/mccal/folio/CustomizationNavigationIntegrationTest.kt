@@ -56,6 +56,7 @@ class CustomizationNavigationIntegrationTest {
         assertEquals(idsBefore, model().state.value.widgetPlacements.map { it.slot to it.id })
     }
 
+    @org.junit.Ignore("The app options sheet with a Move subpage was replaced by the iOS context menu (Edit Home Screen starts jiggle mode).")
     @Test fun appMoveSubpageBackDoesNotChangePlacement() {
         ready()
         val before = model().state.value.layout
@@ -79,7 +80,7 @@ class CustomizationNavigationIntegrationTest {
         val before = model().state.value.layout
         compose.openHomeCustomization()
         compose.onNodeWithTag("customization-help").performScrollTo().performClick()
-        compose.onNodeWithText("Customize any page").assertIsDisplayed()
+        compose.onNodeWithText("Edit Home").assertIsDisplayed()
         compose.onNodeWithTag("help-home-settings").assertExists()
         compose.onNodeWithTag("help-add-widget").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("help-shade-setup").performScrollTo().assertIsDisplayed()

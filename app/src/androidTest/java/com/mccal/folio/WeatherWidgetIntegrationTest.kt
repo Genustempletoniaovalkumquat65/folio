@@ -60,7 +60,7 @@ class WeatherWidgetIntegrationTest {
                 if (listOf(node.text, node.contentDescription).any { it?.toString() == text }) return true
                 return (0 until node.childCount).any { contains(node.getChild(it), text) }
             }
-            val settingsWindow = automation.windows.firstOrNull { contains(it.root, "Make it yours") || contains(it.root, "Home layout") }
+            val settingsWindow = automation.windows.firstOrNull { contains(it.root, "Make it yours") || contains(it.root, "Home Screen & Dock") }
             val scroller = settingsWindow?.let { window ->
                 fun scrollable(candidate: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
                     if (candidate == null) return null
@@ -145,7 +145,7 @@ class WeatherWidgetIntegrationTest {
     private fun addFromSettings(model: LauncherModel, provider: android.appwidget.AppWidgetProviderInfo,
         expectedIndex: Int): WidgetPlacement {
         val slot = model.nextWidgetSlot()
-        openNativeHomeCustomization(automation) { click("Customize launcher") }; click("Home layout"); clickAfterScrolling("Add widget to this page")
+        openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home Screen & Dock"); clickAfterScrolling("Add widget to this page")
         val pm = instrumentation.targetContext.packageManager
         typeSearch(pm.getApplicationLabel(pm.getApplicationInfo(provider.provider.packageName, 0)).toString())
         val label = provider.loadLabel(pm).toString()

@@ -102,7 +102,7 @@ class NativeWidgetLifecycleIntegrationTest {
                 if (listOf(node.text, node.contentDescription).any { it?.toString() == text }) return true
                 return (0 until node.childCount).any { contains(node.getChild(it), text) }
             }
-            val window = automation.windows.firstOrNull { contains(it.root, "Make it yours") || contains(it.root, "Home layout") }
+            val window = automation.windows.firstOrNull { contains(it.root, "Make it yours") || contains(it.root, "Home Screen & Dock") }
             fun scrollable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
                 if (node == null) return null
                 if (node.isVisibleToUser && node.isScrollable) return node
@@ -180,7 +180,7 @@ class NativeWidgetLifecycleIntegrationTest {
 
             tap("Home page 2")
             shell("appwidget revokebind --package com.mccal.folio --user 0")
-            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home layout")
+            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home Screen & Dock")
             clickAfterScrolling("Add widget to this page")
             typeWidgetSearch(provider.loadLabel(main.packageManager).toString())
             click(provider.loadLabel(main.packageManager).toString())
@@ -196,7 +196,7 @@ class NativeWidgetLifecycleIntegrationTest {
             assertFalse("Canceling system widget consent must delete its allocated ID",
                 bindCanceledId in widgets.host.appWidgetIds)
 
-            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home layout")
+            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home Screen & Dock")
             clickAfterScrolling("Add widget to this page")
             typeWidgetSearch(provider.loadLabel(main.packageManager).toString())
             click(provider.loadLabel(main.packageManager).toString())
@@ -236,7 +236,7 @@ class NativeWidgetLifecycleIntegrationTest {
             assertNull(model.placement(slot))
             assertFalse(canceledId in widgets.host.appWidgetIds)
 
-            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home layout")
+            openNativeHomeCustomization(automation) { click("Customize Folio") }; click("Home Screen & Dock")
             clickAfterScrolling("Add widget to this page")
             typeWidgetSearch(provider.loadLabel(main.packageManager).toString())
             click(provider.loadLabel(main.packageManager).toString())

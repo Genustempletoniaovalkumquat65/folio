@@ -164,8 +164,8 @@ class NativeAppearanceLocationIntegrationTest {
             assertEquals(packageName, automation.rootInActiveWindow?.packageName?.toString())
             assertNull("Location permission must be user initiated", find("Don’t allow"))
 
-            openNativeHomeCustomization(automation) { click("Customize launcher") }
-            click("Wallpaper & appearance")
+            openNativeHomeCustomization(automation) { click("Customize Folio") }
+            click("Wallpaper & Appearance")
             clickAfterScrolling("Sunrise / sunset")
             val launcherBefore = launcherPrefs.all.toMap()
             val appearanceBefore = appearancePrefs.all.toMap()
