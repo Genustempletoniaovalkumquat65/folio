@@ -31,6 +31,15 @@ val releaseStoreFile = releaseSigningValues["DUO_RELEASE_STORE_FILE"]?.let { con
     }
 }
 
+val folioVersion = "0.4.0"
+
+// Bundle the changelog so Folio can show What's New after an update.
+val bundleChangelog = tasks.register<Copy>("bundleChangelog") {
+    from(rootProject.file("CHANGELOG.md"))
+    into(layout.buildDirectory.dir("generated/changelog"))
+}
+tasks.named("preBuild") { dependsOn(bundleChangelog) }
+
 android {
     namespace = "com.mccal.folio"
     compileSdk = 36
@@ -38,8 +47,9 @@ android {
         applicationId = "com.mccal.folio"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Semantic version; see CHANGELOG.md. versionCode = MAJOR * 10000 + MINOR * 100 + PATCH.
+        versionName = folioVersion
+        versionCode = folioVersion.split('.').let { (major, minor, patch) -> major.toInt() * 10000 + minor.toInt() * 100 + patch.toInt() }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -71,7 +81,10 @@ android {
         }
     }
     // "fast" uses release's no-op tracing/diagnostic sources.
-    sourceSets { getByName("fast") { java.srcDir("src/release/java") } }
+    sourceSets {
+        getByName("fast") { java.srcDir("src/release/java") }
+        getByName("main") { assets.srcDir(layout.buildDirectory.dir("generated/changelog")) }
+    }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

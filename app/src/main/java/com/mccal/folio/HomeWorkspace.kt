@@ -386,7 +386,7 @@ internal fun SharedHomeGrid(
     // Stacked, or two columns side by side in a short, wide window (see HomeCellLayout).
     val cells = remember(geometry, pageWidgets.map { it.row to it.spanY }) { HomeCellLayout.forPage(geometry, pageWidgets.map { it.row to it.spanY }) }
     fun rowTop(row: Int) = cells.y(row)
-    BoxWithConstraints(Modifier.fillMaxWidth().height(cells.height(renderedRows).dp)) {
+    Box(Modifier.fillMaxWidth().height(cells.height(renderedRows).dp)) {
         val density = LocalDensity.current
         val cellWidth = cells.cellWidth.dp
         fun cellX(column: Int, row: Int) = cells.x(column, row).dp

@@ -131,6 +131,7 @@ fun LauncherScreen(
     onFinishFirstRun: () -> Unit = {},
     onShadeSetup: () -> Unit = {},
     onShowWelcome: () -> Unit = {},
+    onShowWhatsNew: () -> Unit = {},
 ) {
     var sheet by rememberSaveable { mutableStateOf("") }
     var dockSlot by rememberSaveable { mutableIntStateOf(0) }
@@ -862,6 +863,7 @@ fun LauncherScreen(
                             onAppearanceClear = onAppearanceClear,
                             onShadeSetup = { sheet = ""; onShadeSetup() },
                             onShowWelcome = { sheet = ""; onShowWelcome() },
+                            onShowWhatsNew = { sheet = ""; onShowWhatsNew() },
                             backgrounds = launcherActivity.backgrounds,
                             onWallpaperPreview = { sheet = ""; onWallpaperPreview() }, homePage = pager.currentPage.coerceIn(0, homePages - 1))
                         "widgetActions" -> model.placement(widgetSlot)?.let { placement ->

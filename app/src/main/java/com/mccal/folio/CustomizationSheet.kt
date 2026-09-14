@@ -48,6 +48,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
     onAppearanceClear: () -> Unit, backgrounds: LauncherBackgroundController, homePage: Int = 0,
     onShadeSetup: () -> Unit = {},
     onShowWelcome: () -> Unit = {},
+    onShowWhatsNew: () -> Unit = {},
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
     var tweakId by rememberSaveable { mutableStateOf("") }
@@ -135,6 +136,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     SheetGroup {
                         TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help", selected = selected == CustomizationPage.HELP, chevron = !sidebar) { onPage(CustomizationPage.HELP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.NewReleases, 0xFF30D158, "What's New", "customization-whats-new", "v" + WhatsNew.currentVersion(androidx.compose.ui.platform.LocalContext.current), chevron = !sidebar) { onClose(); onShowWhatsNew() }
                         MenuDivider()
                         TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding", chevron = !sidebar) { onClose(); onShowWelcome() }
                         MenuDivider()
@@ -1056,7 +1059,8 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
     }
     SettingsCard("Home Screen") {
         // The real page count: while a Focus hides pages, Home's own state is the filtered copy.
-        val pages = model.state.value.layout.pageCount
+        val real by model.state.collectAsState()
+        val pages = real.layout.pageCount
         Text("Show Pages", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IosChip(mode.pages == null, { model.updateFocusMode(mode.copy(pages = null)) }, label = { Text("All") })
@@ -1255,11 +1259,13 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
     SheetGroup { IosActionRow(stringResource(R.string.reset_this_layout), destructive = true, onClick = { model.setPreset(wide, LayoutPreset()) }) }
     // Per-page looks (after Atria): each page can have its own icon size and labels.
     SheetGroupLabel("Pages")
-    val realPages = model.state.value.layout.pageCount
+    // Real pages and styles (a Focus hiding pages renumbers the state Home draws), collected so the chips update.
+    val real by model.state.collectAsState()
+    val realPages = real.layout.pageCount
     SheetGroup {
         repeat(realPages) { page ->
             if (page > 0) MenuDivider()
-            val style = model.state.value.pageStyles[page] ?: PageStyle()
+            val style = real.pageStyles[page] ?: PageStyle()
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("page-style-$page"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Page ${page + 1}", color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))

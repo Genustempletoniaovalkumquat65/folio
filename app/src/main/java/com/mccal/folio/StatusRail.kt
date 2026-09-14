@@ -7,6 +7,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.AirplanemodeActive
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.material3.Text
@@ -129,29 +135,47 @@ fun StatusRail(
                 if (!compact && style.showDate) Text(now.format(dateFormatter), color = ink.copy(alpha = .7f), fontSize = detailSize,
                     fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
                 when (style.glyph) {
-                    StatusGlyph.RING, StatusGlyph.MINIMAL -> Canvas(Modifier.padding(top = 2.dp).size(visualSize)) {
-                        val w = size.width
-                        val center = Offset(w / 2, w / 2)
-                        // Battery: one thin full ring, filled clockwise from the top.
-                        val radius = w * .44f
-                        drawCircle(ink.copy(alpha = .22f), radius, center, style = Stroke(w * .06f))
-                        status.battery?.let { level ->
-                            drawArc(batteryColor, -90f, 360f * level / 100, false, Offset(center.x - radius, center.y - radius),
-                                Size(radius * 2, radius * 2), style = Stroke(width = w * .06f, cap = StrokeCap.Round))
+                    StatusGlyph.RING, StatusGlyph.MINIMAL -> Box(Modifier.padding(top = 2.dp).size(visualSize), contentAlignment = Alignment.Center) {
+                        // Inside the battery ring, like iPhone's status bar: Wi-Fi when joined; otherwise cellular bars,
+                        // an airplane in Airplane Mode, or a slowly sweeping fan while there's no connection at all.
+                        val offline = !status.wifiConnected && cellularVisual !is CellularSignalVisual.Available && !status.airplane
+                        // With Reduce Motion, a still fan with a slash instead.
+                        val sweep = if (offline && style.glyph == StatusGlyph.RING && !LocalReduceMotion.current) rememberInfiniteTransition(label = "no connection")
+                            .animateFloat(0f, 1f, infiniteRepeatable(tween(2_400, easing = LinearEasing)), label = "sweep").value else -1f
+                        Canvas(Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val center = Offset(w / 2, w / 2)
+                            // Battery: one thin full ring, filled clockwise from the top.
+                            val radius = w * .44f
+                            drawCircle(ink.copy(alpha = .22f), radius, center, style = Stroke(w * .06f))
+                            status.battery?.let { level ->
+                                drawArc(batteryColor, -90f, 360f * level / 100, false, Offset(center.x - radius, center.y - radius),
+                                    Size(radius * 2, radius * 2), style = Stroke(width = w * .06f, cap = StrokeCap.Round))
+                            }
+                            if (style.glyph == StatusGlyph.RING) when {
+                                wifiVisual is WifiSignalVisual.Connected -> {
+                                    drawWifiFan(w, wifiVisual, ink = ink)
+                                    // Cellular: a short row of dots under the fan.
+                                    for (i in 0..4) drawCircle(ink.copy(alpha = if (i < activeDots) 1f else .28f), w * .026f,
+                                        Offset(center.x + (i - 2) * w * .085f, w * .74f))
+                                }
+                                cellularVisual is CellularSignalVisual.Available -> drawCellBars(w, activeDots, ink)
+                                status.airplane -> Unit // the airplane icon draws on top
+                                else -> drawSearchingFan(w, sweep, ink)
+                            } else status.battery?.let { level ->
+                                // Minimal: nothing inside the ring but a small charge dot when charging.
+                                if (status.charging) drawCircle(batteryColor, w * .06f, center)
+                            }
                         }
-                        if (style.glyph == StatusGlyph.RING) {
-                            drawWifiFan(w, wifiVisual, ink = ink)
-                            // Cellular: a short row of dots under the fan.
-                            for (i in 0..4) drawCircle(ink.copy(alpha = if (i < activeDots) 1f else .28f), w * .026f,
-                                Offset(center.x + (i - 2) * w * .085f, w * .74f))
-                        } else status.battery?.let { level ->
-                            // Minimal: nothing inside the ring but a small charge dot when charging.
-                            if (status.charging) drawCircle(batteryColor, w * .06f, center)
-                        }
+                        if (style.glyph == StatusGlyph.RING && status.airplane && !status.wifiConnected)
+                            Icon(Icons.Rounded.AirplanemodeActive, null, tint = ink, modifier = Modifier.size(visualSize * .42f))
                     }
                     StatusGlyph.ICONS -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(top = 2.dp)) {
-                        Canvas(Modifier.size(width = 22.dp, height = 16.dp)) { drawWifiFan(size.width, wifiVisual, centered = true) }
+                        // Wi-Fi when joined (in Home's text color, so it reads on light wallpapers), an airplane in Airplane Mode;
+                        // otherwise nothing, and the cellular bars below say how you're connected.
+                        if (wifiVisual is WifiSignalVisual.Connected) Canvas(Modifier.size(width = 22.dp, height = 16.dp)) { drawWifiFan(size.width, wifiVisual, centered = true, ink = ink) }
+                        else if (status.airplane) Icon(Icons.Rounded.AirplanemodeActive, "Airplane Mode", tint = ink, modifier = Modifier.size(16.dp))
                         Canvas(Modifier.size(width = 22.dp, height = 14.dp)) {
                             val bar = size.width / 7
                             for (i in 0 until 5) {
@@ -204,6 +228,33 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Floa
 
 private val BatteryCharging = Color(0xFF6EE39A)
 private val BatteryLow = Color(0xFFFFB35C)
+
+/** Four rising cellular bars centered in the ring, lit up to [activeDots] of 5. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCellBars(w: Float, activeDots: Int, ink: Color) {
+    val bar = w * .075f
+    val gap = w * .045f
+    val left = w / 2 - (4 * bar + 3 * gap) / 2
+    val bottom = w * .66f
+    for (i in 0 until 4) {
+        val h = w * (.12f + i * .07f)
+        drawRoundRect(ink.copy(alpha = if (i < (activeDots * 4 + 4) / 5) 1f else .28f), Offset(left + i * (bar + gap), bottom - h), Size(bar, h),
+            androidx.compose.ui.geometry.CornerRadius(bar / 2))
+    }
+}
+
+/** No connection: a dim Wi-Fi fan whose arcs light one after another, like it's looking; with a slash when still ([phase] < 0). */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchingFan(w: Float, phase: Float, ink: Color) {
+    val cx = size.width / 2
+    val fanY = w * .6f
+    for (i in 1..3) {
+        val r = w * (.07f + i * .075f)
+        val lit = if (phase < 0f) 0f else (1f - kotlin.math.abs(phase * 4f - i)).coerceIn(0f, 1f)
+        drawArc(ink.copy(alpha = .22f + .5f * lit), 225f, 90f, false, Offset(cx - r, fanY - r), Size(r * 2, r * 2),
+            style = Stroke(w * .05f, cap = StrokeCap.Round))
+    }
+    drawCircle(ink.copy(alpha = .3f), w * .04f, Offset(cx, fanY))
+    if (phase < 0f) drawLine(ink.copy(alpha = .7f), Offset(cx - w * .16f, fanY - w * .26f), Offset(cx + w * .16f, fanY + w * .02f), w * .045f, StrokeCap.Round)
+}
 
 private fun signalAlpha(emphasis: SignalElementEmphasis): Float = when (emphasis) {
     SignalElementEmphasis.DIM -> .3f
