@@ -56,6 +56,10 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
     val expanded = LocalConfiguration.current.let { it.screenWidthDp >= EXPANDED_WIDTH_DP && it.screenHeightDp >= REGULAR_MIN_HEIGHT_DP }
     val view = LocalView.current
     val context = LocalContext.current
+    // Where the hinge is and which half moves, from the real fold and the display's rotation, so the effect is
+    // right in portrait, upside down and on a rotated cover, not just in the unfolded landscape it was tuned in.
+    val hinge = LocalHinge.current
+    val rotation = view.display?.rotation ?: android.view.Surface.ROTATION_0
     val shader = remember { if (Build.VERSION.SDK_INT >= 33) DuoShader() else null }
     val fold = remember { FoldTimeline(context) }
     fold.stayAwake = stayAwake
@@ -131,7 +135,8 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
     // while the recording below it captures the clean screen (a snapshot must never have blur baked in).
     Box(Modifier.fillMaxSize().then(
         if (shader != null) Modifier.graphicsLayer {
-            renderEffect = if (useBlurEffect && m > 0f && Build.VERSION.SDK_INT >= 33) shader.effect(size.width, size.height, (m * intensity).coerceIn(0f, 1.5f), cover = !fold.expanded) else null
+            renderEffect = if (useBlurEffect && m > 0f && Build.VERSION.SDK_INT >= 33) shader.effect(size.width, size.height, (m * intensity).coerceIn(0f, 1.5f),
+                cover = !fold.expanded, geometry = foldGeometry(rotation, hinge, size.width, size.height)) else null
         } else Modifier.drawWithContent {
             drawContent()
             if (useBlurEffect && m > 0f) {
@@ -146,7 +151,9 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
                 contentLayer.record { this@drawWithContent.drawContent() }
                 drawLayer(contentLayer)
             } else Modifier)) { content() }
-        if (snapshotMorph && morph < 1f) SnapshotMorph(fold.expanded, coverShot, innerShot) { morph }
+        // The still picture maps the cover 1:1 onto the inner half only in the natural orientation; rotated, the
+        // pictures don't line up, so the blur carries the transition on its own.
+        if (snapshotMorph && morph < 1f && rotation == android.view.Surface.ROTATION_0) SnapshotMorph(fold.expanded, coverShot, innerShot) { morph }
         // Whole screen dims as it folds, like the display powering down with the hinge.
         if (enabled && fold.closing) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             drawRect(Color.Black.copy(alpha = (m * FOLD_DIM).coerceIn(0f, FOLD_DIM)))
@@ -343,8 +350,11 @@ private fun easeInOutSine(t: Float): Float = (-(kotlin.math.cos(Math.PI * t) - 1
 private class DuoShader {
     private val shader = RuntimeShader(SOURCE)
 
-    fun effect(width: Float, height: Float, m: Float, cover: Boolean): androidx.compose.ui.graphics.RenderEffect {
+    fun effect(width: Float, height: Float, m: Float, cover: Boolean, geometry: FoldGeometry): androidx.compose.ui.graphics.RenderEffect {
         shader.setFloatUniform("size", width, height)
+        shader.setFloatUniform("axis", if (geometry.horizontal) 1f else 0f)
+        shader.setFloatUniform("hingePos", geometry.hingePx)
+        shader.setFloatUniform("side", if (geometry.movingAfterHinge) 1f else -1f)
         shader.setFloatUniform("m", m)
         // 72px on a 1600px-wide canvas in the recreation ≈ 4.5% of width; the cover uses a light version.
         shader.setFloatUniform("maxRadius", width * .045f)
@@ -359,6 +369,9 @@ private class DuoShader {
             uniform float m;
             uniform float maxRadius;
             uniform float cover;
+            uniform float axis;     // 0: the hinge runs top to bottom (compare x); 1: side to side (compare y)
+            uniform float hingePos; // the hinge along that axis
+            uniform float side;     // -1: the moving half (or the cover's hinge edge) is before it; +1: after it
 
             // 24-tap disk (3 rings) keeps large radii smooth.
             half4 blur(float2 p, float r) {
@@ -378,18 +391,27 @@ private class DuoShader {
             half4 main(float2 p) {
                 float mc = clamp(m, 0.0, 1.0);
                 float mm = mc * mc * (3.0 - 2.0 * mc) * max(1.0, m); // smoothstep (as in the recreation), scaled by intensity
+                float coord = axis < 0.5 ? p.x : p.y;
+                float extent = axis < 0.5 ? size.x : size.y;
                 if (cover > 0.5) {
-                    // Outer screen, as on iPhone Duo: the hinge is the cover's left edge, so blur and
-                    // darkness grow toward the free (right) edge. Same curves as the inner half.
-                    float eo = clamp(p.x / size.x, 0.0, 1.0);
+                    // Outer screen, as on iPhone Duo: blur and darkness grow away from the hinge edge
+                    // toward the free edge. Same curves as the inner half.
+                    float eo = clamp(side < 0.0 ? coord / extent : (extent - coord) / extent, 0.0, 1.0);
                     half4 co = blur(p, maxRadius * mm * pow(eo, 1.35));
                     float dO = clamp((eo - 0.2) / 0.8, 0.0, 1.0);
                     float ko = 1.0 - min(1.0, 2.0 * mm * pow(dO, 1.35));
                     return half4(co.rgb * ko, co.a);
                 }
-                float hinge = size.x * 0.5;
-                if (p.x >= hinge) return content.eval(p);
-                float e = clamp((hinge - p.x) / hinge, 0.0, 1.0); // 0 at hinge, 1 at outer edge
+                // Inner screen: the half with the cover behind it stays sharp; the moving half is blurred and
+                // darkened toward its outer edge.
+                float e;
+                if (side < 0.0) {
+                    if (coord >= hingePos) return content.eval(p);
+                    e = clamp((hingePos - coord) / max(hingePos, 1.0), 0.0, 1.0);
+                } else {
+                    if (coord <= hingePos) return content.eval(p);
+                    e = clamp((coord - hingePos) / max(extent - hingePos, 1.0), 0.0, 1.0);
+                }
                 half4 c = blur(p, maxRadius * mm * pow(e, 1.35));
                 float d = clamp((e - 0.2) / 0.8, 0.0, 1.0);
                 float k = 1.0 - min(1.0, 2.0 * mm * pow(d, 1.35));
@@ -427,3 +449,19 @@ private const val CLOSED_STALL_MS = 1_800L
 private const val CLOSED_DEG = 10f
 private const val LIT_TIMEOUT_MS = 1_200L
 private const val IDLE_POLL_MS = 50L
+
+/** The fold effect's layout: which way the hinge runs, where it is, and which side of it moves. */
+internal data class FoldGeometry(val horizontal: Boolean, val hingePx: Float, val movingAfterHinge: Boolean)
+
+/**
+ * In the natural orientation (unfolded landscape; cover portrait) the moving half, or the cover's hinge edge, is
+ * on the left. Display rotation moves that edge: 90° to the bottom, 180° to the right, 270° to the top. A real
+ * hinge from WindowManager gives the exact position; otherwise it's the middle.
+ */
+internal fun foldGeometry(rotation: Int, hinge: Hinge?, width: Float, height: Float): FoldGeometry {
+    val horizontal = rotation == android.view.Surface.ROTATION_90 || rotation == android.view.Surface.ROTATION_270
+    val after = rotation == android.view.Surface.ROTATION_90 || rotation == android.view.Surface.ROTATION_180
+    val middle = if (horizontal) height / 2f else width / 2f
+    val position = hinge?.takeIf { it.vertical != horizontal }?.let { (it.startPx + it.endPx) / 2f } ?: middle
+    return FoldGeometry(horizontal, position, after)
+}
