@@ -681,7 +681,11 @@ fun LauncherScreen(
                             if (contentHeight < 500.dp) 0f else 23f).coerceAtLeast(0f)
                     },
                 compact = contentHeight < 500.dp, iconSize = dockIconSize(geometry.iconSize).dp, style = state.statusStyle,
-                island = null)
+                // Live activities grow the rail under the status; the dock below moves with the measured height.
+                island = if (state.island && state.railActivities) ({
+                    RailLiveActivity(IslandListenerService.activity.collectAsState().value
+                        ?.takeUnless { it is IslandActivity.Call && "CALL" in state.islandEventsOff }, preset.dockWidth.dp, state.leftHanded)
+                }) else null)
             // Background and border without clipping, so Harbor-style magnified icons can grow past the rail.
             // Portrait unfolded (iPhone Duo): a horizontal dock bar centered along the bottom, above the page controls.
             val dockPitch = dockIconSize(geometry.iconSize) + 22f

@@ -262,11 +262,11 @@ internal fun describe(content: IslandContent): String = when (content) {
 }
 
 @Composable
-private fun LeadingGlyph(content: IslandContent, size: Dp) {
+internal fun LeadingGlyph(content: IslandContent, size: Dp) {
     when (content) {
         is IslandContent.Event -> when (val e = content.event) {
             is IslandEvent.Charging -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Bolt, null, tint = Green, modifier = Modifier.size(size * .8f))
+                Icon(Icons.Rounded.Bolt, null, tint = IslandGreen, modifier = Modifier.size(size * .8f))
                 Text(stringResource(R.string.charging), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             is IslandEvent.Silent -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -280,17 +280,17 @@ private fun LeadingGlyph(content: IslandContent, size: Dp) {
                 Spacer(Modifier.width(4.dp))
                 Text(stringResource(R.string.focus), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
-            is IslandEvent.Bluetooth -> Icon(Icons.Rounded.Headphones, null, tint = Blue, modifier = Modifier.size(size * .8f))
+            is IslandEvent.Bluetooth -> Icon(Icons.Rounded.Headphones, null, tint = IslandBlue, modifier = Modifier.size(size * .8f))
             is IslandEvent.Message -> MessageAvatar(e, size)
         }
         is IslandContent.Live -> when (val a = content.activity) {
             is IslandActivity.Call -> if (a.incoming) CallAvatar(a, size) else Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Call, null, tint = Green, modifier = Modifier.size(size * .7f))
+                Icon(Icons.Rounded.Call, null, tint = IslandGreen, modifier = Modifier.size(size * .7f))
                 Spacer(Modifier.width(4.dp))
-                Chronometer(remember(a.key) { a.since ?: System.currentTimeMillis() }, countDown = false, color = Green)
+                Chronometer(remember(a.key) { a.since ?: System.currentTimeMillis() }, countDown = false, color = IslandGreen)
             }
-            is IslandActivity.Timer -> CircleGlyph(Icons.Rounded.Timer, Orange, size)
-            is IslandActivity.Navigation -> CircleGlyph(Icons.Rounded.TurnRight, Blue, size)
+            is IslandActivity.Timer -> CircleGlyph(Icons.Rounded.Timer, IslandOrange, size)
+            is IslandActivity.Navigation -> CircleGlyph(Icons.Rounded.TurnRight, IslandBlue, size)
             else -> ((a as? IslandActivity.Media)?.art ?: a.icon)?.let { Image(it.asImageBitmap(), null, Modifier.size(size).clip(RoundedCornerShape(size * .28f)),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
         }
@@ -298,20 +298,20 @@ private fun LeadingGlyph(content: IslandContent, size: Dp) {
 }
 
 @Composable
-private fun TrailingGlyph(content: IslandContent, size: Dp) {
+internal fun TrailingGlyph(content: IslandContent, size: Dp) {
     when (content) {
         is IslandContent.Event -> when (val e = content.event) {
-            is IslandEvent.Charging -> Text("${e.level ?: ""}%", color = Green, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            is IslandEvent.Charging -> Text("${e.level ?: ""}%", color = IslandGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             is IslandEvent.Silent -> Text(if (e.on) "On" else "Off", color = if (e.on) Red else Color.White.copy(alpha = .7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             is IslandEvent.Focus -> Text(if (e.on) "On" else "Off", color = if (e.on) Purple else Color.White.copy(alpha = .7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             is IslandEvent.Bluetooth -> Text(e.name ?: "Connected", color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             is IslandEvent.Message -> e.appIcon?.let { Image(it.asImageBitmap(), null, Modifier.size(size * .8f).clip(RoundedCornerShape(size * .22f))) }
         }
         is IslandContent.Live -> when (val a = content.activity) {
-            is IslandActivity.Media -> Bars(a.playing, if (LocalTintOptions.current.media) rememberAccent(a.art)?.let { mixColor(it, Color.White, .25f) } ?: Green else Green)
+            is IslandActivity.Media -> Bars(a.playing, if (LocalTintOptions.current.media) rememberAccent(a.art)?.let { mixColor(it, Color.White, .25f) } ?: IslandGreen else IslandGreen)
             is IslandActivity.Progress -> Ring(a.fraction, size)
             is IslandActivity.Call -> Bars(playing = !a.incoming)
-            is IslandActivity.Timer -> Chronometer(a.base, a.countDown, Orange)
+            is IslandActivity.Timer -> Chronometer(a.base, a.countDown, IslandOrange)
             is IslandActivity.Navigation -> Text(a.subtitle ?: a.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -358,7 +358,7 @@ private fun MessageCardContent(message: IslandEvent.Message, replying: Boolean, 
 }
 
 @Composable
-private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
+internal fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpen)) {
@@ -378,8 +378,8 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
                 subtitle?.let { Text(it, color = Color.White.copy(alpha = .6f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
             when (activity) {
-                is IslandActivity.Call -> if (!activity.incoming) Chronometer(remember(activity.key) { activity.since ?: System.currentTimeMillis() }, false, Green, 20.sp)
-                is IslandActivity.Timer -> Chronometer(activity.base, activity.countDown, Orange, 20.sp)
+                is IslandActivity.Call -> if (!activity.incoming) Chronometer(remember(activity.key) { activity.since ?: System.currentTimeMillis() }, false, IslandGreen, 20.sp)
+                is IslandActivity.Timer -> Chronometer(activity.base, activity.countDown, IslandOrange, 20.sp)
                 else -> Unit
             }
         }
@@ -393,7 +393,7 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
             }
             is IslandActivity.Progress -> activity.fraction?.let { f ->
                 Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = .2f))) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(Green))
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(f).background(IslandGreen))
                 }
             }
             is IslandActivity.Call -> CallButtons(activity)
@@ -407,7 +407,7 @@ private fun ExpandedCardContent(activity: IslandActivity, onOpen: () -> Unit) {
 private fun CallAvatar(call: IslandActivity.Call, size: Dp) {
     val bitmap = call.avatar ?: call.icon
     if (bitmap != null) Image(bitmap.asImageBitmap(), null, Modifier.size(size).clip(CircleShape), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-    else CircleGlyph(Icons.Rounded.Call, Green, size)
+    else CircleGlyph(Icons.Rounded.Call, IslandGreen, size)
 }
 
 /** iPhone call controls: Decline/Accept while ringing; Mute, End and Speaker during the call. */
@@ -419,7 +419,7 @@ private fun CallButtons(call: IslandActivity.Call) {
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         if (call.incoming) {
             if (call.canDecline) CallButton(Icons.Rounded.CallEnd, "Decline", Red) { act(CallControls.Kind.DECLINE) }
-            if (call.canAnswer) CallButton(Icons.Rounded.Call, "Accept", Green) { act(CallControls.Kind.ANSWER) }
+            if (call.canAnswer) CallButton(Icons.Rounded.Call, "Accept", IslandGreen) { act(CallControls.Kind.ANSWER) }
         } else {
             if (call.canMute) CallButton(Icons.Rounded.MicOff, "Mute", Color.White.copy(alpha = .22f)) { act(CallControls.Kind.MUTE) }
             if (call.canHangUp) CallButton(Icons.Rounded.CallEnd, "End", Red) { act(CallControls.Kind.HANG_UP) }
@@ -440,14 +440,14 @@ private fun CallButton(icon: ImageVector, label: String, color: Color, onClick: 
 }
 
 @Composable
-private fun CircleGlyph(icon: ImageVector, color: Color, size: Dp) {
+internal fun CircleGlyph(icon: ImageVector, color: Color, size: Dp) {
     Box(Modifier.size(size).clip(CircleShape).background(color.copy(alpha = .22f)), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = color, modifier = Modifier.size(size * .62f))
     }
 }
 
 @Composable
-private fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
+internal fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
     val now by rememberSecondTick()
     val seconds = ((if (countDown) base - now else now - base) / 1000).coerceAtLeast(0)
     val text = if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
@@ -457,7 +457,7 @@ private fun Chronometer(base: Long, countDown: Boolean, color: Color, fontSize: 
 }
 
 @Composable
-private fun Bars(playing: Boolean, color: Color = Green) {
+internal fun Bars(playing: Boolean, color: Color = IslandGreen) {
     // No infinite animation while paused: a paused session must not redraw forever.
     val phase = if (playing) {
         val transition = rememberInfiniteTransition(label = "island-bars")
@@ -475,21 +475,21 @@ private fun Bars(playing: Boolean, color: Color = Green) {
 }
 
 @Composable
-private fun Ring(fraction: Float?, size: Dp) {
+internal fun Ring(fraction: Float?, size: Dp) {
     Canvas(Modifier.size(size)) {
         val stroke = this.size.width * .14f
         val arc = Size(this.size.width - stroke, this.size.height - stroke)
         val o = Offset(stroke / 2, stroke / 2)
         drawArc(Color.White.copy(alpha = .2f), 0f, 360f, false, o, arc, style = Stroke(stroke))
-        drawArc(Green, -90f, 360f * (fraction ?: .25f), false, o, arc, style = Stroke(stroke, cap = StrokeCap.Round))
+        drawArc(IslandGreen, -90f, 360f * (fraction ?: .25f), false, o, arc, style = Stroke(stroke, cap = StrokeCap.Round))
     }
 }
 
-private val Green = Color(0xFF30D158)
-private val Orange = Color(0xFFFF9F0A)
+internal val IslandGreen = Color(0xFF30D158)
+internal val IslandOrange = Color(0xFFFF9F0A)
 private val Red = Color(0xFFFF453A)
 private val Purple = Color(0xFF5E5CE6)
-private val Blue = Color(0xFF0A84FF)
+internal val IslandBlue = Color(0xFF0A84FF)
 
 private const val ISLAND_EDGE_GAP = 6f
 private const val ISLAND_CAMERA_MARGIN = 5f

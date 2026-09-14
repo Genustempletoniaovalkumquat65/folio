@@ -187,8 +187,10 @@ class MainActivity : ComponentActivity() {
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
                 LockCover(lockCoverVisible.value && state.lockCover) { lockCoverVisible.value = false }
+                // With live activities in the side rail, the camera island on Home keeps only its brief events.
                 if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value
-                    ?.takeUnless { it is IslandActivity.Call && "CALL" in state.islandEventsOff }, state.islandEventsOff) {
+                    ?.takeUnless { it is IslandActivity.Call && "CALL" in state.islandEventsOff }
+                    ?.takeUnless { state.railActivities && state.verticalStatus && !overlayOpen }, state.islandEventsOff) {
                     IslandListenerService.open(this@MainActivity, it)
                 }
                 TopPanels(topPanel.value, { overlayProgress }, deviceStatus, onClose = { topPanel.value = null },
