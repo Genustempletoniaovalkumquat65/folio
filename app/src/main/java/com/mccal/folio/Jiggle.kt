@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -64,7 +65,7 @@ internal val LocalJiggle = compositionLocalOf<State<Float>?> { null }
 
 @Composable
 internal fun ProvideJiggle(edit: HomeEditMode, content: @Composable () -> Unit) {
-    val clock = if (edit.active) {
+    val clock = if (edit.active && !LocalReduceMotion.current) {
         val transition = rememberInfiniteTransition(label = "jiggle")
         transition.animateFloat(0f, 1f, infiniteRepeatable(tween(280, easing = LinearEasing)), label = "jiggle phase")
     } else null
@@ -89,11 +90,11 @@ internal fun Modifier.jiggle(key: Any, amount: Float = 1f): Modifier {
 @Composable
 internal fun BoxScope.JiggleRemoveButton(label: String, onRemove: () -> Unit) {
     val haptic = LocalHapticFeedback.current
-    // 36dp touch target around a 22dp visual, centered on the corner.
-    Box(Modifier.align(Alignment.TopStart).offset((-13).dp, (-13).dp).size(36.dp)
+    // 44dp touch target (accessibility minimum) around a 22dp visual, centered on the corner.
+    Box(Modifier.align(Alignment.TopStart).offset((-11).dp, (-11).dp).size(44.dp)
         .clickable(role = Role.Button, onClickLabel = label, interactionSource = null, indication = null) {
             haptic.performHapticFeedback(HapticFeedbackType.ContextClick); onRemove()
-        }, contentAlignment = Alignment.Center) {
+        }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         Box(Modifier.size(22.dp).shadow(2.dp, CircleShape).background(Color(0xFFD1D1D6), CircleShape), contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.Remove, null, tint = Color(0xFF1C1C1E), modifier = Modifier.size(15.dp))
         }
@@ -124,6 +125,6 @@ internal fun HomeSearchPill(onClick: () -> Unit) {
         .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.Search, null, tint = ink.primary, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text("Search", color = ink.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.search), color = ink.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

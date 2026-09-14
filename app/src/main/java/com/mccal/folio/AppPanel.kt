@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.content.pm.LauncherApps
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -125,7 +126,7 @@ internal fun AppPanel(app: AppEntry, onDismiss: () -> Unit, onOpen: () -> Unit) 
                     Spacer(Modifier.width(10.dp))
                     Text(app.label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text("Open", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    Text(stringResource(R.string.open), color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(CircleShape).background(Color.White).clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 6.dp))
                 }
                 media?.let { m ->

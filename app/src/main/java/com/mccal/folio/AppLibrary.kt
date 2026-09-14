@@ -2,6 +2,7 @@
 
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -111,8 +112,8 @@ internal fun AppLibrary(
             }
             if (hasWork || hiddenCount > 0 || showHidden) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasWork) {
-                    FilterChip(selected = !showWork, onClick = { showWork = false }, label = { Text("Personal") })
-                    FilterChip(selected = showWork, onClick = { showWork = true }, label = { Text("Work") })
+                    FilterChip(selected = !showWork, onClick = { showWork = false }, label = { Text(stringResource(R.string.personal)) })
+                    FilterChip(selected = showWork, onClick = { showWork = true }, label = { Text(stringResource(R.string.work)) })
                 }
                 FilterChip(selected = showHidden, onClick = { showHidden = !showHidden }, label = { Text("Hidden ($hiddenCount)") },
                     leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp)) }, modifier = Modifier.testTag("hidden-apps-chip"))
@@ -142,7 +143,7 @@ internal fun AppLibrary(
                     Column(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (selectedProfile.quiet) "Work apps are paused" else "Work profile is unavailable")
                         if (selectedProfile.quiet) Button(onClick = { onTurnOnWork(selectedProfile.userSerial) },
-                            Modifier.padding(top = 10.dp).testTag("turn-on-work")) { Text("Turn on work apps") }
+                            Modifier.padding(top = 10.dp).testTag("turn-on-work")) { Text(stringResource(R.string.turn_on_work_apps)) }
                     }
                 }
                 if (!editing && query.isNotBlank()) item("web-search") {
@@ -154,7 +155,7 @@ internal fun AppLibrary(
                         item("category-header") {
                             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(category.title, color = ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { openCategory = null }) { Text("All categories") }
+                                TextButton(onClick = { openCategory = null }) { Text(stringResource(R.string.all_categories)) }
                             }
                         }
                         item("category-grid") {

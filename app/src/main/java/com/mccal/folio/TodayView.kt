@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,7 +72,7 @@ internal fun TodayView(state: LauncherState, widgets: WidgetController, modifier
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Search, null, tint = ink.secondary, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Search", color = ink.secondary, fontSize = 17.sp)
+                        Text(stringResource(R.string.search), color = ink.secondary, fontSize = 17.sp)
                     }
                     Column(Modifier.padding(start = 4.dp, top = 6.dp)) {
                         Text(today.format(DateTimeFormatter.ofPattern("EEEE")).uppercase(), color = Color(0xFFFF453A), fontSize = 13.sp,
@@ -93,16 +94,16 @@ internal fun TodayView(state: LauncherState, widgets: WidgetController, modifier
                             }
                         }
                     }
-                    if (state.todayWidgets.isEmpty()) Text("Add widgets for the things you check most.", color = LocalHomeInk.current.secondary,
+                    if (state.todayWidgets.isEmpty()) Text(stringResource(R.string.add_widgets_for_the_things_you_check_mos), color = LocalHomeInk.current.secondary,
                         fontSize = 15.sp, modifier = Modifier.padding(4.dp))
 
                     // Edit / Add / Done, like the bottom of iOS's Today View
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         if (edit.active) {
-                            JigglePill("Add Widget", Icons.Rounded.Add, description = "Add widget") { onAddWidget() }
+                            JigglePill(stringResource(R.string.add_widget_2), Icons.Rounded.Add, description = "Add widget") { onAddWidget() }
                             Spacer(Modifier.width(12.dp))
-                            JigglePill("Done", emphasized = true) { edit.stop() }
-                        } else JigglePill("Edit") { edit.start() }
+                            JigglePill(stringResource(R.string.done), emphasized = true) { edit.stop() }
+                        } else JigglePill(stringResource(R.string.edit)) { edit.start() }
                     }
                 }
             }
@@ -127,7 +128,7 @@ private fun TodaySuggestions(apps: List<AppEntry>, columns: Int, onLaunch: (AppE
     val ink = LocalHomeInk.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = if (ink.dark) .45f else .14f))
         .border(FolioGlass.edge, RoundedCornerShape(22.dp)).padding(horizontal = 10.dp, vertical = 12.dp)) {
-        Text("Suggestions", color = ink.secondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        Text(stringResource(R.string.suggestions), color = ink.secondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 6.dp, bottom = 8.dp))
         Row(Modifier.fillMaxWidth()) {
             apps.take(columns).forEach { app ->
@@ -152,7 +153,7 @@ private fun TodayWidgetTile(widget: TodayWidget, widgets: WidgetController, widt
             else {
                 val info = remember(widget.id) { runCatching { widgets.manager.getAppWidgetInfo(widget.id) }.getOrNull() }
                 if (info == null) Box(Modifier.fillMaxSize().background(Glass.copy(alpha = .2f)), contentAlignment = Alignment.Center) {
-                    Text("Widget unavailable", color = Color.White.copy(alpha = .8f), fontSize = 13.sp)
+                    Text(stringResource(R.string.widget_unavailable), color = Color.White.copy(alpha = .8f), fontSize = 13.sp)
                 } else key(widget.id) {
                     AndroidView(factory = { widgets.host.createView(it, widget.id, info) }, modifier = Modifier.fillMaxSize())
                 }

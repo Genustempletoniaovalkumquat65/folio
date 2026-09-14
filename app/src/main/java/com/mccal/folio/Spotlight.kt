@@ -2,6 +2,7 @@
 
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -217,7 +218,7 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                 Icon(Icons.Rounded.Search, null, tint = Color.White.copy(alpha = .75f), modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text("Search", color = Color.White.copy(alpha = .55f), fontSize = 18.sp)
+                    if (query.isEmpty()) Text(stringResource(R.string.search), color = Color.White.copy(alpha = .55f), fontSize = 18.sp)
                     BasicTextField(query, { query = it }, Modifier.fillMaxWidth().focusRequester(focus)
                         .onFocusChanged { fieldFocused = it.isFocused }.testTag("spotlight-field"),
                         singleLine = true, textStyle = TextStyle(color = Color.White, fontSize = 18.sp), cursorBrush = SolidColor(Color.White),
@@ -289,7 +290,7 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                         }
                     }
                     if (math == null && appHits.isEmpty() && contacts.isEmpty() && settingHits.isEmpty()) item("none") {
-                        Text("No results on this phone", color = Color.White.copy(alpha = .6f), fontSize = 13.sp,
+                        Text(stringResource(R.string.no_results_on_this_phone), color = Color.White.copy(alpha = .6f), fontSize = 13.sp,
                             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     }
                 }
@@ -347,7 +348,7 @@ private fun TopHit(app: AppEntry, onClick: () -> Unit) {
             Text(app.label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(if (app.profileLabel == "Personal") "Application" else "${app.profileLabel} app", color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
         }
-        Text("Open", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        Text(stringResource(R.string.open), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .18f)).padding(horizontal = 14.dp, vertical = 6.dp))
     }
 }

@@ -72,3 +72,13 @@ internal fun IosSlider(value: Float, onValueChange: (Float) -> Unit, valueRange:
 internal object NoHaptics : androidx.compose.ui.hapticfeedback.HapticFeedback {
     override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
 }
+
+/**
+ * Android's "Remove animations" (animator duration scale 0), treated like iOS Reduce Motion: no wiggling,
+ * no sliding pages, no fold blur. Read once per composition of the provider.
+ */
+internal val LocalReduceMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+internal fun reduceMotionEnabled(context: android.content.Context): Boolean =
+    runCatching { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }
+        .getOrDefault(1f) == 0f

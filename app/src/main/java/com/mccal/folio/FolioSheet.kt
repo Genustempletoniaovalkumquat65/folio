@@ -81,7 +81,8 @@ private fun FullScreenPage(onDismissRequest: () -> Unit, content: @Composable Co
                 }
             }
         }
-        val slide = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(1f) }
+        val reduceMotion = LocalReduceMotion.current
+        val slide = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (reduceMotion) 0f else 1f) }
         androidx.compose.runtime.LaunchedEffect(Unit) {
             slide.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 500f))
         }

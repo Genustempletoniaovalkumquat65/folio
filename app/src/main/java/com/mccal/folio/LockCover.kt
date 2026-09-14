@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.app.AlarmManager
 import android.content.Intent
 import android.provider.MediaStore
@@ -116,7 +117,7 @@ internal fun LockCover(visible: Boolean, onDismiss: () -> Unit) {
             }
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Swipe up to open", color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
+            Text(stringResource(R.string.swipe_up_to_open), color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
             Box(Modifier.padding(top = 6.dp).size(width = 134.dp, height = 5.dp).clip(CircleShape).background(Color.White))
         }
     }

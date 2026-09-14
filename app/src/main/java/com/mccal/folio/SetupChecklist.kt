@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -145,13 +146,13 @@ internal fun SetupChecklist(steps: List<SetupStep>) {
                             Text(step.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Spacer(Modifier.width(8.dp))
-                        if (step.done) Text("Done", style = MaterialTheme.typography.labelLarge, color = Color(0xFF30D158))
+                        if (step.done) Text(stringResource(R.string.done), style = MaterialTheme.typography.labelLarge, color = Color(0xFF30D158))
                         else FilledTonalButton(onClick = step.onAction, contentPadding = PaddingValues(horizontal = 14.dp)) { Text(step.action) }
                     }
                 }
             }
         }
-        Text("TIPS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(stringResource(R.string.tips), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {

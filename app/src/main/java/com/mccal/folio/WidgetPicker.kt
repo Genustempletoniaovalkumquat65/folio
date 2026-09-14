@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.appwidget.AppWidgetProviderInfo
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
@@ -229,7 +230,7 @@ internal fun VisualWidgetPicker(
         color = Color(0xFF111114).copy(alpha = .97f), contentColor = ink) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(horizontal = 18.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Widgets", color = ink, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.widgets), color = ink, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Box(Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = .14f)).clickable(onClickLabel = "Close", onClick = onBack),
                     contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, "Back", tint = ink, modifier = Modifier.size(20.dp)) }
             }
@@ -238,7 +239,7 @@ internal fun VisualWidgetPicker(
                 Icon(Icons.Rounded.Search, null, tint = secondary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text("Search Widgets", color = secondary, fontSize = 17.sp)
+                    if (query.isEmpty()) Text(stringResource(R.string.search_widgets), color = secondary, fontSize = 17.sp)
                     androidx.compose.foundation.text.BasicTextField(query, { query = it }, Modifier.fillMaxWidth().testTag("widget-catalog-search"),
                         singleLine = true, textStyle = androidx.compose.ui.text.TextStyle(color = ink, fontSize = 17.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(ink))
@@ -258,7 +259,7 @@ internal fun VisualWidgetPicker(
                     Text(if (selectedProfile.quiet) "${selectedProfile.label} apps are paused"
                         else "${selectedProfile.label} profile is unavailable", color = secondary)
                     if (selectedProfile.isWork) Button(onClick = { onTurnOnWork(selectedProfile.userSerial) },
-                        modifier = Modifier.padding(top = 12.dp)) { Text("Turn on") }
+                        modifier = Modifier.padding(top = 12.dp)) { Text(stringResource(R.string.turn_on)) }
                 }
             }
             LazyVerticalGrid(GridCells.Adaptive(168.dp), Modifier.fillMaxSize().testTag("widget-catalog-list"),
@@ -314,7 +315,7 @@ internal fun VisualWidgetPicker(
                     }
                 }
                 if (entries != null && filtered.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text("No Widgets Found", color = secondary, modifier = Modifier.padding(20.dp))
+                    Text(stringResource(R.string.no_widgets_found), color = secondary, modifier = Modifier.padding(20.dp))
                 }
             }
         }

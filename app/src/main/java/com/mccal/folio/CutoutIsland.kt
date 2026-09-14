@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import kotlinx.coroutines.flow.first
 import android.graphics.Rect
@@ -266,18 +267,18 @@ private fun LeadingGlyph(content: IslandContent, size: Dp) {
         is IslandContent.Event -> when (val e = content.event) {
             is IslandEvent.Charging -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Bolt, null, tint = Green, modifier = Modifier.size(size * .8f))
-                Text("Charging", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.charging), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             is IslandEvent.Silent -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (e.on) Icons.Rounded.NotificationsOff else Icons.Rounded.NotificationsActive, null,
                     tint = if (e.on) Red else Color.White, modifier = Modifier.size(size * .75f))
                 Spacer(Modifier.width(4.dp))
-                Text("Silent", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.silent), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             is IslandEvent.Focus -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.DarkMode, null, tint = Purple, modifier = Modifier.size(size * .75f))
                 Spacer(Modifier.width(4.dp))
-                Text("Focus", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.focus), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             is IslandEvent.Bluetooth -> Icon(Icons.Rounded.Headphones, null, tint = Blue, modifier = Modifier.size(size * .8f))
             is IslandEvent.Message -> MessageAvatar(e, size)
@@ -351,7 +352,7 @@ private fun MessageCardContent(message: IslandEvent.Message, replying: Boolean, 
         }
         if (replying) QuickReplyField(message.sender.substringBefore(" · "), onSend = { IslandListenerService.reply(context, message.key, it) }, onDone = onDone)
         else if (message.canReply) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MessageActionPill("Reply", onReply)
+            MessageActionPill(stringResource(R.string.reply), onReply)
         }
     }
 }
@@ -423,7 +424,7 @@ private fun CallButtons(call: IslandActivity.Call) {
             if (call.canMute) CallButton(Icons.Rounded.MicOff, "Mute", Color.White.copy(alpha = .22f)) { act(CallControls.Kind.MUTE) }
             if (call.canHangUp) CallButton(Icons.Rounded.CallEnd, "End", Red) { act(CallControls.Kind.HANG_UP) }
             if (call.canSpeaker) CallButton(Icons.AutoMirrored.Rounded.VolumeUp, "Speaker", Color.White.copy(alpha = .22f)) { act(CallControls.Kind.SPEAKER) }
-            if (!call.canHangUp && !call.canMute && !call.canSpeaker) Text("Tap to return to the call", color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
+            if (!call.canHangUp && !call.canMute && !call.canSpeaker) Text(stringResource(R.string.tap_to_return_to_the_call), color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
         }
     }
 }

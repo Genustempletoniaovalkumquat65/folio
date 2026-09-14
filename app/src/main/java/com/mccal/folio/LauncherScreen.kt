@@ -2,6 +2,7 @@
 
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.appwidget.AppWidgetProviderInfo
 import android.os.UserManager
 import androidx.activity.compose.BackHandler
@@ -688,13 +689,13 @@ fun LauncherScreen(
                     DockAppColumn(state.dock, previewLayout.dock, appsById, geometry.dockRowHeight,
                         dockIconSize(geometry.iconSize), drag, insertionTarget,
                         onLaunch = onLaunchFrom, onChoose = { dockSlot = it; sheet = "dock" },
-                        magnify = state.dockMagnify, leftHanded = state.leftHanded)
+                        magnify = state.dockMagnify && !LocalReduceMotion.current, leftHanded = state.leftHanded)
                 }
             }
             Column(Modifier.align(if (state.leftHanded) Alignment.BottomEnd else Alignment.BottomStart).width(pagerWidth)
                 .padding(start = if (state.leftHanded) 0.dp else 16.dp, end = if (state.leftHanded) 16.dp else 0.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (!isDefaultHome) FilledTonalButton(onClick = { sheet = ""; onMakeDefault() }, Modifier.heightIn(min = 48.dp).testTag("home-setup")) {
-                    Icon(Icons.Rounded.Home, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Set as home app")
+                    Icon(Icons.Rounded.Home, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.set_as_home_app))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     if (!drag.active) IconButton(onClick = openDiscover, Modifier.size(32.dp).testTag("discover-page-link")) {
@@ -756,12 +757,12 @@ fun LauncherScreen(
                         widgetSlot = model.nextWidgetSlot(); widgetTargetIndex = homeCellIndex(editPage, 0); widgetExactTarget = false
                         widgetPackage = null; widgetProfileSerial = null; sheet = "widgets"
                     }
-                    JigglePill("Edit") {
+                    JigglePill(stringResource(R.string.edit)) {
                         emptyCellIndex = homeEdit.lastEmptyIndex?.takeIf { homeCellPage(it) == editPage } ?: homeCellIndex(editPage, 0)
                     }
                     // Unfolded, keep all three together at the top right instead of spread across two pages.
                     if (!geometry.expanded) Spacer(Modifier.weight(1f))
-                    JigglePill("Done", emphasized = true) { haptic.performHapticFeedback(HapticFeedbackType.Confirm); homeEdit.stop() }
+                    JigglePill(stringResource(R.string.done), emphasized = true) { haptic.performHapticFeedback(HapticFeedbackType.Confirm); homeEdit.stop() }
                 }
             }
             if (!inLibrary && !drag.active) Column(Modifier.align(railBottom(state.leftHanded)).railEdge(state.leftHanded, 12.dp).padding(bottom = 6.dp)
@@ -807,7 +808,7 @@ fun LauncherScreen(
                             blockedHint = if (state.dock.none { it == null }) "Dock full • Move an app out first" else null)
                         "pins" -> Column(Modifier.fillMaxHeight(.9f).imePadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { sheet = "" }) { Text("Done") }
+                                TextButton(onClick = { sheet = "" }) { Text(stringResource(R.string.done)) }
                             }
                             AppLibrary(state, pinQuery, { pinQuery = it }, onLaunch, model::setPinned,
                                 onActions = { selectedId = it.id; sheet = "" }, editing = true, modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -879,7 +880,7 @@ fun LauncherScreen(
                         onWallpaper = { value ->
                             if (value != state.systemWallpaper) { model.setSystemWallpaper(value); launcherActivity.recreate() }
                         },
-                        onFinish = onFinishFirstRun)
+                        onFinish = onFinishFirstRun, state = state, model = model)
                 }
             }
             if (sheet == "widgets") {
@@ -1048,8 +1049,8 @@ fun LauncherScreen(
                         Row(Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.folioSafeTop).padding(top = 8.dp)
                             .background(Glass.copy(alpha = .97f), RoundedCornerShape(22.dp))
                             .testTag("widget-placement-toolbar"), verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = widgetPickerBack) { Text("Back to widgets") }
-                            if (session.candidate != null) Text("Replace here", color = Ink,
+                            TextButton(onClick = widgetPickerBack) { Text(stringResource(R.string.back_to_widgets)) }
+                            if (session.candidate != null) Text(stringResource(R.string.replace_here), color = Ink,
                                 modifier = Modifier.testTag("widget-replacement-locked"))
                             val targetPage = homeCellPage(session.targetIndex ?: 0)
                             if (!session.dragging && session.candidate == null) IconButton(
@@ -1075,9 +1076,9 @@ fun LauncherScreen(
                                         ?: session.builtinId?.let { widgets.setBuiltin(draft.copy(id = it)) }
                                     widgetSession = null; sheet = ""; widgetPackage = null
                                 }
-                            }, modifier = Modifier.testTag("widget-placement-apply")) { Text("Place") }
+                            }, modifier = Modifier.testTag("widget-placement-apply")) { Text(stringResource(R.string.place)) }
                             TextButton(onClick = { leaveTemporaryWidgetPage(); widgetSession = null; sheet = ""; widgetPackage = null },
-                                modifier = Modifier.testTag("widget-placement-cancel")) { Text("Cancel") }
+                                modifier = Modifier.testTag("widget-placement-cancel")) { Text(stringResource(R.string.cancel)) }
                         }
                         if (anchor != null) {
                             val density = LocalDensity.current
@@ -1114,7 +1115,7 @@ fun LauncherScreen(
                                     }
                                     if (widgetDraft == null) Box(Modifier.matchParentSize()
                                         .background(Color(0xFFB83B3B).copy(alpha = .34f)), contentAlignment = Alignment.Center) {
-                                        Text("No room here", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                        Text(stringResource(R.string.no_room_here), color = Color.White, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -1127,7 +1128,7 @@ fun LauncherScreen(
                                     if (sessionEntry != null) WidgetProviderPreview(sessionEntry, session.span,
                                         Modifier.fillMaxSize().padding(5.dp).clip(RoundedCornerShape(18.dp)))
                                     Box(Modifier.matchParentSize().background(Color(0xFFB83B3B).copy(alpha = .34f)),
-                                        contentAlignment = Alignment.Center) { Text("No room here", color = Color.White) }
+                                        contentAlignment = Alignment.Center) { Text(stringResource(R.string.no_room_here), color = Color.White) }
                                 }
                             }
                         }
@@ -1180,7 +1181,7 @@ fun LauncherScreen(
                     .padding(top = 10.dp, start = 20.dp, end = 100.dp),
                 color = Glass.copy(alpha = .96f), shape = RoundedCornerShape(18.dp)
             ) {
-                Text("Dock full • Move an app out first",
+                Text(stringResource(R.string.dock_full_move_an_app_out_first),
                     Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Ink, fontSize = 13.sp)
             }
             if (drag.moved && drag.source?.target !is DropTarget.Library &&
@@ -1194,7 +1195,7 @@ fun LauncherScreen(
                 Column(Modifier.fillMaxSize().padding(vertical = 6.dp), verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.DeleteOutline, null)
-                    Text("Remove", fontSize = 11.sp, maxLines = 1)
+                    Text(stringResource(R.string.remove), fontSize = 11.sp, maxLines = 1)
                 }
             }
         }
@@ -1238,12 +1239,12 @@ fun LauncherScreen(
                     }
                     Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp)
                         .background(Glass.copy(alpha = .96f), RoundedCornerShape(20.dp))) {
-                        TextButton(onClick = { resizeSlot = null }) { Text("Cancel") }
+                        TextButton(onClick = { resizeSlot = null }) { Text(stringResource(R.string.cancel)) }
                         TextButton(enabled = valid, onClick = {
                             model.resizeWidget(slot, resizeWidth, resizeHeight); resizeSlot = null
-                        }) { Text("Apply") }
+                        }) { Text(stringResource(R.string.apply)) }
                     }
-                    if (!feasible) Text("Move this widget into the six-row grid before resizing.",
+                    if (!feasible) Text(stringResource(R.string.move_this_widget_into_the_six_row_grid_b),
                         color = Color.White, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .65f)).padding(8.dp))
                 }
             }
@@ -1302,7 +1303,7 @@ fun LauncherScreen(
                             Text(second.label, Modifier.fillMaxWidth())
                         }
                     }
-                } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null }) { Text("Cancel") } })
+                } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null }) { Text(stringResource(R.string.cancel)) } })
         }
         openFolderId?.let { id ->
             state.folders.firstOrNull { it.id == id }?.let { folder ->
@@ -1328,44 +1329,44 @@ fun LauncherScreen(
             }, onCancel = launcherActivity.backups::cancelImport)
         }
         if (launcherActivity.backups.pickerPending) AlertDialog(onDismissRequest = {},
-            title = { Text("Layout document") },
-            text = { Text("The system document picker is still open. Return to it to finish, or cancel this operation.") },
+            title = { Text(stringResource(R.string.layout_document)) },
+            text = { Text(stringResource(R.string.the_system_document_picker_is_still_open)) },
             confirmButton = { TextButton(onClick = { launcherActivity.backups.resumePendingPicker() },
-                modifier = Modifier.testTag("backup-picker-resume")) { Text("Resume") } },
+                modifier = Modifier.testTag("backup-picker-resume")) { Text(stringResource(R.string.resume)) } },
             dismissButton = { TextButton(onClick = launcherActivity.backups::cancelImport,
-                modifier = Modifier.testTag("backup-picker-cancel")) { Text("Cancel") } })
+                modifier = Modifier.testTag("backup-picker-cancel")) { Text(stringResource(R.string.cancel)) } })
         if (launcherActivity.backgrounds.pickerPending && !launcherActivity.backgrounds.loading) AlertDialog(
-            onDismissRequest = {}, title = { Text("Background photo") },
-            text = { Text("The photo picker was interrupted. Resume choosing a photo, or cancel and keep the current background.") },
+            onDismissRequest = {}, title = { Text(stringResource(R.string.background_photo)) },
+            text = { Text(stringResource(R.string.the_photo_picker_was_interrupted_resume)) },
             confirmButton = { TextButton(onClick = launcherActivity.backgrounds::choosePhoto,
-                modifier = Modifier.testTag("background-picker-resume")) { Text("Resume") } },
+                modifier = Modifier.testTag("background-picker-resume")) { Text(stringResource(R.string.resume)) } },
             dismissButton = { TextButton(onClick = launcherActivity.backgrounds::cancelPendingSelection,
-                modifier = Modifier.testTag("background-picker-cancel")) { Text("Cancel") } })
+                modifier = Modifier.testTag("background-picker-cancel")) { Text(stringResource(R.string.cancel)) } })
         (launcherActivity.backups.errorMessage ?: launcherActivity.backups.successMessage)?.let { message ->
             AlertDialog(onDismissRequest = launcherActivity.backups::clearMessage,
                 title = { Text(if (launcherActivity.backups.errorMessage != null) "Layout backup problem" else "Layout backup") },
-                text = { Text(message) }, confirmButton = { TextButton(onClick = launcherActivity.backups::clearMessage) { Text("OK") } })
+                text = { Text(message) }, confirmButton = { TextButton(onClick = launcherActivity.backups::clearMessage) { Text(stringResource(R.string.ok)) } })
         }
         widgets.failureMessage?.let { message ->
-            AlertDialog(onDismissRequest = widgets::clearFailure, title = { Text("Widget not added") },
+            AlertDialog(onDismissRequest = widgets::clearFailure, title = { Text(stringResource(R.string.widget_not_added)) },
                 text = { Text(message, Modifier.testTag("widget-bind-error")) },
-                confirmButton = { TextButton(onClick = widgets::clearFailure) { Text("OK") } })
+                confirmButton = { TextButton(onClick = widgets::clearFailure) { Text(stringResource(R.string.ok)) } })
         }
         if (widgets.pendingPlacement != null && widgets.setupStatus != null) {
-            AlertDialog(onDismissRequest = {}, title = { Text("Finish widget setup") },
-                text = { Text("The widget is waiting at its chosen spot. Finish setup to add it, or cancel to remove the placeholder.") },
+            AlertDialog(onDismissRequest = {}, title = { Text(stringResource(R.string.finish_widget_setup)) },
+                text = { Text(stringResource(R.string.the_widget_is_waiting_at_its_chosen_spot)) },
                 confirmButton = { Button(onClick = widgets::finishPendingSetup,
-                    modifier = Modifier.semantics { contentDescription = "Continue widget setup" }) { Text("Finish setup") } },
+                    modifier = Modifier.semantics { contentDescription = "Continue widget setup" }) { Text(stringResource(R.string.finish_setup)) } },
                 dismissButton = { TextButton(onClick = { leaveTemporaryWidgetPage(); widgets.cancelPendingSetup() },
-                    modifier = Modifier.semantics { contentDescription = "Cancel widget setup" }) { Text("Cancel") } })
+                    modifier = Modifier.semantics { contentDescription = "Cancel widget setup" }) { Text(stringResource(R.string.cancel)) } })
         }
         widgets.reconfigureWidgetId?.let {
-            AlertDialog(onDismissRequest = {}, title = { Text("Widget settings") },
-                text = { Text("Widget settings were interrupted. Resume configuration, or cancel and keep the widget unchanged.") },
+            AlertDialog(onDismissRequest = {}, title = { Text(stringResource(R.string.widget_settings)) },
+                text = { Text(stringResource(R.string.widget_settings_were_interrupted_resume)) },
                 confirmButton = { Button(onClick = widgets::finishPendingReconfigure,
-                    modifier = Modifier.testTag("widget-reconfigure-resume")) { Text("Resume") } },
+                    modifier = Modifier.testTag("widget-reconfigure-resume")) { Text(stringResource(R.string.resume)) } },
                 dismissButton = { TextButton(onClick = widgets::cancelPendingReconfigure,
-                    modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Cancel") } })
+                    modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text(stringResource(R.string.cancel)) } })
         }
         }
     } } }
@@ -1746,7 +1747,7 @@ private fun SharedHomeGrid(
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-                        Spacer(Modifier.height(8.dp)); Text("Finish widget setup", color = Ink)
+                        Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.finish_widget_setup), color = Ink)
                     }
                 } else MovableWidget(placement.id, placement.slot, widgets, drag, target,
                     Modifier.offset(x = x, y = y.dp).width(width).height(height.dp), page = page) { onWidget(placement.slot) }
@@ -1952,7 +1953,7 @@ private fun ClockCard(onClick: () -> Unit) {
     val time = currentTime()
     val format = if (android.text.format.DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm"
     GlassCard(onClick = onClick) {
-        Text("LOCAL TIME", color = LocalHomeInk.current.secondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp,
+        Text(stringResource(R.string.local_time), color = LocalHomeInk.current.secondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .6.sp,
             modifier = Modifier.semantics { contentDescription = "Clock widget; tap to replace" })
         Text(time.format(DateTimeFormatter.ofPattern(format)), color = LocalHomeInk.current.primary, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, maxLines = 1,
             style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
@@ -1982,11 +1983,11 @@ private fun ExpandedCard(onClick: () -> Unit) {
         Column {
             Icon(Icons.Rounded.Widgets, null, tint = LocalHomeInk.current.primary, modifier = Modifier.size(32.dp))
             Spacer(Modifier.height(16.dp))
-            Text("A little more room.", color = LocalHomeInk.current.primary, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
+            Text(stringResource(R.string.a_little_more_room), color = LocalHomeInk.current.primary, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
             Spacer(Modifier.height(12.dp))
-            Text("Add a calendar, photos, or another widget.", color = LocalHomeInk.current.secondary, fontSize = 14.sp)
+            Text(stringResource(R.string.add_a_calendar_photos_or_another_widget), color = LocalHomeInk.current.secondary, fontSize = 14.sp)
             Spacer(Modifier.height(20.dp))
-            FilledTonalButton(onClick = onClick) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add widget") }
+            FilledTonalButton(onClick = onClick) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.add_widget)) }
         }
     }
 }
@@ -2012,8 +2013,8 @@ private fun WidgetSlot(id: Int, slot: Int, controller: WidgetController, modifie
                             if (!controller.rebindRestoredWidget(slot, contentSize = displayedContentSize))
                                 restoreMessage = "That provider or profile isn’t available. Choose a replacement."
                         },
-                            modifier = Modifier.testTag("widget-restore-reconnect-$slot")) { Text("Reconnect") }
-                        TextButton(onClick = onAdd, modifier = Modifier.testTag("widget-restore-replace-$slot")) { Text("Replace") }
+                            modifier = Modifier.testTag("widget-restore-reconnect-$slot")) { Text(stringResource(R.string.reconnect)) }
+                        TextButton(onClick = onAdd, modifier = Modifier.testTag("widget-restore-replace-$slot")) { Text(stringResource(R.string.replace)) }
                     }
                 }
             }
@@ -2065,8 +2066,8 @@ internal fun BuiltinWidgetCard(id: Int, slot: Int, onAdd: () -> Unit) {
         DATE_WIDGET -> DateCard(onAdd)
         INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
             Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
-            Text("Your widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)
-            Text("Tap to choose", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
+            Text(stringResource(R.string.your_widgets), color = Color.White, fontSize = 15.sp, maxLines = 1)
+            Text(stringResource(R.string.tap_to_choose), color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
         }
         else -> Surface(Modifier.fillMaxSize().clickable(onClick = onAdd), color = Glass.copy(alpha = .18f),
             shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .25f))) {
@@ -2125,13 +2126,13 @@ private fun AppPicker(apps: List<AppEntry>, dockSlot: Int?, onSelect: (AppEntry)
     Column(Modifier.fillMaxWidth().fillMaxHeight(.88f).padding(horizontal = 20.dp).imePadding()) {
         Text(if (dockSlot == null) "Your apps" else "Dock position ${dockSlot + 1}", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 16.dp).testTag("search-field"),
-            placeholder = { Text("Search apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+            placeholder = { Text(stringResource(R.string.search_apps)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear search") } }, shape = RoundedCornerShape(20.dp))
-        if (dockSlot != null) TextButton(onClick = onClear) { Text("Leave this position empty") }
+        if (dockSlot != null) TextButton(onClick = onClear) { Text(stringResource(R.string.leave_this_position_empty)) }
         if (blockedHint != null) Text(blockedHint, color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp).testTag("dock-full-guidance"))
         LazyColumn(Modifier.weight(1f)) {
-            if (filtered.isEmpty()) item { Text("No apps found", Modifier.padding(vertical = 24.dp)) }
+            if (filtered.isEmpty()) item { Text(stringResource(R.string.no_apps_found), Modifier.padding(vertical = 24.dp)) }
             items(filtered, key = { it.id }) { app ->
                 val enabled = canSelect(app)
                 Row(Modifier.fillMaxWidth().testTag("picker-app-${app.id}")
@@ -2161,68 +2162,68 @@ private fun SettingsPanel(state: LauncherState, initiallyWide: Boolean, model: L
     val p = if (wide) state.expanded else state.compact
     Column(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Make it yours", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.make_it_yours), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
             IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close customization") }
         }
         Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().testTag("default-home-settings")) {
             Text(if (isDefaultHome) "Change home app" else "Set as home app")
         }
-        TextButton(onClick = onEditPins, modifier = Modifier.fillMaxWidth()) { Text("Choose home apps") }
+        TextButton(onClick = onEditPins, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.choose_home_apps_2)) }
         if (state.canUndoEdit) TextButton(onClick = { model.undoEdit(); onClose() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Undo last layout change")
+            Text(stringResource(R.string.undo_last_layout_change))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(!wide, { wide = false }, label = { Text("Cover / compact") })
-            FilterChip(wide, { wide = true }, label = { Text("Inner / expanded") })
+            FilterChip(!wide, { wide = false }, label = { Text(stringResource(R.string.cover_compact)) })
+            FilterChip(wide, { wide = true }, label = { Text(stringResource(R.string.inner_expanded)) })
         }
         SettingSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
         SettingSlider("Space between rows", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
         SettingSlider("Dock width", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Align dock with app rows", Modifier.weight(1f))
+            Text(stringResource(R.string.align_dock_with_app_rows), Modifier.weight(1f))
             Switch(p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
         }
         if (!p.dockAlignToGrid) SettingSlider("Dock height on screen", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Show app names", Modifier.weight(1f)); Switch(state.labels, model::setLabels, Modifier.testTag("label-switch"))
+            Text(stringResource(R.string.show_app_names), Modifier.weight(1f)); Switch(state.labels, model::setLabels, Modifier.testTag("label-switch"))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Status at upper right", Modifier.weight(1f)); Switch(state.verticalStatus, model::setVerticalStatus, Modifier.testTag("status-switch"))
+            Text(stringResource(R.string.status_at_upper_right), Modifier.weight(1f)); Switch(state.verticalStatus, model::setVerticalStatus, Modifier.testTag("status-switch"))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Search button opens Google", Modifier.weight(1f))
+            Text(stringResource(R.string.search_button_opens_google), Modifier.weight(1f))
             Switch(state.googleSearch, model::setGoogleSearch, Modifier.testTag("google-search-switch"))
         }
-        Text("Opens Google’s search screen. All apps keeps local app search.",
+        Text(stringResource(R.string.opens_google_s_search_screen_all_apps_ke),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }) { Text("Reset this layout") }
+        TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }) { Text(stringResource(R.string.reset_this_layout)) }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         TextButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().testTag("wallpaper-preview")) {
-            Icon(Icons.Rounded.Wallpaper, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Apply matching wallpaper")
+            Icon(Icons.Rounded.Wallpaper, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.apply_matching_wallpaper))
         }
-        Text("Preview the current launcher background in Android’s wallpaper picker, then choose where to apply it.", style = MaterialTheme.typography.bodySmall,
+        Text(stringResource(R.string.preview_the_current_launcher_background), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Launcher background", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+        Text(stringResource(R.string.launcher_background), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
         Button(onClick = backgrounds::choosePhoto, enabled = !backgrounds.loading,
-            modifier = Modifier.fillMaxWidth().testTag("background-choose")) { Text("Choose background photo") }
+            modifier = Modifier.fillMaxWidth().testTag("background-choose")) { Text(stringResource(R.string.choose_background_photo)) }
         if (backgrounds.photoSelected) OutlinedButton(onClick = backgrounds::reset,
-            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text("Reset to Folio dunes") }
+            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text(stringResource(R.string.reset_to_folio_dunes)) }
         if (backgrounds.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("background-loading"))
         (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
             TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }
         }
-        Text("The selected photo stays on this device and is not included in layout backups.",
+        Text(stringResource(R.string.the_selected_photo_stays_on_this_device),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        Text("Layout backup", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.layout_backup), style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onExportLayout, modifier = Modifier.weight(1f).testTag("layout-export")) { Text("Save") }
-            OutlinedButton(onClick = onImportLayout, modifier = Modifier.weight(1f).testTag("layout-import")) { Text("Restore") }
+            OutlinedButton(onClick = onExportLayout, modifier = Modifier.weight(1f).testTag("layout-export")) { Text(stringResource(R.string.save)) }
+            OutlinedButton(onClick = onImportLayout, modifier = Modifier.weight(1f).testTag("layout-import")) { Text(stringResource(R.string.restore)) }
         }
-        Text("Restore always shows a review before changing Home.", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.restore_always_shows_a_review_before_cha), style = MaterialTheme.typography.bodySmall)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text("Widgets · Page ${homePage + 1}", style = MaterialTheme.typography.titleMedium)
         state.widgetPlacements.filter { it.page == homePage }.forEach { placement ->
@@ -2232,21 +2233,21 @@ private fun SettingsPanel(state: LauncherState, initiallyWide: Boolean, model: L
                     modifier = Modifier.semantics { contentDescription = "Remove widget" }) {
                     Icon(Icons.Rounded.DeleteOutline, null)
                 }
-                TextButton(onClick = { onWidget(placement.slot) }) { Text("Replace") }
+                TextButton(onClick = { onWidget(placement.slot) }) { Text(stringResource(R.string.replace)) }
             }
         }
         if (wide) state.widgetPlacements.filter { it.page == -1 }.forEach { placement ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Unfolded-only page", Modifier.weight(1f))
+                Text(stringResource(R.string.unfolded_only_page), Modifier.weight(1f))
                 IconButton(onClick = { onRemoveWidget(placement.slot) },
                     modifier = Modifier.semantics { contentDescription = "Remove widget from Unfolded-only page" }) {
                     Icon(Icons.Rounded.DeleteOutline, null)
                 }
-                TextButton(onClick = { onWidget(placement.slot) }) { Text("Replace") }
+                TextButton(onClick = { onWidget(placement.slot) }) { Text(stringResource(R.string.replace)) }
             }
         }
-        TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth()) { Text("Add widget to this page") }
-        Text("Hold and drag an app to move it. Pause at the screen edge to turn pages. Release without moving for options.", style = MaterialTheme.typography.bodySmall,
+        TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth()) { Text(stringResource(R.string.add_widget_to_this_page)) }
+        Text(stringResource(R.string.hold_and_drag_an_app_to_move_it_pause_at), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 20.dp))
         }
     }
@@ -2309,7 +2310,7 @@ private fun WidgetActions(
                 contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, "Close widget options", tint = Color.White, modifier = Modifier.size(18.dp)) }
         }
 
-        SheetGroupLabel("Size")
+        SheetGroupLabel(stringResource(R.string.size))
         SheetGroup {
             Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(Triple("Small", 2, 2), Triple("Medium", 4, 2), Triple("Large", 4, 4)).forEach { (label, w, h) ->
@@ -2325,9 +2326,9 @@ private fun WidgetActions(
             MenuDivider()
             MenuRow(if (customSize) "Hide Custom Size" else "Custom Size", Icons.Rounded.Tune) { customSize = !customSize }
             if (customSize) Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!feasible) Text("Move this widget into the six-row grid before resizing.", color = Color(0xFFFF453A), fontSize = 13.sp)
+                if (!feasible) Text(stringResource(R.string.move_this_widget_into_the_six_row_grid_b), color = Color(0xFFFF453A), fontSize = 13.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Width", Modifier.weight(1f), color = Color.White)
+                    Text(stringResource(R.string.width), Modifier.weight(1f), color = Color.White)
                     IconButton(enabled = constraints?.canResizeHorizontally != false,
                         onClick = { if (feasible) width = (width - 1).coerceAtLeast(minWidth) }) { Icon(Icons.Rounded.Remove, "Decrease widget width", tint = Color.White) }
                     Text("$width columns", Modifier.width(88.dp), textAlign = TextAlign.Center, color = Color.White)
@@ -2335,20 +2336,20 @@ private fun WidgetActions(
                         onClick = { if (feasible) width = (width + 1).coerceAtMost(maxWidth) }) { Icon(Icons.Rounded.Add, "Increase widget width", tint = Color.White) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Height", Modifier.weight(1f), color = Color.White)
+                    Text(stringResource(R.string.height), Modifier.weight(1f), color = Color.White)
                     IconButton(enabled = constraints?.canResizeVertically != false,
                         onClick = { if (feasible) height = (height - 1).coerceAtLeast(minHeight) }) { Icon(Icons.Rounded.Remove, "Decrease widget height", tint = Color.White) }
                     Text("$height rows", Modifier.width(88.dp), textAlign = TextAlign.Center, color = Color.White)
                     IconButton(enabled = constraints?.canResizeVertically != false,
                         onClick = { if (feasible) height = (height + 1).coerceAtMost(maxHeight) }) { Icon(Icons.Rounded.Add, "Increase widget height", tint = Color.White) }
                 }
-                if (!valid) Text("That size overlaps another item or extends beyond the page.", color = secondary, fontSize = 13.sp)
-                IosChip(selected = valid, onClick = { if (valid) { onResize(width, height); onClose() } }, label = { Text("Apply Size") },
+                if (!valid) Text(stringResource(R.string.that_size_overlaps_another_item_or_exten), color = secondary, fontSize = 13.sp)
+                IosChip(selected = valid, onClick = { if (valid) { onResize(width, height); onClose() } }, label = { Text(stringResource(R.string.apply_size)) },
                     modifier = Modifier.fillMaxWidth())
             }
         }
 
-        SheetGroupLabel("Widget")
+        SheetGroupLabel(stringResource(R.string.widget))
         SheetGroup {
             if (canConfigure) { MenuRow("Edit Widget", Icons.Rounded.Settings) { onConfigure() }; MenuDivider() }
             MenuRow("Replace Widget", Icons.Rounded.FindReplace) { onReplace() }
@@ -2363,7 +2364,7 @@ private fun WidgetActions(
             }
         }
 
-        SheetGroupLabel("Smart Stack")
+        SheetGroupLabel(stringResource(R.string.smart_stack))
         SheetGroup {
             MenuRow(if (stackCards.size > 1) "Add Widget to Stack" else "Make a Stack", Icons.Rounded.Layers) { onAddToStack() }
             if (stackCards.size > 1) {
@@ -2371,7 +2372,7 @@ private fun WidgetActions(
                     MenuDivider()
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("${index + 1}. ${stackLabel(card)}", Modifier.weight(1f), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (index > 0) TextButton(onClick = { onShowFirstInStack(card) }) { Text("Show First") }
+                        if (index > 0) TextButton(onClick = { onShowFirstInStack(card) }) { Text(stringResource(R.string.show_first)) }
                         IconButton(onClick = { onRemoveFromStack(card) }) {
                             Icon(Icons.Rounded.RemoveCircleOutline, "Remove ${stackLabel(card)} from stack", tint = Color(0xFFFF453A))
                         }
@@ -2380,14 +2381,14 @@ private fun WidgetActions(
                 MenuDivider()
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Smart Rotate", color = Color.White)
-                        Text("Show the next widget every 30 minutes", color = secondary, fontSize = 13.sp)
+                        Text(stringResource(R.string.smart_rotate), color = Color.White)
+                        Text(stringResource(R.string.show_the_next_widget_every_30_minutes), color = secondary, fontSize = 13.sp)
                     }
                     IosSwitch(stackRotate, onStackRotate)
                 }
             }
         }
-        if (stackCards.size > 1) Text("Swipe up or down on the stack to flip between widgets.", color = secondary, fontSize = 13.sp,
+        if (stackCards.size > 1) Text(stringResource(R.string.swipe_up_or_down_on_the_stack_to_flip_be), color = secondary, fontSize = 13.sp,
             modifier = Modifier.padding(start = 4.dp))
 
         SheetGroup(Modifier.padding(top = 8.dp)) {

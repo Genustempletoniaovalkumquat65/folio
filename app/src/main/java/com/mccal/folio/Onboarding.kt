@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -54,8 +55,14 @@ private data class OnboardingPage(
  */
 @Composable
 internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onShadeSetup: () -> Unit,
-    systemWallpaper: Boolean, onWallpaper: (Boolean) -> Unit, onFinish: () -> Unit) {
+    systemWallpaper: Boolean, onWallpaper: (Boolean) -> Unit, onFinish: () -> Unit,
+    state: LauncherState? = null, model: LauncherModel? = null) {
     val context = LocalContext.current
+    val contactsPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    val bluetoothPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    fun granted(permission: String) = context.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
     val prefs = remember { context.getSharedPreferences("setup_experience", Context.MODE_PRIVATE) }
     var tick by remember { mutableIntStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -83,23 +90,51 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                 "Samsung locks the phone when you fold from Home. Set Continue apps on cover screen to Always so the cover picks up where you were.",
                 action = "Open Display Settings", done = { foldStaysAwake(context) },
                 onAction = { open(Intent(Settings.ACTION_DISPLAY_SETTINGS)) }),
+            OnboardingPage("system", Icons.Rounded.LightMode, 0xFFFFCC00, "Brightness & Rotation",
+                "Lets Control Center change screen brightness and rotation lock directly.",
+                action = "Allow", done = { Settings.System.canWrite(context) },
+                onAction = { open(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) }),
+            OnboardingPage("dnd", Icons.Rounded.DarkMode, 0xFF5E5CE6, "Do Not Disturb",
+                "Lets Control Center, Actions and (soon) Focus modes turn Do Not Disturb on and off.",
+                action = "Allow", done = { context.getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted },
+                onAction = { open(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }),
             OnboardingPage("sidekey", Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key",
                 "Hold the side key for Folio’s picker: ChatGPT, Claude, Perplexity, Gemini or Google without AI. Settings › Side Key walks through it.",
                 action = "Choose Folio as Assistant", done = { AssistPickerActivity.isDefaultAssistant(context) },
                 onAction = { open(AssistPickerActivity.settingsIntent()) }),
+            OnboardingPage("hold", Icons.Rounded.TouchApp, 0xFFFF9F0A, "Hold the Side Key",
+                "In Samsung’s Side button settings, set Press and hold to Digital assistant so holding it opens Folio’s picker.",
+                action = "Open Side Button Settings", done = { sideKeyHoldIsAssistant(context) || sideKeySettings(context) == null },
+                onAction = { open(sideKeySettings(context)) }),
+            OnboardingPage("wallet", Icons.Rounded.Wallet, 0xFF30D158, "Double Press for Wallet",
+                "Like double-clicking for Apple Pay: set Double press › Open app › Wallet.",
+                action = "Open Side Button Settings", done = { sideKeyDoublePressIsWallet(context) || (sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) == null },
+                onAction = { open(sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) }),
+            OnboardingPage("contacts", Icons.Rounded.Contacts, 0xFF8E8E93, "Contacts in Spotlight",
+                "Search people in Spotlight and message or call them in one tap. Contacts stay on your phone.",
+                action = "Allow", done = { granted(android.Manifest.permission.READ_CONTACTS) },
+                onAction = { contactsPermission.launch(android.Manifest.permission.READ_CONTACTS) }),
+            OnboardingPage("bluetooth", Icons.Rounded.Headphones, 0xFF0A84FF, "Bluetooth Names",
+                "Shows “Connected to Galaxy Buds” in the Dynamic Island.",
+                action = "Allow", done = { granted(android.Manifest.permission.BLUETOOTH_CONNECT) },
+                onAction = { bluetoothPermission.launch(android.Manifest.permission.BLUETOOTH_CONNECT) }),
+            OnboardingPage("features", Icons.Rounded.Tune, 0xFFFF375F, "Choose Your Features",
+                "Turn on what you’d like now. Everything can be changed later in Settings.", optional = false),
             OnboardingPage("look", Icons.Rounded.Wallpaper, 0xFF32ADE6, "Your Wallpaper",
                 "Keep the wallpaper you already use, or use Folio’s dunes. Text on Home adjusts for light and dark wallpapers.",
                 optional = false),
             OnboardingPage("done", Icons.Rounded.CheckCircle, 0xFF30D158, "You’re All Set",
                 "Hold an app for its menu, swipe down on Home for Spotlight, and pull down from the top corners for notifications and Control Center. Everything else is in Settings.",
                 action = "Get Started", optional = false),
-        ).filter { page -> page.key in setOf("welcome", "look", "done") || !page.done() }
+        ).filter { page -> page.key in setOf("welcome", "features", "look", "done") || !page.done() }
+            .filter { it.key != "features" || model != null }
     }
     var index by rememberSaveable { mutableIntStateOf(prefs.getInt(STEP, 0).coerceIn(0, all.lastIndex)) }
     fun go(to: Int) { index = to.coerceIn(0, all.lastIndex); prefs.edit().putInt(STEP, index).apply() }
     fun finish() { prefs.edit().remove(STEP).apply(); onFinish() }
     BackHandler(index > 0) { go(index - 1) }
     val page = all[index]
+    val reduceMotion = LocalReduceMotion.current
     val done = remember(tick, page) { page.done() }
 
     Box(Modifier.fillMaxSize().testTag("onboarding")) {
@@ -109,14 +144,15 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                 if (index > 0) Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { go(index - 1) }.padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(26.dp))
-                    Text("Back", color = IosBlue, fontSize = 17.sp)
+                    Text(stringResource(R.string.back), color = IosBlue, fontSize = 17.sp)
                 }
                 Spacer(Modifier.weight(1f))
-                if (page.key != "done") Text("Skip Setup", color = IosBlue, fontSize = 17.sp,
+                if (page.key != "done") Text(stringResource(R.string.skip_setup), color = IosBlue, fontSize = 17.sp,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { finish() }.padding(8.dp).testTag("onboarding-skip"))
             }
             AnimatedContent(index, Modifier.weight(1f), label = "onboarding page",
                 transitionSpec = {
+                    if (reduceMotion) return@AnimatedContent fadeIn() togetherWith fadeOut()
                     val forward = targetState > initialState
                     (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
                         (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
@@ -141,14 +177,30 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                             }
                         }
                     }
+                    if (p.key == "features" && state != null && model != null) SheetGroup(Modifier.padding(top = 24.dp)) {
+                        listOf(
+                            Triple("Dynamic Island in every app", state.islandEverywhere) { v: Boolean -> model.setIslandEverywhere(v); if (v && !SystemShadeAccessibilityService.isConnected()) onShadeSetup() },
+                            Triple("Pull-out dock in every app", state.dockEverywhere) { v: Boolean -> model.setDockEverywhere(v); if (v && !SystemShadeAccessibilityService.isConnected()) onShadeSetup() },
+                            Triple("Lock Cover after unlocking", state.lockCover, model::setLockCover),
+                            Triple("Swipe up on apps for quick panels", state.appPanels, model::setAppPanels),
+                            Triple("Haptic feedback", state.haptics, model::setHaptics),
+                        ).forEachIndexed { n, (label, on, set) ->
+                            if (n > 0) MenuDivider()
+                            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp).heightIn(min = 52.dp)
+                                .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                                Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                                IosSwitch(on, set)
+                            }
+                        }
+                    }
                     if (p.key == "look") Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        IosChip(selected = systemWallpaper, onClick = { onWallpaper(true) }, label = { Text("My Wallpaper") }, modifier = Modifier.weight(1f))
-                        IosChip(selected = !systemWallpaper, onClick = { onWallpaper(false) }, label = { Text("Folio Dunes") }, modifier = Modifier.weight(1f))
+                        IosChip(selected = systemWallpaper, onClick = { onWallpaper(true) }, label = { Text(stringResource(R.string.my_wallpaper)) }, modifier = Modifier.weight(1f))
+                        IosChip(selected = !systemWallpaper, onClick = { onWallpaper(false) }, label = { Text(stringResource(R.string.folio_dunes)) }, modifier = Modifier.weight(1f))
                     }
                     if (done && p.onAction != null) Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.CheckCircle, null, tint = Color(0xFF30D158))
                         Spacer(Modifier.width(6.dp))
-                        Text("All set", color = Color(0xFF30D158), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.all_set), color = Color(0xFF30D158), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -169,7 +221,7 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                 Text(primary, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
-                if (page.optional && !done) Text("Not Now", color = IosBlue, fontSize = 17.sp,
+                if (page.optional && !done) Text(stringResource(R.string.not_now), color = IosBlue, fontSize = 17.sp,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { go(index + 1) }.padding(10.dp).testTag("onboarding-not-now"))
             }
             Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {

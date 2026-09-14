@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -68,9 +69,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 .clickable { onPage(CustomizationPage.OVERVIEW) }.padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(28.dp))
-                Text("Folio", color = IosBlue, fontSize = 17.sp)
+                Text(stringResource(R.string.folio), color = IosBlue, fontSize = 17.sp)
             }
-            Text("Done", color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            Text(stringResource(R.string.done), color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
                     .padding(horizontal = 8.dp, vertical = 8.dp).semantics { contentDescription = "Close customization" })
         }
@@ -82,9 +83,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.OVERVIEW -> {
                     TweakBanner()
                     if (!isDefaultHome) Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .testTag("default-home-settings")) { Text("Set as home app") }
+                        .testTag("default-home-settings")) { Text(stringResource(R.string.set_as_home_app)) }
                     if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Undo last layout change") }
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.undo_last_layout_change)) }
                     val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
                     val setupLeft = setupSteps.count { it.required && !it.done }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
@@ -121,21 +122,21 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits") { onPage(CustomizationPage.CREDITS) }
                     }
                     if (isDefaultHome) TextButton(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .testTag("default-home-settings")) { Text("Change home app") }
+                        .testTag("default-home-settings")) { Text(stringResource(R.string.change_home_app)) }
                 }
                 CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper))
                 CustomizationPage.WALLPAPER -> {
                     val wallpaperContext = androidx.compose.ui.platform.LocalContext.current
-                    SettingsCard("Background") {
+                    SettingsCard(stringResource(R.string.background)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IosChip(selected = state.systemWallpaper, onClick = {
                                 if (!state.systemWallpaper) { model.setSystemWallpaper(true); (wallpaperContext as? android.app.Activity)?.recreate() }
                             },
-                                label = { Text("Android wallpaper") }, modifier = Modifier.weight(1f).testTag("background-system"))
+                                label = { Text(stringResource(R.string.android_wallpaper)) }, modifier = Modifier.weight(1f).testTag("background-system"))
                             IosChip(selected = !state.systemWallpaper, onClick = {
                                 if (state.systemWallpaper) { model.setSystemWallpaper(false); (wallpaperContext as? android.app.Activity)?.recreate() }
                             },
-                                label = { Text("Folio background") }, modifier = Modifier.weight(1f).testTag("background-folio"))
+                                label = { Text(stringResource(R.string.folio_background)) }, modifier = Modifier.weight(1f).testTag("background-folio"))
                         }
                         Text(if (state.systemWallpaper) "Uses the same wallpaper as your phone’s home screen (including live wallpapers), so it matches what you had in Samsung’s or another launcher."
                             else "Folio’s dunes or a photo you choose, only behind Folio.",
@@ -143,25 +144,25 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         if (state.systemWallpaper) TextButton(onClick = {
                             runCatching { wallpaperContext.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SET_WALLPAPER), "Change wallpaper")
                                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        }, modifier = Modifier.testTag("background-change-system")) { Text("Change Android wallpaper") }
+                        }, modifier = Modifier.testTag("background-change-system")) { Text(stringResource(R.string.change_android_wallpaper)) }
                     }
-                    SettingsCard("Text on Home") {
+                    SettingsCard(stringResource(R.string.text_on_home)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("AUTO" to "Automatic", "LIGHT" to "Light", "DARK" to "Dark").forEach { (value, label) ->
                                 IosChip(selected = state.homeInk == value, onClick = { model.setHomeInk(value) }, label = { Text(label) },
                                     modifier = Modifier.weight(1f))
                             }
                         }
-                        Text("Labels, status, page dots and widget text on the wallpaper. Automatic uses dark text over light wallpapers, like iPhone.",
+                        Text(stringResource(R.string.labels_status_page_dots_and_widget_text),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SettingsSwitch("Tint glass with wallpaper color", state.tintedGlass, model::setTintedGlass, "tinted-glass-switch")
-                        SettingsSwitch("Dark appearance dims wallpaper", state.dimWallpaperDark, model::setDimWallpaperDark, "dim-wallpaper-switch")
-                        if (state.systemWallpaper) SettingsSwitch("Wallpaper moves with pages", state.wallpaperMotion, model::setWallpaperMotion, "wallpaper-motion-switch")
+                        SettingsSwitch(stringResource(R.string.tint_glass_with_wallpaper_color), state.tintedGlass, model::setTintedGlass, "tinted-glass-switch")
+                        SettingsSwitch(stringResource(R.string.dark_appearance_dims_wallpaper), state.dimWallpaperDark, model::setDimWallpaperDark, "dim-wallpaper-switch")
+                        if (state.systemWallpaper) SettingsSwitch(stringResource(R.string.wallpaper_moves_with_pages), state.wallpaperMotion, model::setWallpaperMotion, "wallpaper-motion-switch")
                     }
                     if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
-                    Text("Launcher background", style = MaterialTheme.typography.titleMedium)
-                    Text("Changes the image behind Folio’s Home screens.", style = MaterialTheme.typography.bodySmall,
+                    Text(stringResource(R.string.launcher_background), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.changes_the_image_behind_folio_s_home_sc), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = backgrounds::choosePhoto, enabled = !backgrounds.loading,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("background-choose")) {
@@ -169,12 +170,12 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     if (backgrounds.previewPending) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = backgrounds::cancelPreview, Modifier.weight(1f).heightIn(min = 48.dp)
-                            .testTag("background-preview-cancel")) { Text("Cancel") }
+                            .testTag("background-preview-cancel")) { Text(stringResource(R.string.cancel)) }
                         Button(onClick = backgrounds::applyPreview, enabled = backgrounds.previewBitmap != null,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("background-preview-apply")) { Text("Apply") }
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("background-preview-apply")) { Text(stringResource(R.string.apply)) }
                     }
                     if (backgrounds.photoSelected && !backgrounds.previewPending) OutlinedButton(onClick = backgrounds::reset,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("background-reset")) { Text("Reset to default dunes") }
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("background-reset")) { Text(stringResource(R.string.reset_to_default_dunes)) }
                     if (backgrounds.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("background-loading"))
                     (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
                         TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }
@@ -182,11 +183,11 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     if (!state.systemWallpaper) {
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Folio background as phone wallpaper", style = MaterialTheme.typography.titleMedium)
-                        Text("Opens Android’s preview to use Folio’s background as your phone’s wallpaper too (a live wallpaper), so it matches outside Folio.",
+                        Text(stringResource(R.string.folio_background_as_phone_wallpaper), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.opens_android_s_preview_to_use_folio_s_b),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                            .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text("Preview as phone wallpaper") }
+                            .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.preview_as_phone_wallpaper)) }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
@@ -194,43 +195,43 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.HOME -> HomeLayoutSettings(state, wide, { wide = it }, model, homePage,
                     onEditPins, onWidget, onAddWidget, onRemoveWidget)
                 CustomizationPage.GESTURES -> {
-                    SettingsCard("Gestures") {
-                        Text("Pull down from the top-left for notifications, top-right for Control Center. Swipe down lower on Home for Spotlight. Swipe sideways to change pages.",
+                    SettingsCard(stringResource(R.string.gestures)) {
+                        Text(stringResource(R.string.pull_down_from_the_top_left_for_notifica),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SettingsSwitch("iPhone-style Control Center and notifications", state.folioPanels, model::setFolioPanels, "folio-panels-switch")
+                        SettingsSwitch(stringResource(R.string.iphone_style_control_center_and_notifica), state.folioPanels, model::setFolioPanels, "folio-panels-switch")
                     }
-                    if (state.folioPanels) SettingsCard("Panels") {
+                    if (state.folioPanels) SettingsCard(stringResource(R.string.panels)) {
                         CustomizationSlider("Background blur", "${(state.panelBlur * 100).toInt()}%", state.panelBlur, 0f..1f) { model.setPanelBlur(it) }
-                        SettingsSwitch("Big clock in Notification Center", state.notificationClock, model::setNotificationClock, "notification-clock-switch")
-                        SettingsSwitch("Stack notifications by app", state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
-                        SettingsSwitch("Tint notifications with app colors", state.tintNotifications, model::setTintNotifications, "tint-notifications-switch")
-                        SettingsSwitch("Tint music with album art", state.tintMedia, model::setTintMedia, "tint-media-switch")
-                        SettingsSwitch("App icons row above notifications", state.notificationAppRow, model::setNotificationAppRow, "notification-app-row-switch")
-                        SettingsSwitch("Unfolded: clock beside notifications", state.ncSplit, model::setNcSplit, "notification-split-switch")
-                        Text("Control Center size", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        SettingsSwitch(stringResource(R.string.big_clock_in_notification_center), state.notificationClock, model::setNotificationClock, "notification-clock-switch")
+                        SettingsSwitch(stringResource(R.string.stack_notifications_by_app), state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
+                        SettingsSwitch(stringResource(R.string.tint_notifications_with_app_colors), state.tintNotifications, model::setTintNotifications, "tint-notifications-switch")
+                        SettingsSwitch(stringResource(R.string.tint_music_with_album_art), state.tintMedia, model::setTintMedia, "tint-media-switch")
+                        SettingsSwitch(stringResource(R.string.app_icons_row_above_notifications), state.notificationAppRow, model::setNotificationAppRow, "notification-app-row-switch")
+                        SettingsSwitch(stringResource(R.string.unfolded_clock_beside_notifications), state.ncSplit, model::setNcSplit, "notification-split-switch")
+                        Text(stringResource(R.string.control_center_size), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PanelSize.entries.forEach { size ->
                                 IosChip(selected = state.ccSize == size, onClick = { model.setCcSize(size) }, label = { Text(size.label) })
                             }
                         }
-                        SettingsSwitch("Unfolded: Control Center in the middle", state.ccCentered, model::setCcCentered, "cc-centered-switch")
-                        Text("Tip: tap + at the top of Control Center to add or remove controls.",
+                        SettingsSwitch(stringResource(R.string.unfolded_control_center_in_the_middle), state.ccCentered, model::setCcCentered, "cc-centered-switch")
+                        Text(stringResource(R.string.tip_tap_at_the_top_of_control_center_to),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("To restyle Samsung\u2019s own pull-down (colors, transparency, layout), use Good Lock \u203a QuickStar and Theme Park.",
+                        Text(stringResource(R.string.to_restyle_samsungs_own_pull_down_colors),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard("Side key") {
+                    SettingsCard(stringResource(R.string.side_key)) {
                         val assistContext = androidx.compose.ui.platform.LocalContext.current
                         val held = remember(page) { AssistPickerActivity.isDefaultAssistant(assistContext) }
                         Text(if (held) "Holding the side key opens Folio\u2019s picker: ChatGPT, Claude, Perplexity, Gemini or search without AI."
                             else "Make Folio the digital assistant, then set Settings \u203a Advanced features \u203a Side button \u203a Press and hold \u203a Digital assistant.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (!held) FilledTonalButton(onClick = { runCatching { assistContext.startActivity(AssistPickerActivity.settingsIntent()) } }) {
-                            Text("Choose Folio as assistant")
+                            Text(stringResource(R.string.choose_folio_as_assistant))
                         }
                     }
-                    SettingsCard("Spotlight") {
-                        Text("Search with Enter", style = MaterialTheme.typography.labelLarge)
+                    SettingsCard(stringResource(R.string.spotlight)) {
+                        Text(stringResource(R.string.search_with_enter), style = MaterialTheme.typography.labelLarge)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(WebSearchTarget.GOOGLE to "Google (no AI)", WebSearchTarget.DUCKDUCKGO to "DuckDuckGo").forEach { (target, label) ->
                                 IosChip(selected = state.searchEngine == target.name, onClick = { model.setSearchEngine(target.name) }, label = { Text(label) })
@@ -243,17 +244,17 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         val messageContext = androidx.compose.ui.platform.LocalContext.current
                         val iMessageApps = remember { Messaging.iMessageApps.filter { Messaging.installed(messageContext, it.first) } }
                         if (iMessageApps.isNotEmpty()) {
-                            Text("Message contacts with", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            Text(stringResource(R.string.message_contacts_with), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IosChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text("Texting app") })
+                                IosChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text(stringResource(R.string.texting_app)) })
                                 iMessageApps.forEach { (pkg, label) ->
                                     IosChip(selected = state.messagesApp == pkg, onClick = { model.setMessagesApp(pkg) }, label = { Text(label) })
                                 }
                             }
                         }
                     }
-                    SettingsCard("Actions") {
-                        Text("Pick what gestures and events do, Activator-style. Events run while Folio’s Home or gestures service is active.",
+                    SettingsCard(stringResource(R.string.actions)) {
+                        Text(stringResource(R.string.pick_what_gestures_and_events_do_activat),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         var openTrigger by remember { mutableStateOf<FolioTrigger?>(null) }
                         FolioTrigger.entries.forEach { trigger ->
@@ -272,7 +273,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
-                    SettingsCard("Left of Home") {
+                    SettingsCard(stringResource(R.string.left_of_home)) {
                         val leftContext = androidx.compose.ui.platform.LocalContext.current
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover").forEach { (value, label) ->
@@ -285,10 +286,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                                 }, label = { Text(label) })
                             }
                         }
-                        Text("Today View is iPhone's widget page: search, suggestions and your widgets. Google Discover needs the Google app.",
+                        Text(stringResource(R.string.today_view_is_iphone_s_widget_page_searc),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (state.leftPage == "TODAY") {
-                            Text("When unfolded", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            Text(stringResource(R.string.when_unfolded), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf("PAGE" to "Swipe to it", "BESIDE" to "Beside Home", "OFF" to "Off").forEach { (value, label) ->
                                     IosChip(selected = state.todayUnfolded == value, onClick = { model.setTodayUnfolded(value) }, label = { Text(label) })
@@ -301,55 +302,55 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    SettingsCard("App Library") {
-                        SettingsSwitch("Group apps into categories", state.libraryCategories, model::setLibraryCategories, "library-categories-switch")
+                    SettingsCard(stringResource(R.string.app_library)) {
+                        SettingsSwitch(stringResource(R.string.group_apps_into_categories), state.libraryCategories, model::setLibraryCategories, "library-categories-switch")
                     }
-                    SettingsCard("Search") {
-                        SettingsSwitch("Search button on Home", state.searchPill, model::setSearchPill, "search-pill-switch")
-                        SettingsSwitch("Swipe down on Home for Spotlight", state.swipeDownSearch, model::setSwipeDownSearch, "swipe-search-switch")
-                        SettingsSwitch("Drag page dots to flip pages", state.pageScrub, model::setPageScrub, "page-scrub-switch")
-                        SettingsSwitch("Haptic feedback", state.haptics, model::setHaptics, "haptics-switch")
-                        SettingsSwitch("Search button opens the Google app", state.googleSearch, model::setGoogleSearch, "google-search-switch")
-                        Text("When off, the search button opens Spotlight: apps, contacts, settings, a calculator, Google without AI, and ChatGPT, Claude or Perplexity.",
+                    SettingsCard(stringResource(R.string.search)) {
+                        SettingsSwitch(stringResource(R.string.search_button_on_home), state.searchPill, model::setSearchPill, "search-pill-switch")
+                        SettingsSwitch(stringResource(R.string.swipe_down_on_home_for_spotlight), state.swipeDownSearch, model::setSwipeDownSearch, "swipe-search-switch")
+                        SettingsSwitch(stringResource(R.string.drag_page_dots_to_flip_pages), state.pageScrub, model::setPageScrub, "page-scrub-switch")
+                        SettingsSwitch(stringResource(R.string.haptic_feedback), state.haptics, model::setHaptics, "haptics-switch")
+                        SettingsSwitch(stringResource(R.string.search_button_opens_the_google_app), state.googleSearch, model::setGoogleSearch, "google-search-switch")
+                        Text(stringResource(R.string.when_off_the_search_button_opens_spotlig),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 CustomizationPage.STATUS -> {
                     MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
                     val st = state.statusStyle
-                    SettingsCard("App icons") {
+                    SettingsCard(stringResource(R.string.app_icons)) {
                         val iconContext = androidx.compose.ui.platform.LocalContext.current
                         val packs = remember { IconPacks.installed(iconContext) }
-                        Text("Icon pack", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.icon_pack), style = MaterialTheme.typography.labelLarge)
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text("App icons") })
+                            IosChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text(stringResource(R.string.app_icons)) })
                             packs.forEach { pack ->
                                 IosChip(selected = state.iconPack == pack.packageName, onClick = { IconPacks.clear(); model.setIconPack(pack.packageName) },
                                     label = { Text(pack.label) })
                             }
                         }
-                        if (packs.isEmpty()) Text("Install any icon pack made for Nova-style launchers to use it here.",
+                        if (packs.isEmpty()) Text(stringResource(R.string.install_any_icon_pack_made_for_nova_styl),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SettingsSwitch("Live Clock and Calendar icons", state.liveIcons, model::setLiveIcons, "live-icons-switch")
-                        Text("Shape", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        SettingsSwitch(stringResource(R.string.live_clock_and_calendar_icons), state.liveIcons, model::setLiveIcons, "live-icons-switch")
+                        Text(stringResource(R.string.shape), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconShape.entries.forEach { shape ->
                                 IosChip(selected = state.iconShape == shape, onClick = { model.setIconShape(shape) }, label = { Text(shape.label) })
                             }
                         }
-                        Text("Notification badges", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        Text(stringResource(R.string.notification_badges), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BadgeStyle.entries.forEach { style ->
                                 IosChip(selected = state.badgeStyle == style, onClick = { model.setBadgeStyle(style) }, label = { Text(style.label) })
                             }
                         }
-                        if (state.badgeStyle != BadgeStyle.OFF) Text("Badge color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        if (state.badgeStyle != BadgeStyle.OFF) Text(stringResource(R.string.badge_color), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         if (state.badgeStyle != BadgeStyle.OFF) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             BadgeColor.entries.forEach { color ->
                                 IosChip(selected = state.badgeColor == color, onClick = { model.setBadgeColor(color) }, label = { Text(color.label) })
                             }
                         }
-                        Text("Style", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                        Text(stringResource(R.string.style), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconStyle.entries.forEach { style ->
                                 IosChip(selected = state.iconStyle == style, onClick = { model.setIconStyle(style, state.iconTint) },
@@ -375,62 +376,62 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             }
                         }
                     }
-                    SettingsCard("Side rail") {
-                        SettingsSwitch("Left-handed layout (rail on the left)", state.leftHanded, model::setLeftHanded, "left-handed-switch")
-                        SettingsSwitch("Show app names", state.labels, model::setLabels, "label-switch")
-                        SettingsSwitch("Magnify dock icons under your finger", state.dockMagnify, model::setDockMagnify, "dock-magnify-switch")
-                        SettingsSwitch("Swipe up on an app for its quick panel", state.appPanels, model::setAppPanels, "app-panels-switch")
+                    SettingsCard(stringResource(R.string.side_rail)) {
+                        SettingsSwitch(stringResource(R.string.left_handed_layout_rail_on_the_left), state.leftHanded, model::setLeftHanded, "left-handed-switch")
+                        SettingsSwitch(stringResource(R.string.show_app_names), state.labels, model::setLabels, "label-switch")
+                        SettingsSwitch(stringResource(R.string.magnify_dock_icons_under_your_finger), state.dockMagnify, model::setDockMagnify, "dock-magnify-switch")
+                        SettingsSwitch(stringResource(R.string.swipe_up_on_an_app_for_its_quick_panel), state.appPanels, model::setAppPanels, "app-panels-switch")
                         CustomizationSlider("Frost", "${(st.railGlass * 100).toInt()}%", st.railGlass, 0f..0.8f) {
                             model.setStatusStyle(st.copy(railGlass = it))
                         }
                     }
-                    SettingsCard("Status") {
-                        SettingsSwitch("Show status in the rail", state.verticalStatus, model::setVerticalStatus, "status-switch")
+                    SettingsCard(stringResource(R.string.status)) {
+                        SettingsSwitch(stringResource(R.string.show_status_in_the_rail), state.verticalStatus, model::setVerticalStatus, "status-switch")
                         if (state.verticalStatus) {
-                            Text("Icon style", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.icon_style), style = MaterialTheme.typography.labelLarge)
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 StatusGlyph.entries.forEach { g ->
                                     IosChip(selected = st.glyph == g, onClick = { model.setStatusStyle(st.copy(glyph = g)) }, label = { Text(g.label) },
                                         modifier = Modifier.testTag("status-glyph-${g.name.lowercase()}"))
                                 }
                             }
-                            SettingsSwitch("Time", st.showTime, { model.setStatusStyle(st.copy(showTime = it)) }, "status-time")
-                            SettingsSwitch("Date", st.showDate, { model.setStatusStyle(st.copy(showDate = it)) }, "status-date")
-                            SettingsSwitch("Battery percentage", st.showBatteryPercent, { model.setStatusStyle(st.copy(showBatteryPercent = it)) }, "status-percent")
-                            SettingsSwitch("Color battery when charging or low", st.colorfulBattery, { model.setStatusStyle(st.copy(colorfulBattery = it)) }, "status-color")
+                            SettingsSwitch(stringResource(R.string.time), st.showTime, { model.setStatusStyle(st.copy(showTime = it)) }, "status-time")
+                            SettingsSwitch(stringResource(R.string.date), st.showDate, { model.setStatusStyle(st.copy(showDate = it)) }, "status-date")
+                            SettingsSwitch(stringResource(R.string.battery_percentage), st.showBatteryPercent, { model.setStatusStyle(st.copy(showBatteryPercent = it)) }, "status-percent")
+                            SettingsSwitch(stringResource(R.string.color_battery_when_charging_or_low), st.colorfulBattery, { model.setStatusStyle(st.copy(colorfulBattery = it)) }, "status-color")
                         }
                     }
-                    SettingsCard("In every app") {
-                        SettingsSwitch("Dock handle on the rail edge", state.dockEverywhere, { on ->
+                    SettingsCard(stringResource(R.string.in_every_app)) {
+                        SettingsSwitch(stringResource(R.string.dock_handle_on_the_rail_edge), state.dockEverywhere, { on ->
                             model.setDockEverywhere(on); if (on && !SystemShadeAccessibilityService.isConnected()) onShadeSetup()
                         }, "dock-everywhere-switch")
-                        SettingsSwitch("Dynamic Island", state.islandEverywhere, { on ->
+                        SettingsSwitch(stringResource(R.string.dynamic_island), state.islandEverywhere, { on ->
                             model.setIslandEverywhere(on); if (on && !SystemShadeAccessibilityService.isConnected()) onShadeSetup()
                         }, "island-everywhere-switch")
-                        Text("Uses Folio\u2019s accessibility service (the same one as shade gestures). Tap or drag the handle to open your dock. If the handle fights the back gesture, lower the right-edge back sensitivity.",
+                        Text(stringResource(R.string.uses_folios_accessibility_service_the_sa),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard("Island") {
+                    SettingsCard(stringResource(R.string.island)) {
                         val islandContext = androidx.compose.ui.platform.LocalContext.current
-                        SettingsSwitch("Music and live progress", state.island, { on ->
+                        SettingsSwitch(stringResource(R.string.music_and_live_progress), state.island, { on ->
                             model.setIsland(on)
                             if (on && !IslandListenerService.hasAccess(islandContext))
                                 runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }, "island-switch")
                         if (state.island && !IslandListenerService.hasAccess(islandContext)) TextButton(onClick = {
                             runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
-                        }) { Text("Allow notification access") }
+                        }) { Text(stringResource(R.string.allow_notification_access)) }
                         if (state.island) {
-                            Text("Long-press and drag the island to move it. On the inner screen the camera sits under the display, so drag it onto the camera once.",
+                            Text(stringResource(R.string.long_press_and_drag_the_island_to_move_i),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            TextButton(onClick = { IslandPosition.reset(islandContext) }) { Text("Put the island back at the camera") }
-                            Text("Brief pop-ups", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+                            TextButton(onClick = { IslandPosition.reset(islandContext) }) { Text(stringResource(R.string.put_the_island_back_at_the_camera)) }
+                            Text(stringResource(R.string.brief_pop_ups), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
                             listOf("CHARGING" to "Charging", "SILENT" to "Silent mode", "FOCUS" to "Do Not Disturb", "BLUETOOTH" to "Bluetooth devices", "MESSAGE" to "New messages (with quick reply)", "CALL" to "Calls (answer, decline, end)").forEach { (kind, label) ->
                                 SettingsSwitch(label, kind !in state.islandEventsOff, { model.setIslandEvent(kind, it) }, "island-event-${kind.lowercase()}")
                             }
                             if ("MESSAGE" !in state.islandEventsOff) MessageBannerSettings(state.messagesAvoidDouble, model::setMessagesAvoidDouble)
                         }
-                        Text("Reads only music, calls, timers, navigation and progress. Nothing leaves your phone.",
+                        Text(stringResource(R.string.reads_only_music_calls_timers_navigation),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -438,64 +439,67 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     // What Folio has learned about how fast you fold (it adapts the animation to this).
                     val foldPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("folio", 0)
                     var learned by remember { mutableStateOf(foldPrefs.getFloat("fold_open_ms", 520f) to foldPrefs.getFloat("fold_close_ms", 650f)) }
-                    SettingsCard("Your fold timing") {
+                    SettingsCard(stringResource(R.string.your_fold_timing)) {
                         Text("Unfold: about ${learned.first.toInt()} ms · Fold: about ${learned.second.toInt()} ms",
                             style = MaterialTheme.typography.bodyLarge)
-                        Text("Learned from your last folds and used to pace the animation. Reset if someone else has been using the phone.",
+                        Text(stringResource(R.string.learned_from_your_last_folds_and_used_to),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = {
                             foldPrefs.edit().remove("fold_open_ms").remove("fold_close_ms").apply()
                             learned = 520f to 650f
-                        }) { Text("Reset fold timing") }
+                        }) { Text(stringResource(R.string.reset_fold_timing)) }
                     }
-                    SettingsCard("Fold animation") {
-                        SettingsSwitch("Fold animation", state.foldEffect, model::setFoldEffect, "fold-effect-switch")
+                    SettingsCard(stringResource(R.string.fold_animation)) {
+                        SettingsSwitch(stringResource(R.string.fold_animation), state.foldEffect, model::setFoldEffect, "fold-effect-switch")
                         if (state.foldEffect) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("iPhone Duo fade") })
-                            IosChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text("Screenshot morph") })
+                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text(stringResource(R.string.iphone_duo_fade)) })
+                            IosChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text(stringResource(R.string.screenshot_morph)) })
                         }
-                        if (state.foldEffect && state.foldSnapshot) Text("Takes a quick in-memory snapshot of Folio’s screen as the hinge starts moving and melts it into the other display. Nothing is saved.",
+                        if (state.foldEffect && state.foldSnapshot) Text(stringResource(R.string.takes_a_quick_in_memory_snapshot_of_foli),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (state.foldEffect) CustomizationSlider("Intensity", "${(state.foldIntensity * 100).toInt()}%",
                             state.foldIntensity, .3f..1.5f) { model.setFoldIntensity(it) }
-                        Text("Your Fold reports only a few hinge positions, so Folio learns how fast you open and close and paces the effect to match.",
+                        Text(stringResource(R.string.your_fold_reports_only_a_few_hinge_posit),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard("StandBy") {
-                        SettingsSwitch("Show StandBy when set down half-open", state.standBy, model::setStandBy, "standby-switch")
-                        Text("Big clock, date, next alarm, battery and music while the phone sits half-open on Home. Turns dim red at night. Tap to leave.",
+                    SettingsCard(stringResource(R.string.standby)) {
+                        SettingsSwitch(stringResource(R.string.show_standby_when_set_down_half_open), state.standBy, model::setStandBy, "standby-switch")
+                        Text(stringResource(R.string.big_clock_date_next_alarm_battery_and_mu),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    SettingsCard("Closing from Home") {
-                        SettingsSwitch("Stay awake on the cover screen", state.stayAwakeOnFold, model::setStayAwakeOnFold, "fold-awake-switch")
-                        Text("Samsung locks the phone when you fold on any home screen. Folio briefly steps aside while you close it so the cover screen stays on. Needs Settings › Display › Continue apps on cover screen › Always.",
+                    SettingsCard(stringResource(R.string.closing_from_home)) {
+                        SettingsSwitch(stringResource(R.string.stay_awake_on_the_cover_screen), state.stayAwakeOnFold, model::setStayAwakeOnFold, "fold-awake-switch")
+                        Text(stringResource(R.string.samsung_locks_the_phone_when_you_fold_on),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 CustomizationPage.BACKUP -> {
-                    Text("Save the current Home layout, folders, widgets, and layout settings.",
+                    Text(stringResource(R.string.save_the_current_home_layout_folders_wid),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onExportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-export")) { Text("Save") }
-                        Button(onClick = onImportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-import")) { Text("Restore") }
+                        OutlinedButton(onClick = onExportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-export")) { Text(stringResource(R.string.save)) }
+                        Button(onClick = onImportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-import")) { Text(stringResource(R.string.restore)) }
                     }
-                    Text("Restore shows a review before changing Home.", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.restore_shows_a_review_before_changing_h), style = MaterialTheme.typography.bodySmall)
                 }
                 CustomizationPage.SIDE_KEY -> SideKeyPage()
                 CustomizationPage.LOCK -> {
-                    SettingsCard("Lock Cover") {
-                        SettingsSwitch("Show after unlocking", state.lockCover, model::setLockCover, "lock-cover-switch")
-                        Text("Android doesn’t let apps replace the real lock screen. When you unlock straight to Home, Folio shows an iPhone-style cover with the time, next alarm and notifications. Swipe up to open Home.",
+                    SettingsCard(stringResource(R.string.lock_cover)) {
+                        SettingsSwitch(stringResource(R.string.show_after_unlocking), state.lockCover, model::setLockCover, "lock-cover-switch")
+                        Text(stringResource(R.string.android_doesn_t_let_apps_replace_the_rea),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 CustomizationPage.CREDITS -> CreditsPage()
-                CustomizationPage.HELP -> LauncherHelp(
-                    isDefaultHome = isDefaultHome,
-                    onHomeSettings = onMakeDefault,
-                    onAddWidget = { onAddWidget(homePage) },
-                    onShadeSetup = onShadeSetup,
-                )
+                CustomizationPage.HELP -> {
+                    LauncherHelp(
+                        isDefaultHome = isDefaultHome,
+                        onHomeSettings = onMakeDefault,
+                        onAddWidget = { onAddWidget(homePage) },
+                        onShadeSetup = onShadeSetup,
+                    )
+                    CrashReportsCard()
+                }
             }
         }
     }
@@ -520,13 +524,13 @@ private fun LauncherHelp(
     HelpSection(Icons.Rounded.Widgets, "Widgets",
         "Add Android widgets to empty Home cells. Hold a widget to move or remove it.")
     OutlinedButton(onClick = onAddWidget, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-add-widget")) {
-        Text("Add widget to this page")
+        Text(stringResource(R.string.add_widget_to_this_page))
     }
     HorizontalDivider(Modifier.padding(vertical = 4.dp))
     HelpSection(Icons.Rounded.SwipeDown, "Notifications and quick settings",
         "Pull down from the top of Home. The first time, Folio explains Android’s optional Accessibility setting, which opens the system panels and, if you turn them on, shows the dock handle and island over other apps.")
     TextButton(onClick = onShadeSetup, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-shade-setup")) {
-        Text("Set up shade gestures")
+        Text(stringResource(R.string.set_up_shade_gestures))
     }
     HelpSection(Icons.Rounded.Explore, "Discover",
         "Swipe right from the first Home page. If Google can’t provide the feed, Folio keeps a Home return and recovery actions available.")
@@ -557,7 +561,7 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
             contentAlignment = Alignment.Center) {
             Text("F", color = androidx.compose.ui.graphics.Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
         }
-        Text("Folio", color = androidx.compose.ui.graphics.Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        Text(stringResource(R.string.folio), color = androidx.compose.ui.graphics.Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         Text("iPhone Duo for your Fold · v$version", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 14.sp)
     }
 }
@@ -586,15 +590,15 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
     val assistant = remember(tick) { AssistPickerActivity.isDefaultAssistant(context) }
     val hold = remember(tick) { sideKeyHoldIsAssistant(context) }
     val wallet = remember(tick) { sideKeyDoublePressIsWallet(context) }
-    SettingsCard("Press and Hold") {
+    SettingsCard(stringResource(R.string.press_and_hold)) {
         SideKeyStep("1. Folio is your digital assistant", "Settings › Apps › Default apps › Digital assistant app › Folio", assistant) { open(AssistPickerActivity.settingsIntent()) }
         SideKeyStep("2. Hold the side key: Digital assistant", "Side button › Press and hold › Digital assistant", hold) { open(sideKeySettings(context)) }
-        Text("Then holding the side key opens Folio’s picker: ChatGPT, Claude, Perplexity, Gemini or Google without AI.",
+        Text(stringResource(R.string.then_holding_the_side_key_opens_folio_s),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    SettingsCard("Double Press") {
+    SettingsCard(stringResource(R.string.double_press)) {
         SideKeyStep("Double press: Google Wallet", "Side button › Double press › Open app › Wallet", wallet) { open(sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) }
-        Text("Like double-clicking the side button for Apple Pay. If Wallet isn’t listed, choose “Open app” and pick Wallet.",
+        Text(stringResource(R.string.like_double_clicking_the_side_button_for),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -606,7 +610,26 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
             Text(path, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (done) Icon(Icons.Rounded.CheckCircle, "Done", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
-        else TextButton(onClick = onOpen) { Text("Open") }
+        else TextButton(onClick = onOpen) { Text(stringResource(R.string.open)) }
+    }
+}
+
+@Composable private fun CrashReportsCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var reports by remember { mutableStateOf(CrashLog.reports(context)) }
+    SettingsCard(stringResource(R.string.crash_reports)) {
+        Text(if (reports.isEmpty()) "No crashes recorded." else "${reports.size} saved on this phone. Nothing is sent unless you share it.",
+            style = MaterialTheme.typography.bodyMedium)
+        reports.firstOrNull()?.let { latest ->
+            Text(latest.readLines().take(5).joinToString("\n"), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { runCatching { context.startActivity(CrashLog.shareIntent(latest).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }) {
+                    Text(stringResource(R.string.share_latest))
+                }
+                TextButton(onClick = { CrashLog.clear(context); reports = emptyList() }) { Text(stringResource(R.string.clear)) }
+            }
+        }
     }
 }
 
@@ -623,7 +646,7 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
         "ColorFlow" to "David Goldman · album art colors idea",
         "Harbor" to "Evan Swick · dock magnification idea",
     )
-    SettingsCard("Thanks to") {
+    SettingsCard(stringResource(R.string.thanks_to)) {
         credits.forEach { (name, detail) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                 Text(name)
@@ -631,7 +654,7 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
             }
         }
     }
-    Text("Tweak ideas were re-created from scratch; no tweak code is included. Apple, iPhone and Samsung are trademarks of their owners.",
+    Text(stringResource(R.string.tweak_ideas_were_re_created_from_scratch),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
 }
 
@@ -707,10 +730,10 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
             if (state.searchPill) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = unit(10f), end = unit(40f))
                 .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (ink.dark) .45f else .2f), RoundedCornerShape(50))
                 .padding(horizontal = unit(10f), vertical = unit(3f))) {
-                Text("Search", color = ink.primary, fontSize = (7 * scale).sp)
+                Text(stringResource(R.string.search), color = ink.primary, fontSize = (7 * scale).sp)
             }
         }
-        if (state.systemWallpaper) Text("Colors from your Android wallpaper (apps can’t show its image here)",
+        if (state.systemWallpaper) Text(stringResource(R.string.colors_from_your_android_wallpaper_apps),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
     }
 }
@@ -720,39 +743,39 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
     onAddWidget: (Int) -> Unit, onRemoveWidget: (Int) -> Unit) {
     val p = if (wide) state.expanded else state.compact
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IosChip(!wide, { onWide(false) }, label = { Text("Cover") })
-        IosChip(wide, { onWide(true) }, label = { Text("Inner") })
+        IosChip(!wide, { onWide(false) }, label = { Text(stringResource(R.string.cover)) })
+        IosChip(wide, { onWide(true) }, label = { Text(stringResource(R.string.inner)) })
     }
-    OutlinedButton(onClick = onEditPins, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Choose Home apps") }
+    OutlinedButton(onClick = onEditPins, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.choose_home_apps)) }
     CustomizationSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
     CustomizationSlider("Space between rows", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
     CustomizationSlider("Dock width", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }
-    SettingsSwitch("Align dock with app rows", p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
+    SettingsSwitch(stringResource(R.string.align_dock_with_app_rows), p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
     if (!p.dockAlignToGrid) CustomizationSlider("Dock height on screen", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
-    TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }, Modifier.fillMaxWidth()) { Text("Reset this layout") }
+    TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }, Modifier.fillMaxWidth()) { Text(stringResource(R.string.reset_this_layout)) }
     HorizontalDivider(Modifier.padding(vertical = 6.dp))
     Text("Widgets · Page ${homePage + 1}", style = MaterialTheme.typography.titleMedium)
     state.widgetPlacements.filter { it.page == homePage || (wide && it.page == -1) }.forEach { placement ->
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (placement.page == -1) "Unfolded-only page" else "${placement.spanX} × ${placement.spanY} widget · row ${placement.row + 1}", Modifier.weight(1f))
             IconButton(onClick = { onRemoveWidget(placement.slot) }, modifier = Modifier.semantics { contentDescription = if (placement.page == -1) "Remove widget from Unfolded-only page" else "Remove widget" }) { Icon(Icons.Rounded.DeleteOutline, null) }
-            TextButton(onClick = { onWidget(placement.slot) }) { Text("Replace") }
+            TextButton(onClick = { onWidget(placement.slot) }) { Text(stringResource(R.string.replace)) }
         }
     }
-    TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Add widget to this page") }
+    TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.add_widget_to_this_page)) }
 }
 
 /** Keeps Android's pop-up and Folio's island message card from showing for the same message. */
 @Composable private fun MessageBannerSettings(avoidDouble: Boolean, onAvoidDouble: (Boolean) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val channels by IslandListenerService.messageChannels.collectAsState()
-    SettingsSwitch("Don\u2019t double up with Android pop-ups", avoidDouble, onAvoidDouble, "messages-avoid-double-switch")
+    SettingsSwitch(stringResource(R.string.dont_double_up_with_android_pop_ups), avoidDouble, onAvoidDouble, "messages-avoid-double-switch")
     Text(if (avoidDouble) "Messages that Android already pops up are left to Android. Turn off Android\u2019s pop-up for an app below and its messages use the island instead (sound, badges and the notification list stay the same)."
         else "The island shows every new message, even when Android also shows its own pop-up.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (!avoidDouble) return
     val list = channels.values.sortedWith(compareBy({ !it.popsUp }, { it.appLabel }))
-    if (list.isEmpty()) Text("Messaging apps appear here after they post a notification.",
+    if (list.isEmpty()) Text(stringResource(R.string.messaging_apps_appear_here_after_they_po),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     list.forEach { channel ->
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -761,14 +784,15 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
                 Text(listOfNotNull(channel.channelName, if (channel.popsUp) "Android pop-up" else "Island").joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (channel.popsUp) TextButton(onClick = { runCatching { context.startActivity(channel.settingsIntent()) } }) { Text("Use island") }
+            if (channel.popsUp) TextButton(onClick = { runCatching { context.startActivity(channel.settingsIntent()) } }) { Text(stringResource(R.string.use_island)) }
             else Icon(Icons.Rounded.Check, "Uses the island", tint = androidx.compose.ui.graphics.Color(0xFF30D158))
         }
     }
 }
 
 @Composable private fun SettingsSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit, tag: String? = null) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+    // One accessible element for TalkBack ("label, switch, on"); the whole row toggles.
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f)); IosSwitch(checked, onChecked, Modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier))
     }
 }

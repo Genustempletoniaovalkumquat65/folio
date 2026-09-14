@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -24,7 +25,7 @@ internal fun AppearanceSettings(state: AppearanceState, onMode: (AppearanceMode)
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("appearance-settings")) {
-        Text("Appearance", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleMedium)
         AppearanceMode.entries.forEach { mode ->
             FilterChip(selected = state.mode == mode, onClick = { onMode(mode) }, label = { Text(when (mode) {
                 AppearanceMode.LIGHT -> "Light"; AppearanceMode.DARK -> "Dark"; AppearanceMode.SYSTEM -> "Follow system"
@@ -33,10 +34,10 @@ internal fun AppearanceSettings(state: AppearanceState, onMode: (AppearanceMode)
         }
         if (state.mode == AppearanceMode.SUNRISE_SUNSET) {
             state.fallback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            OutlinedTextField(place, { place = it }, Modifier.testTag("appearance-place"), label = { Text("Place name") }, singleLine = true)
+            OutlinedTextField(place, { place = it }, Modifier.testTag("appearance-place"), label = { Text(stringResource(R.string.place_name)) }, singleLine = true)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(latitude, { latitude = it }, Modifier.weight(1f).testTag("appearance-latitude"), label = { Text("Latitude (−90 to 90)") }, singleLine = true)
-                OutlinedTextField(longitude, { longitude = it }, Modifier.weight(1f).testTag("appearance-longitude"), label = { Text("Longitude (−180 to 180)") }, singleLine = true)
+                OutlinedTextField(latitude, { latitude = it }, Modifier.weight(1f).testTag("appearance-latitude"), label = { Text(stringResource(R.string.latitude_90_to_90)) }, singleLine = true)
+                OutlinedTextField(longitude, { longitude = it }, Modifier.weight(1f).testTag("appearance-longitude"), label = { Text(stringResource(R.string.longitude_180_to_180)) }, singleLine = true)
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(onClick = {
@@ -45,15 +46,15 @@ internal fun AppearanceSettings(state: AppearanceState, onMode: (AppearanceMode)
                     if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
                         inputError = null; onManual(place, lat, lon)
                     } else inputError = "Enter a latitude from −90 to 90 and longitude from −180 to 180." },
-                    modifier = Modifier.fillMaxWidth().testTag("appearance-save-place")) { Text("Use this place") }
+                    modifier = Modifier.fillMaxWidth().testTag("appearance-save-place")) { Text(stringResource(R.string.use_this_place)) }
                 AppearanceFeedback(inputError, MaterialTheme.colorScheme.error, "appearance-manual-status")
                 OutlinedButton(onClick = {
                     focusManager.clearFocus(); keyboard?.hide(); onDeviceLocation()
                 }, modifier = Modifier.fillMaxWidth()
-                    .testTag("appearance-device-location")) { Text("Use device location") }
+                    .testTag("appearance-device-location")) { Text(stringResource(R.string.use_device_location)) }
                 AppearanceFeedback(state.locationStatus, MaterialTheme.colorScheme.onSurfaceVariant,
                     "appearance-location-status")
-                if (state.latitude != null) TextButton(onClick = onClear, Modifier.fillMaxWidth()) { Text("Clear location") }
+                if (state.latitude != null) TextButton(onClick = onClear, Modifier.fillMaxWidth()) { Text(stringResource(R.string.clear_location)) }
             }
         }
     }

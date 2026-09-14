@@ -134,13 +134,18 @@ class MainActivity : ComponentActivity() {
             }
             val badgeCounts = androidx.compose.runtime.remember(notificationItems) { notificationItems.groupingBy { it.packageName }.eachCount() }
             val wallpaperTone = rememberWallpaperTone(state.systemWallpaper)
+            // Re-read on every resume so turning Remove animations on/off applies without restarting.
+            val reduceMotionState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(reduceMotionEnabled(this@MainActivity)) }
+            androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { reduceMotionState.value = reduceMotionEnabled(this@MainActivity); onPauseOrDispose { } }
+            val reduceMotion = reduceMotionState.value
             val iconTint = if (state.iconTintFromWallpaper) wallpaperTone.primary?.let(::vividTint)?.toLong()?.and(0xFFFFFFFFL) ?: state.iconTint else state.iconTint
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperTone provides wallpaperTone,
+                LocalReduceMotion provides reduceMotion,
                 LocalTintOptions provides TintOptions(state.tintNotifications, state.tintMedia, state.notificationAppRow),
                 androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
                 LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
-                LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
+                LocalBadgeCounts provides badgeCounts, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {
                     val p = overlayProgress

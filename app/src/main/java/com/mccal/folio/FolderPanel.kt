@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -150,11 +151,11 @@ private fun FolderChild(
                     }, modifier = Modifier.testTag("folder-move-${app.id}-page-$destinationPage"))
                 }
                 dockVacancies.firstOrNull()?.let { dock ->
-                    DropdownMenuItem(text = { Text("Move to dock") }, onClick = {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.move_to_dock)) }, onClick = {
                         menu = false; onMoveOut(app.id, DropTarget.Dock(dock))
                     }, modifier = Modifier.testTag("folder-move-${app.id}-dock"))
                 }
-                DropdownMenuItem(text = { Text("Remove shortcut") }, onClick = {
+                DropdownMenuItem(text = { Text(stringResource(R.string.remove_shortcut)) }, onClick = {
                     menu = false; onMoveOut(app.id, DropTarget.Remove)
                 }, modifier = Modifier.testTag("folder-remove-${app.id}"))
             }

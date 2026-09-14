@@ -2,6 +2,7 @@
 
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -82,7 +83,7 @@ class AssistPickerActivity : ComponentActivity() {
                             Icon(Icons.Rounded.Search, null, tint = Color.White.copy(alpha = .7f))
                             Spacer(Modifier.width(10.dp))
                             Box(Modifier.weight(1f)) {
-                                if (query.isEmpty()) Text("Search Google without AI", color = Color.White.copy(alpha = .5f), fontSize = 17.sp)
+                                if (query.isEmpty()) Text(stringResource(R.string.search_google_without_ai), color = Color.White.copy(alpha = .5f), fontSize = 17.sp)
                                 BasicTextField(query, { query = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true,
                                     textStyle = TextStyle(color = Color.White, fontSize = 17.sp), cursorBrush = SolidColor(Color.White),
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -92,12 +93,12 @@ class AssistPickerActivity : ComponentActivity() {
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PickerPill("Spotlight", Modifier.weight(1f)) {
+                            PickerPill(stringResource(R.string.spotlight), Modifier.weight(1f)) {
                                 SpotlightRequest.request()
                                 startActivity(Intent(this@AssistPickerActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                 finish()
                             }
-                            PickerPill("DuckDuckGo", Modifier.weight(1f)) {
+                            PickerPill(stringResource(R.string.duckduckgo), Modifier.weight(1f)) {
                                 if (query.isNotBlank()) { openWebSearch(this@AssistPickerActivity, WebSearchTarget.DUCKDUCKGO, query); finish() }
                                 else focus.requestFocus()
                             }

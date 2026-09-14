@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,16 +33,16 @@ internal fun DiscoverContent(modifier: Modifier = Modifier) {
             border = BorderStroke(1.dp, Color.White.copy(alpha = .5f))) {
             Column(Modifier.fillMaxSize().padding(32.dp),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Discover", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.discover), style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(16.dp))
                 Text(message ?: "", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(20.dp))
-                FilledTonalButton(onClick = LiveDiscover::retry, Modifier.testTag("discover-retry")) { Text("Retry") }
+                FilledTonalButton(onClick = LiveDiscover::retry, Modifier.testTag("discover-retry")) { Text(stringResource(R.string.retry)) }
                 if (googleIntent != null) TextButton(onClick = {
                     runCatching { context.startActivity(googleIntent) }
-                }, Modifier.testTag("discover-open-google")) { Text("Open Google") }
+                }, Modifier.testTag("discover-open-google")) { Text(stringResource(R.string.open_google)) }
                 TextButton(onClick = { LiveDiscover.onHomeRequest?.invoke() },
-                    Modifier.testTag("discover-return-home")) { Text("Back to Home") }
+                    Modifier.testTag("discover-return-home")) { Text(stringResource(R.string.back_to_home_2)) }
             }
         }
     }

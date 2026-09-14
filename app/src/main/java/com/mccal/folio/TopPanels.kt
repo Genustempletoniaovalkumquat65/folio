@@ -2,6 +2,7 @@
 
 package com.mccal.folio
 
+import androidx.compose.ui.res.stringResource
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -160,7 +161,7 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
                 lineHeight = 80.sp)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Notification Center", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.notification_center), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             GlassIconButton(Icons.Rounded.Tune, "Android notifications") { onClose(); onSystem() }
             if (items.any { it.clearable }) {
                 Spacer(Modifier.width(8.dp))
@@ -168,7 +169,7 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
                 var confirmClear by remember { mutableStateOf(false) }
                 LaunchedEffect(confirmClear) { if (confirmClear) { kotlinx.coroutines.delay(3_000); confirmClear = false } }
                 androidx.compose.animation.AnimatedContent(confirmClear, label = "clear-all") { confirm ->
-                    if (confirm) PanelPill("Clear") { confirmClear = false; IslandListenerService.dismissAll() }
+                    if (confirm) PanelPill(stringResource(R.string.clear)) { confirmClear = false; IslandListenerService.dismissAll() }
                     else GlassIconButton(Icons.Rounded.Close, "Clear all") { confirmClear = true }
                 }
             }
@@ -177,7 +178,7 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
             !hasAccess -> EmptyNote("Allow notification access to see notifications here.", "Allow") {
                 onClose(); runCatching { context.startActivity(IslandListenerService.accessSettingsIntent(context)) }
             }
-            items.isEmpty() -> Text("No Notifications", color = Color.White.copy(alpha = .6f), fontSize = 15.sp,
+            items.isEmpty() -> Text(stringResource(R.string.no_notifications), color = Color.White.copy(alpha = .6f), fontSize = 15.sp,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             else -> {
             if (allGroups.size > 1 && LocalTintOptions.current.notificationAppRow) androidx.compose.foundation.lazy.LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -207,7 +208,7 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
                         if (group.size > 1) item("$pkg-header") {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(group.first().appLabel, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                PanelPill("Show less") { expandedGroup = null }
+                                PanelPill(stringResource(R.string.show_less)) { expandedGroup = null }
                             }
                         }
                         items(group, key = { it.key }) { item -> NotificationCard(item, Modifier.animateItem()) {
@@ -293,8 +294,8 @@ private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCo
                     if (replying) QuickReplyField(item.title, Modifier.padding(top = 8.dp),
                         onSend = { IslandListenerService.reply(context, item.key, it) }, onDone = { replying = false })
                     else Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (item.canReply) MessageActionPill("Reply") { replying = true }
-                        if (item.canMarkRead) MessageActionPill("Mark as Read") { IslandListenerService.markRead(item.key) }
+                        if (item.canReply) MessageActionPill(stringResource(R.string.reply)) { replying = true }
+                        if (item.canMarkRead) MessageActionPill(stringResource(R.string.mark_as_read)) { IslandListenerService.markRead(item.key) }
                     }
                 }
             }
@@ -526,7 +527,7 @@ private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames
         Column(Modifier.width(gridWidth).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(gap)) {
             // iOS 18 header: edit on the left, power on the right.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (edit.active) PanelPill("Done") { edit.stop() }
+                if (edit.active) PanelPill(stringResource(R.string.done)) { edit.stop() }
                 else GlassIconButton(Icons.Rounded.Add, "Edit controls") { edit.start() }
                 Spacer(Modifier.weight(1f))
                 GlassIconButton(Icons.Rounded.PowerSettingsNew, "Power menu") {
