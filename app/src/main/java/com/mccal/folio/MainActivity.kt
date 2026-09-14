@@ -196,7 +196,8 @@ class MainActivity : ComponentActivity() {
                 TopPanels(topPanel.value, { overlayProgress }, deviceStatus, onClose = { topPanel.value = null },
                     onSystemPanel = { openAndroidShade(it) }, showClock = state.notificationClock, grouped = state.groupNotifications,
                     ccControls = state.ccControls, onCcControls = model::setCcControls,
-                    ccSize = state.ccSize, ccCentered = state.ccCentered, ncSplit = state.ncSplit)
+                    ccSize = state.ccSize, ccCentered = state.ccCentered, ncSplit = state.ncSplit,
+                    focusModes = state.focusModes, activeFocus = state.activeFocus, onFocus = model::setFocus)
                 SpotlightOverlay(spotlightVisible.value, { overlayProgress }, state, onClose = { spotlightVisible.value = false },
                     onLaunch = { launchApp(it) })
             } } }
@@ -240,6 +241,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         FolioForeground.visible.value = true
         FolioActions.home = java.lang.ref.WeakReference(this)
+        model.syncFocus()
         // Unlock arrived just before Home resumed: show the cover now.
         if (unlockedAt > 0 && android.os.SystemClock.uptimeMillis() - unlockedAt < 2_000 && model.state.value.lockCover) lockCoverVisible.value = true
         unlockedAt = 0L

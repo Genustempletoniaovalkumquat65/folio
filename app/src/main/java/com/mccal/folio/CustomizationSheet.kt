@@ -33,7 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS, FOCUS, FOCUS_MODE }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -49,6 +49,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
     var tweakId by rememberSaveable { mutableStateOf("") }
+    var focusId by rememberSaveable { mutableStateOf("") }
     var settingsQuery by rememberSaveable { mutableStateOf("") }
     val title = when (page) {
         CustomizationPage.OVERVIEW -> "Folio"
@@ -64,6 +65,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.LOCK -> "Lock Cover"
         CustomizationPage.CREDITS -> "Credits"
         CustomizationPage.TWEAKS -> "Tweaks"
+        CustomizationPage.FOCUS -> "Focus"
+        CustomizationPage.FOCUS_MODE -> state.focusModes.firstOrNull { it.id == focusId }?.name ?: "Focus"
         CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.name ?: "Tweak"
         CustomizationPage.ADVANCED -> "Advanced"
         CustomizationPage.NOTIFICATIONS -> "Notifications & Control Center"
@@ -76,7 +79,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
     val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
     val setupLeft = setupSteps.count { it.required && !it.done }
-    val onBack = { onPage(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else CustomizationPage.OVERVIEW) }
+    val onBack = { onPage(when (page) { CustomizationPage.TWEAK -> CustomizationPage.TWEAKS; CustomizationPage.FOCUS_MODE -> CustomizationPage.FOCUS; else -> CustomizationPage.OVERVIEW }) }
 
     // The settings list. On the phone it's the first page; in the split view it's the sidebar, with the open page highlighted.
     val overviewRows: @Composable ColumnScope.(selected: CustomizationPage?, sidebar: Boolean) -> Unit = { selected, sidebar ->
@@ -94,6 +97,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "customization-island", selected = selected == CustomizationPage.ISLAND, chevron = !sidebar) { onPage(CustomizationPage.ISLAND) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Notifications, 0xFFFF3B30, "Notifications & Control Center", "customization-notifications", selected = selected == CustomizationPage.NOTIFICATIONS, chevron = !sidebar) { onPage(CustomizationPage.NOTIFICATIONS) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.DarkMode, 0xFF5E5CE6, "Focus", "customization-focus",
+                            state.focusModes.firstOrNull { it.id == state.activeFocus }?.name, selected = selected == CustomizationPage.FOCUS, chevron = !sidebar) { onPage(CustomizationPage.FOCUS) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Search & App Library", "customization-search", selected = selected == CustomizationPage.SEARCH, chevron = !sidebar) { onPage(CustomizationPage.SEARCH) }
                         MenuDivider()
@@ -551,12 +557,15 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                 }
                 CustomizationPage.PERMISSIONS -> PermissionsPage(isDefaultHome, onMakeDefault, onShadeSetup)
+                CustomizationPage.FOCUS -> FocusListPage(state, model) { focusId = it; onPage(CustomizationPage.FOCUS_MODE) }
+                CustomizationPage.FOCUS_MODE -> state.focusModes.firstOrNull { it.id == focusId }?.let { FocusModePage(it, state, model) }
+                    ?: LaunchedEffect(Unit) { onPage(CustomizationPage.FOCUS) }
                 CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.let { tweak -> TweakPage(tweak, state, model) }
                     ?: LaunchedEffect(Unit) { onPage(CustomizationPage.TWEAKS) }
             }
     }
     if (!split) Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        SettingsNavBar(if (page == CustomizationPage.OVERVIEW) null else if (page == CustomizationPage.TWEAK) "Tweaks" else stringResource(R.string.folio), onBack, onClose)
+        SettingsNavBar(if (page == CustomizationPage.OVERVIEW) null else if (page == CustomizationPage.TWEAK) "Tweaks" else if (page == CustomizationPage.FOCUS_MODE) "Focus" else stringResource(R.string.folio), onBack, onClose)
         if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
         Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp), content = pageContent)
@@ -579,7 +588,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 else {
                     // Like the account card at the top of iPad Settings: Folio's own page.
                     SheetGroup { SidebarAppRow(selected = page == CustomizationPage.OVERVIEW, setupLeft) { onPage(CustomizationPage.OVERVIEW) } }
-                    overviewRows(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else page, true)
+                    overviewRows(when (page) { CustomizationPage.TWEAK -> CustomizationPage.TWEAKS; CustomizationPage.FOCUS_MODE -> CustomizationPage.FOCUS; else -> page }, true)
                 }
             }
         }
@@ -589,7 +598,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 Box(Modifier.fillMaxHeight().width(.5.dp).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .14f)))
             }
             Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 20.dp)) {
-                SettingsNavBar(if (page == CustomizationPage.TWEAK) "Tweaks" else null, onBack, onClose,
+                SettingsNavBar(if (page == CustomizationPage.TWEAK) "Tweaks" else if (page == CustomizationPage.FOCUS_MODE) "Focus" else null, onBack, onClose,
                     leading = if (tiled) null else ({ SidebarButton { sidebarOpen = !sidebarOpen } }))
                 if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
                 Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -800,6 +809,7 @@ private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = lis
     Triple("Lock Cover", "lock screen unlock cover clock", CustomizationPage.LOCK),
     Triple("Fold animation", "fold unfold animation blur fade duo timing", CustomizationPage.FOLD),
     Triple("StandBy", "standby tent half open clock", CustomizationPage.FOLD),
+    Triple("Focus", "focus do not disturb dnd sleep work personal silence quiet grayscale", CustomizationPage.FOCUS),
     Triple("Tweaks", "tweak jailbreak velox harbor axon velvet colorflow panels magnification tint album", CustomizationPage.TWEAKS),
     Triple("Privacy & Permissions", "privacy permissions notification access accessibility contacts bluetooth", CustomizationPage.PERMISSIONS),
     Triple("Safe Mode & crash reports", "safe mode crash report bug", CustomizationPage.ADVANCED),
@@ -899,6 +909,66 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         Text("Inspired by ${tweak.inspiredBy}. Re-created from scratch; no tweak code is included.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = { model.resetTweak(tweak) }) { Text("Reset ${tweak.name}") }
+    }
+}
+
+/** iOS Settings › Focus: the list of Focuses, with the one that's on. */
+@Composable private fun FocusListPage(state: LauncherState, model: LauncherModel, onOpen: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var access by remember { mutableStateOf(FocusController.hasAccess(context)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { access = FocusController.hasAccess(context) } }
+    SheetGroup {
+        state.focusModes.forEachIndexed { index, mode ->
+            if (index > 0) MenuDivider()
+            TweakRow(mode.icon(), mode.color, mode.name, "focus-${mode.id}", if (state.activeFocus == mode.id) "On" else null) { onOpen(mode.id) }
+        }
+    }
+    Text("Focus lets you silence notifications, change how the phone looks and bring Home to the page you need. Turn one on here or from Control Center.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    if (!access) {
+        SheetGroup { IosActionRow("Allow Do Not Disturb Access…", "focus-allow-access") {
+            runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        } }
+        Text("Without it, a Focus still changes Home but can't silence notifications or change the look.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+@Composable private fun FocusModePage(mode: FocusMode, state: LauncherState, model: LauncherModel) {
+    val on = state.activeFocus == mode.id
+    SheetGroup {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(androidx.compose.ui.graphics.Color(mode.color)), contentAlignment = Alignment.Center) {
+                Icon(mode.icon(), null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(if (on) "On" else "Off", color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+            IosSwitch(on, { model.setFocus(if (it) mode.id else null) }, Modifier.testTag("focus-switch-${mode.id}"))
+        }
+    }
+    SettingsCard("Notifications") {
+        SettingsSwitch("Silence Notifications", mode.silence, { model.updateFocusMode(mode.copy(silence = it)) }, "focus-silence")
+        Text("Calls and people allowed in Android's Do Not Disturb settings still come through.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    SettingsCard("Home Screen") {
+        val pages = state.homePages
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IosChip(mode.homePage == null, { model.updateFocusMode(mode.copy(homePage = null)) }, label = { Text("Any Page") })
+            repeat(pages) { page ->
+                IosChip(mode.homePage == page, { model.updateFocusMode(mode.copy(homePage = page)) }, label = { Text("Page ${page + 1}") })
+            }
+        }
+        Text("Home opens on this page while ${mode.name} is on.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (android.os.Build.VERSION.SDK_INT >= 35) SettingsCard("Look") {
+        SettingsSwitch("Dim Wallpaper", mode.dimWallpaper, { model.updateFocusMode(mode.copy(dimWallpaper = it)) }, "focus-dim")
+        SettingsSwitch("Dark Appearance", mode.darkTheme, { model.updateFocusMode(mode.copy(darkTheme = it)) }, "focus-dark")
+        SettingsSwitch("Grayscale", mode.grayscale, { model.updateFocusMode(mode.copy(grayscale = it)) }, "focus-gray")
+        Text("Android applies these while the Focus is on and puts things back when it ends.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

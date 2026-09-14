@@ -288,7 +288,9 @@ fun LauncherScreen(
     LaunchedEffect(state.verticalStatus) { onStatusMode(state.verticalStatus) }
     LaunchedEffect(homeRequests) { if (homeRequests > 0) {
         // An app can pause Home after the destination is visible but before its settle completes.
-        val page = pager.currentPage.takeIf { it in 0 until homePages }
+        // A Focus with its own Home page brings Home back there, like iOS Focus pages.
+        val page = FocusModes.homePage(state.focusModes.firstOrNull { it.id == state.activeFocus }, homePages)
+            ?: pager.currentPage.takeIf { it in 0 until homePages }
             ?: lastHomePage.coerceIn(0, homePages - 1)
         drag.clear(); widgetSession = null; resizeSlot = null; sheet = ""; widgetPackage = null
         widgetExactTarget = false; widgetPlacementMessage = null; selectedId = null
@@ -296,6 +298,10 @@ fun LauncherScreen(
         focus.clearFocus(); keyboard?.hide()
         pager.animateScrollToPage(page)
     } }
+    // Turning on a Focus with a Home page goes straight there.
+    LaunchedEffect(state.activeFocus) {
+        FocusModes.homePage(state.focusModes.firstOrNull { it.id == state.activeFocus }, homePages)?.let { pager.animateScrollToPage(it) }
+    }
     LaunchedEffect(settingsRequests) { if (settingsRequests > 0) {
         drag.clear(); widgetSession = null; resizeSlot = null; selectedId = null; homeEdit.stop(); sheet = "settings"
     } }
@@ -674,6 +680,7 @@ fun LauncherScreen(
                             if (contentHeight < 500.dp) 0f else 23f).coerceAtLeast(0f)
                     },
                 compact = contentHeight < 500.dp, iconSize = dockIconSize(geometry.iconSize).dp, style = state.statusStyle,
+                focus = state.focusModes.firstOrNull { it.id == state.activeFocus },
                 // Live activities grow the rail under the status; the dock below moves with the measured height.
                 island = if (state.island && state.railActivities) ({
                     RailLiveActivity(IslandListenerService.activity.collectAsState().value

@@ -82,7 +82,8 @@ internal val OverlaySpring = spring<Float>(dampingRatio = .86f, stiffness = Spri
 internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: DeviceStatus, onClose: () -> Unit,
     onSystemPanel: (ShadePanel) -> Unit, showClock: Boolean = true, grouped: Boolean = true,
     ccControls: List<String> = CcControl.DEFAULTS, onCcControls: (List<String>) -> Unit = {},
-    ccSize: PanelSize = PanelSize.STANDARD, ccCentered: Boolean = false, ncSplit: Boolean = true) {
+    ccSize: PanelSize = PanelSize.STANDARD, ccCentered: Boolean = false, ncSplit: Boolean = true,
+    focusModes: List<FocusMode> = emptyList(), activeFocus: String? = null, onFocus: (String?) -> Unit = {}) {
     val open = panel == ShadePanel.NOTIFICATIONS || panel == ShadePanel.QUICK_SETTINGS
     BackHandler(open) { onClose() }
     var shown by remember { mutableStateOf<ShadePanel?>(null) }
@@ -135,7 +136,7 @@ internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: Device
             })
         }
         if (current == ShadePanel.NOTIFICATIONS) NotificationCenter(panelModifier, showClock && !split, grouped, tall = split, onClose = onClose) { onSystemPanel(ShadePanel.NOTIFICATIONS) }
-        else ControlCenter(panelModifier, status, ccControls, onCcControls, ccSize, wide, onClose) { onSystemPanel(ShadePanel.QUICK_SETTINGS) }
+        else ControlCenter(panelModifier, status, ccControls, onCcControls, ccSize, wide, onClose, focusModes, activeFocus, onFocus) { onSystemPanel(ShadePanel.QUICK_SETTINGS) }
     }
     }
 }
@@ -469,7 +470,8 @@ private fun CcControl.icon(): ImageVector = when (this) {
 
 @Composable
 private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames: List<String>, onControls: (List<String>) -> Unit,
-    size: PanelSize, wide: Boolean, onClose: () -> Unit, onSystem: () -> Unit) {
+    size: PanelSize, wide: Boolean, onClose: () -> Unit,
+    focusModes: List<FocusMode>, activeFocus: String?, onFocus: (String?) -> Unit, onSystem: () -> Unit) {
     val context = LocalContext.current
     val controls = remember { DeviceControls(context) }
     DisposableEffect(controls) { controls.start(); onDispose { controls.stop() } }
@@ -524,7 +526,7 @@ private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames
     BoxWithConstraints(modifier.testTag("control-center")) {
         val gap = 12.dp
         // iPad-sized cells: a compact grid instead of stretching across the whole screen.
-        val rows = 5 + (maxOf(0, chosen.size - 4) + 3) / 4
+        val rows = 5 + (if (focusModes.isNotEmpty()) 1 else 0) + (maxOf(0, chosen.size - 4) + 3) / 4
         val byHeight = if (maxHeight == Dp.Infinity) Dp.Infinity else (maxHeight - 60.dp - gap * (rows - 1)) / rows
         val cell = minOf(size.cell + if (wide) 8.dp else 0.dp, (maxWidth - gap * 3) / 4, byHeight).coerceAtLeast(44.dp)
         fun span(n: Int): Dp = cell * n + gap * (n - 1)
@@ -577,6 +579,37 @@ private fun ControlCenter(modifier: Modifier, status: DeviceStatus, controlNames
                     }
                 }
                 MediaModule(media, Modifier.size(span(2)), cell, onOpen = { media?.let { onClose(); IslandListenerService.open(context, it) } })
+            }
+            // Focus, like iOS: the Focus that's on (or "Focus"); the icon toggles it, the rest opens the list.
+            if (focusModes.isNotEmpty()) {
+                var focusOpen by remember { mutableStateOf(false) }
+                val current = focusModes.firstOrNull { it.id == activeFocus }
+                if (focusOpen) Module(Modifier.width(span(4))) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        focusModes.forEach { mode ->
+                            val on = mode.id == activeFocus
+                            Row(Modifier.fillMaxWidth().clickable { onFocus(if (on) null else mode.id); focusOpen = false }
+                                .padding(horizontal = 14.dp, vertical = 8.dp).testTag("cc-focus-${mode.id}"), verticalAlignment = Alignment.CenterVertically) {
+                                RoundToggle(mode.icon(), mode.name, on, Color(mode.color), 40.dp) { onFocus(if (on) null else mode.id); focusOpen = false }
+                                Spacer(Modifier.width(12.dp))
+                                Text(mode.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                if (on) Text("On", color = FolioGlass.secondary, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                } else Module(Modifier.width(span(4)).height(cell).clickable(onClickLabel = "Choose a Focus") { focusOpen = true }.testTag("cc-focus")) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = cell * .14f), verticalAlignment = Alignment.CenterVertically) {
+                        val mode = current ?: focusModes.first()
+                        RoundToggle(mode.icon(), if (current != null) "Turn off ${mode.name}" else "Turn on ${mode.name}", current != null, Color(mode.color), cell * .7f) {
+                            onFocus(if (current != null) null else mode.id)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(current?.name ?: "Focus", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            if (current != null) Text("On", color = FolioGlass.secondary, fontSize = 13.sp)
+                        }
+                    }
+                }
             }
             // Row 3–4: the first four small controls (2×2) and brightness + volume sliders
             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {

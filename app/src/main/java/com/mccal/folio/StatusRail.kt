@@ -69,6 +69,8 @@ fun StatusRail(
     locationInUse: Boolean = false,
     island: (@Composable () -> Unit)? = null,
     style: StatusStyle = StatusStyle(),
+    /** The Focus that's on: its icon sits above the time, as iPhone shows it beside the clock. */
+    focus: FocusMode? = null,
 ) {
     val ink = LocalHomeInk.current.primary
     val now by produceState(LocalDateTime.now()) {
@@ -82,6 +84,7 @@ fun StatusRail(
     val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d") }
     val description = listOfNotNull(
         if (locationInUse) "Location in use" else null,
+        focus?.let { "${it.name} on" },
         now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, $format")),
         status.battery?.let { "Battery $it percent${if (status.charging) ", charging" else ""}" } ?: "Battery unavailable",
         if (status.wifiConnected) "Wi-Fi connected${status.wifiLevel?.let { ", signal $it of 4" } ?: ""}" else "Wi-Fi disconnected",
@@ -118,6 +121,9 @@ fun StatusRail(
                 .border(1.dp, RailBorder, capsule)
                 .padding(vertical = if (compact) 8.dp else 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                focus?.let { Icon(it.icon(), "${it.name} on", tint = androidx.compose.ui.graphics.Color(it.color).let { c ->
+                    if (LocalHomeInk.current.dark) c else androidx.compose.ui.graphics.lerp(c, androidx.compose.ui.graphics.Color.White, .35f) },
+                    modifier = Modifier.size(if (compact) 14.dp else 16.dp).testTag("status-focus")) }
                 if (style.showTime) Text(now.format(timeFormatter), color = ink, fontSize = timeSize, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
                 if (!compact && style.showDate) Text(now.format(dateFormatter), color = ink.copy(alpha = .7f), fontSize = detailSize,
