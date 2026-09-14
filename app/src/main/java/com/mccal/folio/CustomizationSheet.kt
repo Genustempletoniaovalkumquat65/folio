@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -1150,61 +1151,76 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
  * image can't be read by apps, so in that mode the preview uses the wallpaper's own reported colors and says so.
  */
 @Composable private fun MiniHomePreview(stagedBitmap: android.graphics.Bitmap?, state: LauncherState,
-    previewHeight: androidx.compose.ui.unit.Dp, iconScale: Float = 1f) {
+    previewHeight: androidx.compose.ui.unit.Dp, @Suppress("UNUSED_PARAMETER") iconScale: Float = 1f) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val backgroundRevision = LauncherBackgroundCache.revision.intValue
     val committedBitmap = remember(backgroundRevision) { cachedLauncherBackground(context) }
     val bitmap = stagedBitmap ?: committedBitmap
     val apps = remember(state.apps) { state.apps.associateBy { it.id } }
-    val homeIcons = state.homeSlots.mapNotNull { id -> id?.let(apps::get) }.take(8)
-    val dockIcons = state.dock.mapNotNull { id -> id?.let(apps::get) }.take(5)
     val tone = LocalWallpaperTone.current
     val ink = homeInkFor(state.homeInk, tone.prefersDarkText)
     val basePalette = LocalDuoPalette.current
     val glass = if (state.tintedGlass) tintedGlass(basePalette.glass, tone.primary) else basePalette.glass
-    val scale = previewHeight.value * .632f / 250f
-    fun unit(value: Float) = (value * scale).dp
+    // Home page 1 drawn at a real cover-screen size with Folio's own layout math and parts (widget cards, icons,
+    // status rail, dock, search pill), then scaled down, so the preview matches Home instead of approximating it.
+    val refW = 420f; val refH = 720f
+    val geometry = homeGeometry(refW, refH, state.compact, state.labels, statusHeight = if (state.verticalStatus) 180f else 0f, labelHeight = 20f)
+    val placements = state.widgetPlacements.filter { it.page == 0 }
+    val cells = HomeCellLayout.forPage(geometry, placements.map { it.row to it.spanY })
+    val (iconSize, labels) = (state.pageStyles[0] ?: PageStyle()).apply(geometry, state.labels)
+    val scale = previewHeight.value / refH
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.height(previewHeight).width(previewHeight * .632f).clip(RoundedCornerShape(unit(24f)))
-            .testTag("customization-home-preview")) {
-            if (state.systemWallpaper) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
-                androidx.compose.ui.graphics.Color(tone.primary ?: 0xFF5A6B78.toInt()), androidx.compose.ui.graphics.Color(tone.secondary ?: tone.primary ?: 0xFF2E3A42.toInt())))))
-            else {
-                DuneWallpaper()
-                bitmap?.let { Image(it.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
-            }
-            if (state.dimWallpaperDark && basePalette.dark) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .3f)))
-            CompositionLocalProvider(LocalHomeInk provides ink) {
-                Column(Modifier.fillMaxSize().padding(start = unit(14f), top = unit(18f), end = unit(52f)),
-                    verticalArrangement = Arrangement.spacedBy(unit(8f))) {
-                    Box(Modifier.fillMaxWidth().height(unit(42f)).background(glass.copy(alpha = .26f), RoundedCornerShape(unit(12f)))
-                        .padding(unit(6f))) {
-                        val tick by rememberMinuteTick()
-                        val time = remember(tick) { java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern(
-                            if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm")) }
-                        Text(time, color = ink.primary, fontSize = (13 * scale).sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    homeIcons.chunked(4).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        row.forEach { app ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                AppIcon(app, null, Modifier.size(unit(24f * iconScale)), shape = RoundedCornerShape(unit(6f * iconScale)))
-                                if (state.labels) Text(app.label, color = ink.primary, fontSize = (5.5f * scale).sp, maxLines = 1,
-                                    modifier = Modifier.width(unit(28f)), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Box(Modifier.height(previewHeight).width(previewHeight * (refW / refH))
+            .clip(RoundedCornerShape(26.dp * (previewHeight.value / 260f)))
+            .border(1.5.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = .18f), RoundedCornerShape(26.dp * (previewHeight.value / 260f)))
+            .testTag("customization-home-preview"), contentAlignment = Alignment.Center) {
+            Box(Modifier.requiredSize(refW.dp, refH.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
+                if (state.systemWallpaper) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(
+                    androidx.compose.ui.graphics.Color(tone.primary ?: 0xFF5A6B78.toInt()), androidx.compose.ui.graphics.Color(tone.secondary ?: tone.primary ?: 0xFF2E3A42.toInt())))))
+                else {
+                    DuneWallpaper()
+                    bitmap?.let { Image(it.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                }
+                if (state.dimWallpaperDark && basePalette.dark) Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .3f)))
+                CompositionLocalProvider(LocalHomeInk provides ink, LocalDuoPalette provides basePalette.copy(glass = glass)) {
+                    Box(Modifier.offset(x = 16.dp, y = geometry.contentTop.dp).width(geometry.gridWidth.dp).height((cells.height(GRID_ROWS)).dp)) {
+                        placements.forEach { w ->
+                            Box(Modifier.offset(x = (cells.x(w.column, w.row) + 5f).dp, y = cells.y(w.row).dp)
+                                .size((geometry.cellWidth * w.spanX - 10f).dp, (cells.spanHeight(w.row, w.spanY) - 18f).coerceAtLeast(48f).dp)) {
+                                if (w.id < 0) BuiltinWidgetCard(w.id, w.slot) {}
+                                else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(glass.copy(alpha = .26f)), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.Widgets, null, tint = ink.secondary, modifier = Modifier.size(32.dp))
+                                }
                             }
                         }
-                    } }
+                        repeat(HOME_CELLS) { local ->
+                            val app = state.homeSlots.getOrNull(local)?.let(apps::get) ?: return@repeat
+                            val row = local / GRID_COLUMNS
+                            Column(Modifier.offset(x = cells.x(local % GRID_COLUMNS, row).dp, y = cells.y(row).dp).width(geometry.cellWidth.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                AppIcon(app, null, Modifier.size(iconSize.dp), shape = RoundedCornerShape((iconSize * .24f).dp))
+                                if (labels) Text(app.label, color = ink.primary, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp),
+                                    style = androidx.compose.ui.text.TextStyle(shadow = ink.labelShadow))
+                            }
+                        }
+                    }
+                    if (state.verticalStatus) StatusRail(DeviceStatus(battery = 80, wifiConnected = true, wifiLevel = 4, cellularLevel = 4),
+                        Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = geometry.contentTop.dp).width(state.compact.dockWidth.dp),
+                        iconSize = dockIconSize(iconSize).dp, style = state.statusStyle)
+                    Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = geometry.dockTop.dp).width(state.compact.dockWidth.dp)
+                        .height(geometry.dockHeight.dp).background(glass.copy(alpha = state.statusStyle.railGlass), RoundedCornerShape(30.dp))
+                        .border(1.dp, RailBorder, RoundedCornerShape(30.dp)).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        state.dock.forEach { id ->
+                            Box(Modifier.fillMaxWidth().height(geometry.dockRowHeight.dp), contentAlignment = Alignment.Center) {
+                                id?.let(apps::get)?.let { AppIcon(it, null, Modifier.size(dockIconSize(iconSize).dp), shape = RoundedCornerShape(11.dp)) }
+                            }
+                        }
+                    }
+                    if (state.searchPill) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp, end = (state.compact.dockWidth + 24f).dp)) {
+                        HomeSearchPill {}
+                    }
                 }
-            }
-            Column(Modifier.align(Alignment.CenterEnd).padding(end = unit(8f)).width(unit(36f))
-                .background(glass.copy(alpha = state.statusStyle.railGlass), RoundedCornerShape(unit(18f)))
-                .padding(vertical = unit(8f)), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(unit(8f))) {
-                dockIcons.forEach { app -> AppIcon(app, null, Modifier.size(unit(22f)), shape = RoundedCornerShape(unit(6f))) }
-            }
-            if (state.searchPill) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = unit(10f), end = unit(40f))
-                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (ink.dark) .45f else .2f), RoundedCornerShape(50))
-                .padding(horizontal = unit(10f), vertical = unit(3f))) {
-                Text(stringResource(R.string.search), color = ink.primary, fontSize = (7 * scale).sp)
             }
         }
         if (state.systemWallpaper) Text(stringResource(R.string.colors_from_your_android_wallpaper_apps),
