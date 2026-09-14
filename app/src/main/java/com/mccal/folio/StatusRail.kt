@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -78,7 +79,17 @@ fun StatusRail(
     /** The Focus that's on: its icon sits above the time, as iPhone shows it beside the clock. */
     focus: FocusMode? = null,
 ) {
-    val homeInk = LocalHomeInk.current
+    // Text sits on the frosted capsule, not straight on the wallpaper, so pick its color from how light the capsule
+    // looks: the wallpaper's main color seen through the glass. An explicit Light or Dark "Text on Home" still wins.
+    val tone = LocalWallpaperTone.current
+    val glassColor = Glass
+    val homeInk = LocalHomeInk.current.let { base ->
+        if (!base.automatic) base else {
+            val wallpaperLum = tone.primary?.let { Color(it).luminance() } ?: if (tone.prefersDarkText) .75f else .25f
+            val capsuleLum = wallpaperLum + (glassColor.luminance() - wallpaperLum) * style.railGlass.coerceIn(0f, 1f) * 1.6f
+            HomeInk(dark = capsuleLum.coerceIn(0f, 1f) > .5f, automatic = true)
+        }
+    }
     val ink = homeInk.primary
     // Over light wallpapers (dark text) the frosted capsule is light too, so dim parts and colors need more weight to read.
     val onLight = homeInk.dark

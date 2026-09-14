@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
  * dark ink over light wallpapers, white ink over dark ones.
  */
 @Immutable
-internal data class HomeInk(val dark: Boolean) {
+internal data class HomeInk(val dark: Boolean, /** Chosen from the wallpaper ("Automatic") rather than set by hand. */ val automatic: Boolean = false) {
     val primary get() = if (dark) Color(0xFF1C1C1E) else Color.White
     val secondary get() = primary.copy(alpha = if (dark) .65f else .75f)
     val faint get() = primary.copy(alpha = if (dark) .3f else .4f)
@@ -33,7 +33,7 @@ internal fun homeInkFor(setting: String, wallpaperPrefersDarkText: Boolean) = Ho
     "DARK" -> true
     "LIGHT" -> false
     else -> wallpaperPrefersDarkText
-})
+}, automatic = setting != "DARK" && setting != "LIGHT")
 
 internal fun WallpaperColors?.prefersDarkText(): Boolean =
     this != null && colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
