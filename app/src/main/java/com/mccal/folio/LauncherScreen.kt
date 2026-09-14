@@ -479,7 +479,8 @@ fun LauncherScreen(
         val homeInk = homeInkFor(state.homeInk, tone.prefersDarkText)
         val basePalette = LocalDuoPalette.current
         val palette = if (state.tintedGlass) remember(basePalette, tone.primary) { basePalette.copy(glass = tintedGlass(basePalette.glass, tone.primary)) } else basePalette
-        CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate,
+        val homeApps = remember(state.apps, state.hiddenApps) { HomeApps(state.apps.filter { it.id !in state.hiddenApps && it.available }) { onLaunchFrom(it, null) } }
+        CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate, LocalHomeApps provides homeApps,
             LocalHomeInk provides homeInk, LocalDuoPalette provides palette,
             // Remembered so every icon isn't recomposed each time Home recomposes (a new lambda changes the local).
             LocalAppPanel provides remember(state.appPanels, state.featureScopes, homeEdit.active, haptic, panelWide) {
@@ -1122,6 +1123,8 @@ fun LauncherScreen(
                                             ?: when (session.builtinId) {
                                                 CLOCK_WIDGET -> "Clock"
                                                 DATE_WIDGET -> "Date"
+                                                UP_NEXT_WIDGET -> "Up Next"
+                                                SUGGESTIONS_WIDGET -> "Suggestions"
                                                 else -> "Widget panel"
                                             }, color = Ink,
                                             textAlign = TextAlign.Center)

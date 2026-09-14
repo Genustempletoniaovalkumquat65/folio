@@ -50,8 +50,7 @@ internal fun TodayView(state: LauncherState, widgets: WidgetController, modifier
     val apps = remember(state.apps, state.hiddenApps) { state.apps.filter { it.id !in state.hiddenApps } }
     val suggestions by produceState(emptyList<AppEntry>(), apps) {
         value = withContext(Dispatchers.IO) {
-            val byId = apps.associateBy { it.id }
-            RecentApps.frecency(context).entries.sortedByDescending { it.value }.mapNotNull { byId[it.key] }.take(8)
+            Suggestions.forNow(context, apps)
         }
     }
 

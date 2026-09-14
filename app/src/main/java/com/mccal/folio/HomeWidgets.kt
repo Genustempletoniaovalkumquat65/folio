@@ -202,6 +202,8 @@ internal fun WidgetSlot(id: Int, slot: Int, controller: WidgetController, modifi
 internal fun widgetLabel(id: Int, controller: WidgetController) = when (id) {
     CLOCK_WIDGET -> "Clock"
     DATE_WIDGET -> "Date"
+    UP_NEXT_WIDGET -> "Up Next"
+    SUGGESTIONS_WIDGET -> "Suggestions"
     INFO_WIDGET -> "Widget panel"
     EMPTY_WIDGET -> "Add widget"
     else -> controller.label(id)
@@ -232,6 +234,8 @@ internal fun BuiltinWidgetCard(id: Int, slot: Int, onAdd: () -> Unit) {
     when (id) {
         CLOCK_WIDGET -> ClockCard(onAdd)
         DATE_WIDGET -> DateCard(onAdd)
+        UP_NEXT_WIDGET -> UpNextCard(onAdd)
+        SUGGESTIONS_WIDGET -> SuggestionsCard(onAdd)
         INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
             Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
             Text(stringResource(R.string.your_widgets), color = Color.White, fontSize = 15.sp, maxLines = 1)

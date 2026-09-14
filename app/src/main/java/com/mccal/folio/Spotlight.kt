@@ -181,9 +181,11 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
     val wide = LocalConfiguration.current.let { isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) }
 
     val apps = remember(state.apps, state.hiddenApps) { state.apps.filter { it.id !in state.hiddenApps } }
-    val recent = remember(apps, frecency) {
+    // Suggestions for this time of day first, then recent and dock apps to fill the row.
+    val timely by produceState(emptyList<AppEntry>(), apps, active) { if (active) value = withContext(Dispatchers.IO) { Suggestions.forNow(context, apps) } }
+    val recent = remember(apps, frecency, timely) {
         val byId = apps.associateBy { it.id }
-        (frecency.entries.sortedByDescending { it.value }.mapNotNull { byId[it.key] } +
+        (timely + frecency.entries.sortedByDescending { it.value }.mapNotNull { byId[it.key] } +
             RecentApps.load(context).mapNotNull(byId::get) + state.dock.mapNotNull { it?.let(byId::get) }).distinctBy { it.id }.take(8)
     }
     val q = query.trim()

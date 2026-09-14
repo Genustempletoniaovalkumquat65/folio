@@ -858,11 +858,14 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             IslandListenerService.hasAccess(context)) { open(IslandListenerService.accessSettingsIntent(context)) },
         Perm("Gestures service (accessibility)", "Pull-down panels, island and dock in other apps, Lock Screen and Screenshot actions",
             SystemShadeAccessibilityService.isConnected(), onShadeSetup),
-        Perm("Do Not Disturb access", "Control Center, Actions, Focus modes (soon)",
+        Perm("Do Not Disturb access", "Focus, Control Center, Actions",
             context.getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted) {
             open(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) },
         Perm("Modify system settings", "Control Center brightness and rotation lock", android.provider.Settings.System.canWrite(context)) {
             open(android.content.Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) },
+        Perm("Usage access (optional)", "Better Suggestions: counts apps you open from anywhere, not just from Folio", Suggestions.hasUsageAccess(context)) {
+            open(Suggestions.usageAccessIntent(context)) },
+        Perm("Calendar (optional)", "Up Next widget", UpNext.hasCalendar(context)) { open(appSettings) },
         Perm("Contacts", "Spotlight contact search", context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) { open(appSettings) },
         Perm("Nearby devices (Bluetooth)", "Device names in the Dynamic Island", context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED) { open(appSettings) },
         Perm("Digital assistant", "Side key picker", AssistPickerActivity.isDefaultAssistant(context)) { open(AssistPickerActivity.settingsIntent()) },
