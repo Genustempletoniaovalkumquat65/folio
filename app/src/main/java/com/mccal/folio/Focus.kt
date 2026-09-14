@@ -266,8 +266,10 @@ internal object FocusPages {
     fun effective(state: LauncherState): LauncherState {
         val focus = lockingFocus(state) ?: return state
         val filtered = filter(state.layout, focus.pages!!)
+        val kept = focus.pages!!.filter { it in 0 until state.layout.pageCount }.sorted().ifEmpty { listOf(0) }
         return state.copy(homeSlots = filtered.slots, widgetPlacements = filtered.widgetPlacements,
-            widgetRestores = filtered.widgetRestores, minPages = filtered.minPages, canUndoEdit = false)
+            widgetRestores = filtered.widgetRestores, minPages = filtered.minPages, canUndoEdit = false,
+            pageStyles = kept.mapIndexedNotNull { shown, real -> state.pageStyles[real]?.let { shown to it } }.toMap())
     }
 
     /** A Focus's opening page as it's numbered on the filtered Home. */

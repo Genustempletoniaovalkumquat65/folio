@@ -163,6 +163,8 @@ data class LauncherState(
     val folderColors: Map<String, Long> = emptyMap(),
     /** Icon Stacks: anchor app id → the apps that fan out when you swipe down on it. */
     val iconStacks: Map<String, List<String>> = emptyMap(),
+    /** Per-page looks by real Home page number (pages without an entry use Home's settings). */
+    val pageStyles: Map<Int, PageStyle> = emptyMap(),
     val islandEverywhere: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
@@ -598,6 +600,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
     fun setRailActivities(value: Boolean) = updateSettings(soon = false) { it.copy(railActivities = value) }
+    fun setPageStyle(page: Int, style: PageStyle) = updateSettings(soon = false) {
+        it.copy(pageStyles = if (style.isDefault) it.pageStyles - page else it.pageStyles + (page to style))
+    }
     fun toggleStackApp(anchor: String, app: String) = updateSettings(soon = false) { it.copy(iconStacks = IconStacks.toggle(it.iconStacks, anchor, app)) }
     fun setAddNewAppsToHome(value: Boolean) = updateSettings(soon = false) { it.copy(addNewAppsToHome = value) }
     /** Turns a Focus on (or all off with null) and applies it to Android. */
@@ -844,6 +849,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("todayWidgets", JSONArray().apply { s.todayWidgets.forEach { put(JSONObject().put("id", it.id).put("size", it.size.name)) } })
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
             .put("iconStacks", JSONObject().apply { s.iconStacks.forEach { (id, apps) -> put(id, JSONArray(apps)) } })
+            .put("pageStyles", JSONObject().apply { s.pageStyles.forEach { (page, style) -> put(page.toString(), JSONObject().put("scale", style.iconScale.toDouble())
+                .apply { style.labels?.let { put("labels", it) } }) } })
             .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
         val editor = prefs.edit()
@@ -1038,6 +1045,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 a.optJSONObject(i)?.let { o -> runCatching { TodayWidget(o.getInt("id"), TodaySize.valueOf(o.getString("size"))) }.getOrNull() }
             } } ?: DEFAULT_TODAY_WIDGETS,
             folderColors = j.optJSONObject("folderColors")?.let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } ?: emptyMap(),
+            pageStyles = j.optJSONObject("pageStyles")?.let { o -> o.keys().asSequence().mapNotNull { key ->
+                val page = key.toIntOrNull()?.takeIf { it >= 0 } ?: return@mapNotNull null
+                val style = o.optJSONObject(key) ?: return@mapNotNull null
+                page to PageStyle(style.optDouble("scale", 1.0).toFloat().coerceIn(.7f, 1.3f), if (style.has("labels")) style.optBoolean("labels") else null)
+            }.toMap() } ?: emptyMap(),
             iconStacks = j.optJSONObject("iconStacks")?.let { o -> o.keys().asSequence().associateWith { key ->
                 o.optJSONArray(key)?.let { a -> (0 until a.length()).mapNotNull { a.optString(it).takeIf(String::isNotBlank) } }.orEmpty()
             }.filterValues { it.isNotEmpty() } } ?: emptyMap(),

@@ -185,3 +185,23 @@ fun moveApp(order: List<String>, id: String, offset: Int): List<String> {
     val to = (from + offset).coerceIn(0, order.lastIndex)
     return order.toMutableList().apply { add(to, removeAt(from)) }
 }
+
+/**
+ * A Home page's own look (after Atria's per-page layouts): icon size and labels. It only changes how icons draw inside
+ * their cells, never the grid, so widgets, dragging and the dock stay lined up on every page.
+ */
+data class PageStyle(val iconScale: Float = 1f, val labels: Boolean? = null) {
+    val isDefault get() = iconScale == 1f && labels == null
+
+    /** Icon size and label visibility on this page, given the Home-wide values and the cell the icon lives in. */
+    fun apply(geometry: HomeGeometry, labelsHome: Boolean): Pair<Float, Boolean> {
+        val labels = labels ?: labelsHome
+        // Without labels an icon may use the label's room too; it never outgrows its cell.
+        val room = minOf(geometry.cellWidth - 8f, geometry.rowHeight - (if (labels) 22f else 8f))
+        return (geometry.iconSize * iconScale).coerceIn(32f, maxOf(32f, room)) to labels
+    }
+
+    companion object {
+        val SIZES = listOf("Small" to .82f, "Default" to 1f, "Large" to 1.14f)
+    }
+}

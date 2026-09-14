@@ -1184,6 +1184,34 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
     SettingsSwitch(stringResource(R.string.align_dock_with_app_rows), p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
     if (!p.dockAlignToGrid) CustomizationSlider("Dock height on screen", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
     SheetGroup { IosActionRow(stringResource(R.string.reset_this_layout), destructive = true, onClick = { model.setPreset(wide, LayoutPreset()) }) }
+    // Per-page looks (after Atria): each page can have its own icon size and labels.
+    SheetGroupLabel("Pages")
+    val realPages = model.state.value.layout.pageCount
+    SheetGroup {
+        repeat(realPages) { page ->
+            if (page > 0) MenuDivider()
+            val style = model.state.value.pageStyles[page] ?: PageStyle()
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("page-style-$page"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Page ${page + 1}", color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                    if (page == homePage) Text("Showing", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f), fontSize = 13.sp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PageStyle.SIZES.forEach { (name, scale) ->
+                        IosChip(style.iconScale == scale, { model.setPageStyle(page, style.copy(iconScale = scale)) }, label = { Text(name) }, modifier = Modifier.weight(1f))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Labels", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .6f), fontSize = 15.sp, modifier = Modifier.width(58.dp))
+                    listOf("As Home" to null, "Show" to true, "Hide" to false).forEach { (name, value) ->
+                        IosChip(style.labels == value, { model.setPageStyle(page, style.copy(labels = value)) }, label = { Text(name) }, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+    Text("Changes how icons look on one page. Widgets, the grid and the dock stay the same on every page.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
     SheetGroupLabel("Widgets · Page ${homePage + 1}")
     SheetGroup {
         state.widgetPlacements.filter { it.page == homePage || (wide && it.page == -1) }.forEach { placement ->
