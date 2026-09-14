@@ -42,6 +42,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
     onAppearanceManual: (String, Double, Double) -> Unit, onAppearanceDeviceLocation: () -> Unit,
     onAppearanceClear: () -> Unit, backgrounds: LauncherBackgroundController, homePage: Int = 0,
     onShadeSetup: () -> Unit = {},
+    onShowWelcome: () -> Unit = {},
 ) {
     var wide by rememberSaveable { mutableStateOf(initiallyWide) }
     val title = when (page) {
@@ -114,6 +115,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup") { onPage(CustomizationPage.BACKUP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help") { onPage(CustomizationPage.HELP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding") { onClose(); onShowWelcome() }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits") { onPage(CustomizationPage.CREDITS) }
                     }

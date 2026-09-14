@@ -139,6 +139,7 @@ fun LauncherScreen(
     showFirstRun: Boolean = false,
     onFinishFirstRun: () -> Unit = {},
     onShadeSetup: () -> Unit = {},
+    onShowWelcome: () -> Unit = {},
 ) {
     var sheet by rememberSaveable { mutableStateOf("") }
     var dockSlot by rememberSaveable { mutableIntStateOf(0) }
@@ -825,6 +826,7 @@ fun LauncherScreen(
                             onAppearanceManual = onAppearanceManual, onAppearanceDeviceLocation = onAppearanceDeviceLocation,
                             onAppearanceClear = onAppearanceClear,
                             onShadeSetup = { sheet = ""; onShadeSetup() },
+                            onShowWelcome = { sheet = ""; onShowWelcome() },
                             backgrounds = launcherActivity.backgrounds,
                             onWallpaperPreview = { sheet = ""; onWallpaperPreview() }, homePage = pager.currentPage.coerceIn(0, homePages - 1))
                         "widgetActions" -> model.placement(widgetSlot)?.let { placement ->
@@ -870,27 +872,14 @@ fun LauncherScreen(
                 }
             }
             if (showFirstRun) {
-                ModalBottomSheet(
-                    onDismissRequest = onFinishFirstRun,
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("first-run-setup"),
-                ) {
-                    FirstRunSetupSheet(
-                        isDefaultHome = isDefaultHome,
-                        onMakeDefault = onMakeDefault,
-                        onAddWidget = {
-                            onFinishFirstRun()
-                            widgetSlot = model.nextWidgetSlot()
-                            widgetTargetIndex = pager.currentPage.coerceIn(0, homePages - 1) * HOME_CELLS
-                            widgetPackage = null
-                            widgetProfileSerial = null
-                            widgetExactTarget = false
-                            sheet = "widgets"
+                // Full-screen, iOS Setup Assistant style; Back steps back, Skip Setup or Get Started finishes.
+                ModalBottomSheet(onDismissRequest = onFinishFirstRun, modifier = Modifier.testTag("first-run-setup"), fullScreen = true) {
+                    Onboarding(isDefaultHome, onMakeDefault, onShadeSetup,
+                        systemWallpaper = state.systemWallpaper,
+                        onWallpaper = { value ->
+                            if (value != state.systemWallpaper) { model.setSystemWallpaper(value); launcherActivity.recreate() }
                         },
-                        onExplore = onFinishFirstRun,
-                        onSkip = onFinishFirstRun,
-                    )
+                        onFinish = onFinishFirstRun)
                 }
             }
             if (sheet == "widgets") {

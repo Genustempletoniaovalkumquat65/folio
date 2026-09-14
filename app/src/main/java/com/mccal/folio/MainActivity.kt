@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
                     onAppearanceClear = { cancelAppearanceLocation(); appearance.clearLocation(systemDark()) },
                     showFirstRun = showFirstRun.value,
                     onFinishFirstRun = ::finishFirstRun,
-                    onShadeSetup = ::showShadeSetup)
+                    onShadeSetup = ::showShadeSetup, onShowWelcome = { showFirstRun.value = true })
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
                 LockCover(lockCoverVisible.value && state.lockCover) { lockCoverVisible.value = false }

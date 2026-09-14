@@ -116,7 +116,7 @@ internal fun sideKeyDoublePressIsWallet(context: Context): Boolean = runCatching
 private fun granted(context: Context, permission: String) =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
-private fun foldStaysAwake(context: Context) =
+internal fun foldStaysAwake(context: Context) =
     runCatching { Settings.System.getString(context.contentResolver, "fold_lock_behavior_setting") }.getOrNull() == "stay_awake_on_fold_key"
 
 @Composable
