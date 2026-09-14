@@ -125,12 +125,12 @@ class IslandGeometryTest {
         val g = islandGeometry(intArrayOf(900, 20, 940, 60), 1000, 2f)
         assertEquals(920f, g.centerXPx)
         assertEquals(20f, g.camW)
-        // Room on the narrow (right) side: (1000-920)/2 - 8 = 32dp → max width 64dp.
-        assertEquals(64f, g.maxW)
+        // Room on the narrow (right) side: (1000-920)/2 - 12 = 28dp → max width 56dp.
+        assertEquals(56f, g.maxW)
         val event = IslandContent.Event(IslandEvent.Silent(true))
-        assertEquals(64f, g.widthFor(event))
-        // Camera spans 10..30dp: pill starts 6dp from the edge and wraps the camera with a 5dp margin.
-        assertEquals(6f, g.top)
+        assertEquals(56f, g.widthFor(event))
+        // Camera spans 10..30dp: pill starts 8dp from the edge and still wraps the camera.
+        assertEquals(8f, g.top)
         assertEquals(34f, g.pillH)
         assertTrue(g.top <= 10f && g.top + g.pillH >= 30f)
     }

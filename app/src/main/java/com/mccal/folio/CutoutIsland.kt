@@ -80,9 +80,11 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
     // Track the cutout and window width live: after a fold the insets arrive after the first layout.
     var cutout by remember { mutableStateOf<Rect?>(null) }
     var windowWidth by remember { mutableIntStateOf(view.width) }
+    var windowHeight by remember { mutableIntStateOf(view.height) }
     DisposableEffect(view) {
         val update = ViewTreeObserver.OnGlobalLayoutListener {
             windowWidth = view.rootView.width
+            windowHeight = view.rootView.height
             // Reported cutout first; otherwise a known under-display camera (e.g. Galaxy Z Fold8 inner screen).
             cutout = view.rootWindowInsets?.displayCutout?.boundingRects?.filter { !it.isEmpty }?.minByOrNull { it.top }?.let(::Rect)
                 ?: CameraArea.hiddenCamera(view.display)
@@ -116,9 +118,10 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val wide = with(density) { windowWidth.toDp() } >= 600.dp
-    // A spot the user dragged the island to on this screen (needed on the inner screen, whose
+    val landscape = windowWidth > windowHeight
+    // A spot the user dragged the island to on this screen and orientation (needed on the inner screen, whose
     // under-display camera isn't reported by Android). Null = wrap the reported camera cutout.
-    var custom by remember(wide) { mutableStateOf(IslandPosition.load(context, wide)) }
+    var custom by remember(wide, landscape) { mutableStateOf(IslandPosition.load(context, wide, landscape)) }
     var dragOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var dragging by remember { mutableStateOf(false) }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -139,13 +142,15 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
         val morph = spring<Dp>(dampingRatio = .74f, stiffness = Spring.StiffnessMediumLow)
         val width by animateDpAsState(if (open) cardW else geometry.widthFor(content).dp, morph, label = "island-width")
         val corner by animateDpAsState(if (open) 34.dp else pillH / 2, morph, label = "island-corner")
-        val left = (centerX - width.toPx() / 2f).coerceIn(8.dp.toPx(), windowWidth - width.toPx() - 8.dp.toPx())
-        val top = geometry.top.dp
+        // Always a clear margin from the screen edges, like the gap around iPhone's island.
+        val edge = ISLAND_SIDE_MARGIN.dp.toPx()
+        val left = (centerX - width.toPx() / 2f).coerceIn(edge, maxOf(edge, windowWidth - width.toPx() - edge))
+        val top = geometry.top.coerceAtLeast(ISLAND_EDGE_GAP).dp
 
         Box(Modifier.offset { IntOffset((left + dragOffset.x).roundToInt(), (top.toPx() + dragOffset.y).roundToInt()) }.width(width)
             .graphicsLayer { val s = if (dragging) 1.06f else 1f; scaleX = s; scaleY = s }
             // Long-press and drag to move it; dropping near the camera snaps back to the camera.
-            .pointerInput(wide, windowWidth) {
+            .pointerInput(wide, landscape, windowWidth) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { dragging = true; expanded = false; haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) },
                     onDragCancel = { dragging = false; dragOffset = androidx.compose.ui.geometry.Offset.Zero },
@@ -156,7 +161,7 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
                         val nearCamera = kotlin.math.abs(newCenterX - cameraGeometry.centerXPx) < 56.dp.toPx() &&
                             kotlin.math.abs(newTopDp - cameraGeometry.top) < 40f && cutout != null
                         custom = if (nearCamera) null else IslandPosition(newCenterX / windowWidth, newTopDp)
-                        IslandPosition.save(context, wide, custom)
+                        IslandPosition.save(context, wide, landscape, custom)
                         dragOffset = androidx.compose.ui.geometry.Offset.Zero
                     },
                 ) { change, amount -> change.consume(); dragOffset += amount }
@@ -181,25 +186,32 @@ internal fun CutoutIsland(activity: IslandActivity?, eventsOff: Set<String> = em
 /** Where the user dragged the island on one screen: horizontal center as a fraction of width, top in dp. */
 internal data class IslandPosition(val xFraction: Float, val topDp: Float) {
     companion object {
-        private fun key(wide: Boolean) = if (wide) "island_pos_inner" else "island_pos_cover"
-        fun load(context: android.content.Context, wide: Boolean): IslandPosition? =
-            context.getSharedPreferences("folio", 0).getString(key(wide), null)?.split(',')?.let { parts ->
+        // Saved per screen and orientation: a spot dragged to in landscape means nothing once the screen turns.
+        // (The original keys were the natural orientations: unfolded landscape, cover portrait.)
+        private fun key(wide: Boolean, landscape: Boolean) = when {
+            wide -> if (landscape) "island_pos_inner" else "island_pos_inner_portrait"
+            else -> if (landscape) "island_pos_cover_landscape" else "island_pos_cover"
+        }
+        fun load(context: android.content.Context, wide: Boolean, landscape: Boolean): IslandPosition? =
+            context.getSharedPreferences("folio", 0).getString(key(wide, landscape), null)?.split(',')?.let { parts ->
                 runCatching { IslandPosition(parts[0].toFloat(), parts[1].toFloat()) }.getOrNull()
             }
-        fun save(context: android.content.Context, wide: Boolean, position: IslandPosition?) {
+        fun save(context: android.content.Context, wide: Boolean, landscape: Boolean, position: IslandPosition?) {
             context.getSharedPreferences("folio", 0).edit().apply {
-                if (position == null) remove(key(wide)) else putString(key(wide), "${position.xFraction},${position.topDp}")
+                if (position == null) remove(key(wide, landscape)) else putString(key(wide, landscape), "${position.xFraction},${position.topDp}")
             }.apply()
         }
         fun reset(context: android.content.Context) {
-            context.getSharedPreferences("folio", 0).edit().remove(key(true)).remove(key(false)).apply()
+            context.getSharedPreferences("folio", 0).edit().apply {
+                for (wide in listOf(true, false)) for (landscape in listOf(true, false)) remove(key(wide, landscape))
+            }.apply()
         }
     }
 }
 
 /** Island placed at a free position (no camera inside). */
 internal fun islandGeometryAt(centerXPx: Float, topDp: Float, windowWidthPx: Int, density: Float): IslandGeometry {
-    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - 8f
+    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - ISLAND_SIDE_MARGIN
     val pillH = 34f
     return IslandGeometry(0f, 0f, centerXPx, topDp + pillH / 2, pillH, maxOf(room * 2, 80f), topDp)
 }
@@ -227,7 +239,7 @@ internal fun islandGeometry(cutoutLtrb: IntArray?, windowWidthPx: Int, density: 
     val top = maxOf(ISLAND_EDGE_GAP, camTop - ISLAND_CAMERA_MARGIN)
     val pillH = maxOf(camBottom + ISLAND_CAMERA_MARGIN - top, ISLAND_MIN_HEIGHT)
     // Width stays symmetric around the camera, capped by the room on the narrower side.
-    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - 8f
+    val room = minOf(centerXPx, windowWidthPx - centerXPx) / density - ISLAND_SIDE_MARGIN
     return IslandGeometry(camW, camH, centerXPx, top + pillH / 2, pillH, room * 2, top)
 }
 
@@ -491,6 +503,8 @@ private val Red = Color(0xFFFF453A)
 private val Purple = Color(0xFF5E5CE6)
 internal val IslandBlue = Color(0xFF0A84FF)
 
-private const val ISLAND_EDGE_GAP = 6f
+private const val ISLAND_EDGE_GAP = 8f
+/** Smallest gap between the island and the left or right screen edge. */
+private const val ISLAND_SIDE_MARGIN = 12f
 private const val ISLAND_CAMERA_MARGIN = 5f
 private const val ISLAND_MIN_HEIGHT = 34f

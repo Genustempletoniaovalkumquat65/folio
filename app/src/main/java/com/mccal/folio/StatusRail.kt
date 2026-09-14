@@ -175,7 +175,7 @@ fun StatusRail(
                     fontSize = detailSize, fontWeight = FontWeight.Medium,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
             }
-            if (island != null) { Spacer(Modifier.height(5.dp)); island() }
+            if (island != null) { Spacer(Modifier.height(8.dp)); island() }
         }
     }
 }

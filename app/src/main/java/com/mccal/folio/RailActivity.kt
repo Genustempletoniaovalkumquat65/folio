@@ -49,12 +49,13 @@ internal fun RailLiveActivity(activity: IslandActivity?, width: androidx.compose
         enter = if (reduceMotion) fadeIn() else expandVertically(expandFrom = Alignment.Top) + fadeIn(),
         exit = if (reduceMotion) fadeOut() else shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()) {
         val current = shown ?: return@AnimatedVisibility
-        val glyph = (width - 22.dp).coerceIn(28.dp, 46.dp)
+        // Even inset on every side of the capsule, like the island's margin around the camera.
+        val glyph = (width - 28.dp).coerceIn(28.dp, 44.dp)
         Box {
             Column(Modifier.width(width).clip(RoundedCornerShape(30.dp)).background(Color.Black.copy(alpha = .82f))
                 .border(1.dp, RailBorder, RoundedCornerShape(30.dp))
                 .clickable(onClickLabel = "Show ${current.title}") { expanded = !expanded }
-                .padding(vertical = 10.dp).testTag("rail-live-activity")
+                .padding(vertical = 14.dp, horizontal = 6.dp).testTag("rail-live-activity")
                 .semantics { contentDescription = current.title },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 AnimatedContent(current::class to current.packageName, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "rail activity") { _ ->
