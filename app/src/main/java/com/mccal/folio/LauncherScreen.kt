@@ -507,9 +507,11 @@ fun LauncherScreen(
             val geometry = homeGeometry(maxWidth.value, maxHeight.value, preset, state.labels,
                 statusHeight = if (state.verticalStatus) statusHeight + 22f else 0f,
                 labelHeight = with(density) { 14.sp.toDp().value } + 6f, inLibrary = inLibrary,
-                homeBottomSpace = if (isDefaultHome) 44f else 88f)
+                homeBottomSpace = if (isDefaultHome) 44f else 88f,
+                // The rail's round search/back controls only show without the search pill or on Discover.
+                railControls = !state.searchPill || pager.currentPage < 0)
             SideEffect {
-                resizePitchX = with(density) { (geometry.gridWidth / GRID_COLUMNS).dp.toPx() }
+                resizePitchX = with(density) { geometry.cellWidth.dp.toPx() }
                 resizePitchY = with(density) { minOf((geometry.widgetHeight + 18f) / 2f, geometry.rowHeight).dp.toPx() }
                 resizeTopPitch = with(density) { ((geometry.widgetHeight + 18f) / 2f).dp.toPx() }
                 resizeAppPitch = with(density) { geometry.rowHeight.dp.toPx() }
@@ -658,7 +660,8 @@ fun LauncherScreen(
                             onActions = { selectedId = it.id }, modifier = Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, bottom = bottomSpace).testTag("library-page"),
                             drag = drag, page = visibleHomePages, onLaunchFrom = onLaunchFrom, onTurnOnWork = { model.turnOnWork(it) })
                     } else {
-                        Row(Modifier.fillMaxSize().testTag("home-surface")) {
+                        // Centered beside the rail when the grid is narrower than the space (short, wide windows).
+                        Row(Modifier.fillMaxSize().testTag("home-surface"), horizontalArrangement = Arrangement.Center) {
                             HomePagePane(page, state, previewLayout.slots, previewLayout.leadingSlots, previewLayout.widgetPlacements, appsById, geometry, contentHeight,
                                 bottomSpace, widgets, drag, target, insertionTarget, showLargeWidget = false,
                                 onLaunch = onLaunchFrom, onActions = { selectedId = it.id },
@@ -835,7 +838,7 @@ fun LauncherScreen(
                             onWallpaperPreview = { sheet = ""; onWallpaperPreview() }, homePage = pager.currentPage.coerceIn(0, homePages - 1))
                         "widgetActions" -> model.placement(widgetSlot)?.let { placement ->
                             val topPitch = (geometry.widgetHeight + 18f) / 2f
-                            val gridSizing = WidgetGridSizing(GRID_COLUMNS, GRID_ROWS, geometry.gridWidth / GRID_COLUMNS,
+                            val gridSizing = WidgetGridSizing(GRID_COLUMNS, GRID_ROWS, geometry.cellWidth,
                                 minOf(topPitch, geometry.rowHeight), maxOf(topPitch, geometry.rowHeight), 10f, 18f,
                                 topRowHeightDp = topPitch, appRowHeightDp = geometry.rowHeight)
                             val constraints = widgets.manager.getAppWidgetInfo(placement.id)?.let { widgets.sizing(it, gridSizing) }
@@ -905,7 +908,7 @@ fun LauncherScreen(
                 }
                 val topPitch = (geometry.widgetHeight + 18f) / 2f
                 val pickerSizing = remember(geometry) { WidgetGridSizing(GRID_COLUMNS, GRID_ROWS,
-                    geometry.gridWidth / GRID_COLUMNS, minOf(topPitch, geometry.rowHeight),
+                    geometry.cellWidth, minOf(topPitch, geometry.rowHeight),
                     maxOf(topPitch, geometry.rowHeight), 10f, 18f,
                     topRowHeightDp = topPitch, appRowHeightDp = geometry.rowHeight) }
                 val footprint: (AppWidgetProviderInfo) -> WidgetSpan? = { provider ->
@@ -1085,7 +1088,7 @@ fun LauncherScreen(
                         }
                         if (anchor != null) {
                             val density = LocalDensity.current
-                            val cellWidthPx = with(density) { (geometry.gridWidth / GRID_COLUMNS).dp.toPx() }
+                            val cellWidthPx = with(density) { geometry.cellWidth.dp.toPx() }
                             fun pickerRowTop(row: Int): Float = if (row <= 2) row * with(density) { topPitch.dp.toPx() }
                                 else with(density) { (geometry.widgetHeight + 18f + (row - 2) * geometry.rowHeight).dp.toPx() }
                             val candidateRow = homeCellLocal(visualIndex ?: 0) / GRID_COLUMNS
@@ -1663,13 +1666,13 @@ private fun SharedHomeGrid(
     val pendingIsReplacement = pending != null && widgetPlacements.any { it.slot == pending.slot }
     val pageWidgets = widgetPlacements.filter { it.page == page } + listOfNotNull(pending?.takeUnless { pendingIsReplacement })
     val renderedRows = maxOf(GRID_ROWS, pageWidgets.maxOfOrNull { it.row + it.spanY } ?: GRID_ROWS)
-    val topPitch = (geometry.widgetHeight + 18f) / 2f
-    fun rowTop(row: Int) = if (row <= 2) row * topPitch else geometry.widgetHeight + 18f + (row - 2) * rowHeight
-    BoxWithConstraints(Modifier.fillMaxWidth().height(rowTop(renderedRows).dp)) {
+    // Stacked, or two columns side by side in a short, wide window (see HomeCellLayout).
+    val cells = remember(geometry, pageWidgets.map { it.row to it.spanY }) { HomeCellLayout.forPage(geometry, pageWidgets.map { it.row to it.spanY }) }
+    fun rowTop(row: Int) = cells.y(row)
+    BoxWithConstraints(Modifier.fillMaxWidth().height(cells.height(renderedRows).dp)) {
         val density = LocalDensity.current
-        val cellWidth = maxWidth / 4
-        val cellWidthPx = with(density) { cellWidth.toPx() }
-        val rowHeightPx = with(density) { rowHeight.dp.toPx() }
+        val cellWidth = cells.cellWidth.dp
+        fun cellX(column: Int, row: Int) = cells.x(column, row).dp
 
         repeat(HOME_CELLS) { localIndex ->
             val globalIndex = pageStart + localIndex
@@ -1681,8 +1684,8 @@ private fun SharedHomeGrid(
             val highlighted = drag.active && target == cell
             val gap = hiddenIndex == globalIndex
             val row = localIndex / GRID_COLUMNS
-            val cellHeight = rowTop(row + 1) - rowTop(row)
-            Box(Modifier.offset(x = cellWidth * (localIndex % GRID_COLUMNS), y = rowTop(row).dp)
+            val cellHeight = cells.spanHeight(row, 1)
+            Box(Modifier.offset(x = cellX(localIndex % GRID_COLUMNS, row), y = rowTop(row).dp)
                 .width(cellWidth).height(cellHeight.dp).testTag("home-cell-$globalIndex")
                 .dropRegion(drag, cell, savedApp?.id ?: savedFolder?.id, page)
                 .combinedClickable(onClick = { if (savedFolder != null) onFolder(savedFolder.id) else if (edit.active) edit.stop() },
@@ -1710,7 +1713,7 @@ private fun SharedHomeGrid(
                 val row = localIndex / GRID_COLUMNS
                 // Slide only while rearranging; a new screen size (folding) must place icons immediately.
                 val animatedOffset by animateIntOffsetAsState(
-                    IntOffset(((localIndex % GRID_COLUMNS) * cellWidthPx).roundToInt(), with(density) { rowTop(row).dp.toPx() }.roundToInt()),
+                    with(density) { IntOffset(cellX(localIndex % GRID_COLUMNS, row).toPx().roundToInt(), rowTop(row).dp.toPx().roundToInt()) },
                     animationSpec = if (drag.active || edit.active) androidx.compose.animation.core.spring(visibilityThreshold = IntOffset(1, 1))
                         else androidx.compose.animation.core.snap(),
                     label = "home insertion $id",
@@ -1734,7 +1737,7 @@ private fun SharedHomeGrid(
             val renderIndex = previewIndex.takeIf { it in pageRange } ?: savedIndex.takeIf { it in pageRange } ?: return@forEach
             val localIndex = renderIndex - pageStart
             val row = localIndex / GRID_COLUMNS
-            val x = cellWidth * (localIndex % GRID_COLUMNS)
+            val x = cellX(localIndex % GRID_COLUMNS, row)
             val y = rowTop(row).dp
             FolderTile(folder, appsById, iconSize, labels, drag, page,
                 Modifier.offset(x = x, y = y).width(cellWidth).height(rowHeight.dp)
@@ -1742,10 +1745,10 @@ private fun SharedHomeGrid(
         }
         pageWidgets.forEach { placement ->
             key("widget-${placement.slot}") {
-                val x = cellWidth * placement.column + 5.dp
+                val x = cellX(placement.column, placement.row) + 5.dp
                 val width = (cellWidth * placement.spanX - 10.dp).coerceAtLeast(1.dp)
                 val y = rowTop(placement.row)
-                val height = (rowTop(placement.row + placement.spanY) - y - 18f).coerceAtLeast(48f)
+                val height = (cells.spanHeight(placement.row, placement.spanY) - 18f).coerceAtLeast(48f)
                 if (placement == pending) Surface(Modifier.offset(x = x, y = y.dp).width(width).height(height.dp)
                     .testTag("widget-pending-${placement.slot}").semantics(mergeDescendants = true) {
                         contentDescription = "Pending ${widgets.pendingProvider?.shortClassName ?: "widget"}"

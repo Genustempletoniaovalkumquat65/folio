@@ -73,12 +73,37 @@ class LayoutModelTest {
         for ((width, height) in listOf(751f to 475f, 751f to 431f, 640f to 360f, 460f to 700f)) {
             val g = homeGeometry(width, height, LayoutPreset(), true, labelHeight = 21f)
             assertFalse("$width x $height", g.expanded)
-            if (height >= 430f) assertTrue("page overflows at $width x $height", g.widgetHeight + 18f + 4f * g.rowHeight <= height - 16f - 44f + .01f)
+            val pageHeight = if (g.splitColumns) maxOf(g.widgetHeight + 18f, 4f * g.rowHeight) else g.widgetHeight + 18f + 4f * g.rowHeight
+            if (height >= 430f) assertTrue("page overflows at $width x $height", pageHeight <= height - 16f - 44f + .01f)
+            if (g.splitColumns) assertTrue("halves overflow the width", 8f * g.cellWidth + g.zoneGap <= width - 68f - 44f + .01f)
             assertTrue(g.rowHeight >= 48f)
         }
         assertTrue(isRegularSize(704f, 930f))
         assertTrue(isRegularSize(932f, 680f))
         assertFalse(isRegularSize(751f, 475f))
+    }
+    @Test fun `two-column pages keep widgets whole and rows aligned`() {
+        val g = homeGeometry(751f, 459f, LayoutPreset(), true, labelHeight = 21f)
+        assertTrue(g.splitColumns)
+        // Widgets up top: widget rows and two app rows on the left, the other app rows on the right, both from the top.
+        val withWidgets = HomeCellLayout.forPage(g, listOf(0 to 2))
+        assertEquals(4, withWidgets.splitRow)
+        assertEquals(0f, withWidgets.y(4), .01f)
+        assertEquals(g.widgetHeight, withWidgets.spanHeight(0, 2) - 18f, .01f)
+        assertTrue(withWidgets.x(0, 4) >= withWidgets.x(3, 3) + g.cellWidth)
+        assertTrue(withWidgets.height(6) <= 459f - 16f - 44f + .01f)
+        // Apps only: three full rows per half.
+        val appsOnly = HomeCellLayout.forPage(g, emptyList())
+        assertEquals(3, appsOnly.splitRow)
+        assertEquals(g.rowHeight * 3, appsOnly.height(6), .01f)
+        // A widget that would be cut in half picks another split, or the page stays stacked.
+        assertEquals(2, HomeCellLayout.forPage(g, listOf(2 to 3)).splitRow)
+        assertEquals(null, HomeCellLayout.forPage(g, listOf(1 to 2, 3 to 2, 2 to 2)).splitRow)
+        // Stacked layouts are unchanged: rows 0-1 are half pitch, then app rows.
+        val portrait = homeGeometry(475f, 700f, LayoutPreset(), true)
+        val stacked = HomeCellLayout.forPage(portrait, listOf(0 to 2))
+        assertEquals(null, stacked.splitRow)
+        assertEquals(portrait.widgetHeight + 18f + portrait.rowHeight, stacked.y(3), .01f)
     }
     @Test fun `expanded pane appears from actual window width`() {
         assertFalse(homeGeometry(475f, 700f, LayoutPreset(), true).expanded)
