@@ -7,6 +7,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -116,6 +122,40 @@ internal fun CategoryGrid(apps: List<AppEntry>, columns: Int, labelColor: Color 
                     }
                 }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** An App Library category opened like an iOS folder: big title and a rounded glass card of every app, over a dimmed background. */
+@Composable
+internal fun CategoryFolder(title: String, apps: List<AppEntry>, onDismiss: () -> Unit, onLaunch: (AppEntry) -> Unit, onActions: (AppEntry) -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        FolioDialogWindow(dim = 0f, blurRadiusDp = 24)
+        val reduceMotion = LocalReduceMotion.current
+        val appear = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (reduceMotion) 1f else 0f) }
+        androidx.compose.runtime.LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .82f, stiffness = 600f)) }
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value }.background(Color.Black.copy(alpha = .45f)).clickable(androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onDismiss)
+            .testTag("category-folder-scrim"))
+        FoldAvoidingBox(Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing).padding(24.dp)) {
+            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val width = minOf(maxWidth, 560.dp)
+                val availableHeight = maxHeight
+                // ~84dp per app: three or four columns on the cover, up to six unfolded.
+                val columns = evenColumnsOnHinge(((width - 40.dp) / 84.dp).toInt().coerceIn(3, 6), 3)
+                Column(Modifier.width(width).graphicsLayer {
+                    alpha = appear.value; scaleX = .9f + .1f * appear.value; scaleY = scaleX
+                }) {
+                    Text(title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp))
+                    Box(Modifier.fillMaxWidth().heightIn(max = availableHeight - 64.dp).clip(RoundedCornerShape(36.dp))
+                        .background(Color(0xFF2C2C2E).copy(alpha = .96f)).border(FolioGlass.edge, RoundedCornerShape(36.dp))
+                        .pointerInput(Unit) { detectTapGestures() }
+                        .verticalScroll(rememberScrollState()).padding(20.dp).testTag("category-folder")) {
+                        CategoryGrid(apps, columns, Color.White, onLaunch, onActions)
+                    }
+                }
             }
         }
     }

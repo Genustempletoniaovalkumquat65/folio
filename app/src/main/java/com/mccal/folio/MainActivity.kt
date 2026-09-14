@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperTone provides wallpaperTone,
                 LocalReduceMotion provides reduceMotion,
-                LocalHalfOpenHinge provides rememberHalfOpenHinge(this@MainActivity),
+                LocalHinge provides rememberHinge(this@MainActivity),
                 LocalTintOptions provides androidx.compose.ui.platform.LocalConfiguration.current.let { config ->
                     val screen = screenFor(isRegularSize(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat()))
                     TintOptions(FeatureScopes.on(state.featureScopes, "tintNotifications", state.tintNotifications, screen),

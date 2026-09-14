@@ -102,9 +102,12 @@ internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: Device
 
     val wide = LocalConfiguration.current.let { isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) }
     // Unfolded, Notification Center can be iPad-style: big clock on the left, notifications on the right.
-    // Only when there's room for both side by side (inner screen in landscape); in portrait the clock sits above the list.
-    val split = wide && ncSplit && current == ShadePanel.NOTIFICATIONS && LocalConfiguration.current.screenWidthDp >= 760
-    // Half folded, the panel moves off the hinge like iPhone Duo's sheets and menus.
+    // A split arrangement: clock and list side by side only when the screen is wider than tall; otherwise the clock sits above the list.
+    val split = wide && ncSplit && current == ShadePanel.NOTIFICATIONS && LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    // Half folded, Control Center moves off the hinge like iPhone Duo's controls; Notification Center is a
+    // scrolling list, which adapts by scrolling instead.
+    val hinge = LocalHinge.current?.takeIf { it.active && current == ShadePanel.QUICK_SETTINGS }
+    CompositionLocalProvider(LocalHinge provides hinge) {
     FoldAvoidingBox(Modifier.windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
         contentAlignment = when {
             split -> Alignment.TopEnd
@@ -133,6 +136,7 @@ internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: Device
         }
         if (current == ShadePanel.NOTIFICATIONS) NotificationCenter(panelModifier, showClock && !split, grouped, tall = split, onClose = onClose) { onSystemPanel(ShadePanel.NOTIFICATIONS) }
         else ControlCenter(panelModifier, status, ccControls, onCcControls, ccSize, wide, onClose) { onSystemPanel(ShadePanel.QUICK_SETTINGS) }
+    }
     }
 }
 

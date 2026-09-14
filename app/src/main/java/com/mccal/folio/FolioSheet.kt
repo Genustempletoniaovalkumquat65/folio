@@ -121,17 +121,7 @@ private fun FormSheet(onDismissRequest: () -> Unit, dismissOnBack: Boolean, widt
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
             dismissOnBackPress = dismissOnBack)) {
-        val view = androidx.compose.ui.platform.LocalView.current
-        androidx.compose.runtime.LaunchedEffect(view) {
-            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
-                w.setDimAmount(0f)
-                w.setWindowAnimations(0)
-                androidx.core.view.WindowCompat.getInsetsController(w, w.decorView).apply {
-                    systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                }
-            }
-        }
+        FolioDialogWindow(dim = 0f)
         val reduceMotion = LocalReduceMotion.current
         val appear = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (reduceMotion) 1f else 0f) }
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -167,10 +157,7 @@ internal fun AlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composabl
     dismissButton: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null, text: (@Composable () -> Unit)? = null) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        val view = androidx.compose.ui.platform.LocalView.current
-        androidx.compose.runtime.LaunchedEffect(view) {
-            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w -> w.setDimAmount(.3f); w.setWindowAnimations(0) }
-        }
+        FolioDialogWindow(dim = .3f)
         val reduceMotion = LocalReduceMotion.current
         val appear = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (reduceMotion) 1f else 0f) }
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -179,7 +166,7 @@ internal fun AlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composabl
         val base = MaterialTheme.typography
         val blue = Color(0xFF0A84FF)
         fun buttons(weight: androidx.compose.ui.text.font.FontWeight) = base.copy(labelLarge = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, fontWeight = weight))
-        FoldAvoidingBox(Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
+        FoldAvoidingBox(Modifier.windowInsetsPadding(WindowInsets.safeDrawing), role = FoldRole.INFO) {
             MaterialTheme(colorScheme = FolioSheetColors.copy(primary = blue), typography = base) {
                 androidx.compose.foundation.layout.Column(modifier.width(270.dp)
                     .graphicsLayer { alpha = appear.value; scaleX = 1.12f - .12f * appear.value; scaleY = scaleX }
@@ -204,6 +191,30 @@ internal fun AlertDialog(onDismissRequest: () -> Unit, confirmButton: @Composabl
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Folio's overlay windows (form sheets, alerts, folders): no system window animation, Android's status bar
+ * stays hidden like on Home (so nothing shifts), and Home dims and blurs behind, like iOS materials.
+ */
+@Composable
+internal fun FolioDialogWindow(dim: Float, blurRadiusDp: Int = 0) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.LaunchedEffect(view) {
+        (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { w ->
+            w.setDimAmount(dim)
+            w.setWindowAnimations(0)
+            if (blurRadiusDp > 0 && android.os.Build.VERSION.SDK_INT >= 31) {
+                w.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                w.attributes = w.attributes.apply { blurBehindRadius = with(density) { blurRadiusDp.dp.roundToPx() } }
+            }
+            androidx.core.view.WindowCompat.getInsetsController(w, w.decorView).apply {
+                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
             }
         }
     }

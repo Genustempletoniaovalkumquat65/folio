@@ -49,6 +49,7 @@ internal fun AppLibrary(
     onTurnOnWork: (Long) -> Unit = {},
 ) {
     val glass = !editing
+    val hasHinge = LocalHinge.current != null
     val palette = LocalDuoPalette.current
     val ink = if (glass) Ink else MaterialTheme.colorScheme.onSurface
     val pinned = remember(state.homeSlots, state.leadingSlots) {
@@ -99,6 +100,11 @@ internal fun AppLibrary(
             it.label.firstOrNull()?.takeIf(Char::isLetter)?.uppercaseChar()?.toString() ?: "#"
         }
     }
+    // Like iOS, a category opens as an expanded folder over the library instead of replacing it.
+    openCategory?.takeIf { browsing }?.let { category ->
+        CategoryFolder(category.title, categorized[category].orEmpty(), onDismiss = { openCategory = null },
+            onLaunch = { openCategory = null; onLaunchFrom(it, null) }, onActions = { openCategory = null; onActions(it) })
+    }
     Surface(modifier, shape = RoundedCornerShape(24.dp),
         color = if (glass) Glass.copy(alpha = .48f) else MaterialTheme.colorScheme.surface,
         contentColor = ink,
@@ -106,9 +112,10 @@ internal fun AppLibrary(
         Column(Modifier.background(Brush.verticalGradient(if (glass)
             listOf(Color.White.copy(alpha = .09f), Color.Transparent) else listOf(Color.Transparent, Color.Transparent)))
             .padding(horizontal = 16.dp).padding(top = 18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (editing) "Choose Home Apps" else "App Library", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = if (editing) FontWeight.Bold else FontWeight.Medium)
-                Text(if (editing) "${pinned.size} pinned" else "${visibleApps.size}", color = ink, fontSize = 12.sp)
+            // iOS App Library has no title bar, just its search field; choosing Home apps keeps a title and count.
+            if (editing) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Choose Home Apps", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("${pinned.size} pinned", color = ink, fontSize = 12.sp)
             }
             if (hasWork || hiddenCount > 0 || showHidden) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasWork) {
@@ -118,7 +125,7 @@ internal fun AppLibrary(
                 if (!editing) IosChip(selected = showHidden, onClick = { showHidden = !showHidden }, label = { Text("Hidden ($hiddenCount)") },
                     modifier = Modifier.testTag("hidden-apps-chip"))
             }
-            IosSearchField(query, onQuery, if (editing) "Search apps" else "Search apps, web or ask AI", Modifier.padding(vertical = 12.dp),
+            IosSearchField(query, onQuery, if (editing) "Search apps" else "App Library", Modifier.padding(vertical = 12.dp),
                 fieldModifier = (if (editing) Modifier else Modifier.focusRequester(searchFocus)).testTag(if (editing) "pin-search" else "library-search"),
                 ink = ink, onSearch = {
                     if (!editing && query.isNotBlank()) openWebSearch(context,
@@ -139,28 +146,14 @@ internal fun AppLibrary(
                     WebSearchRow(query) { openWebSearch(context, it, query) }
                 }
                 if (browsing && categorized.isNotEmpty()) {
-                    val category = openCategory
-                    if (category != null) {
-                        item("category-header") {
-                            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(category.title, color = ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { openCategory = null }) { Text(stringResource(R.string.all_categories)) }
+                    // Tiles stay iPhone-sized (~180dp): more columns on the wide inner screen instead of giant tiles.
+                    val columns = evenColumns((libraryWidth / 190.dp).toInt().coerceIn(2, 6), 2, hasHinge)
+                    items(categorized.entries.toList().chunked(columns), key = { row -> "cat-" + row.first().key.name }) { row ->
+                        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            row.forEach { (cat, apps) ->
+                                CategoryCard(cat.title, apps, Modifier.weight(1f), labelColor = ink, onLaunch = { onLaunchFrom(it, null) }) { openCategory = cat }
                             }
-                        }
-                        item("category-grid") {
-                            CategoryGrid(categorized[category].orEmpty(), columns = (libraryWidth / 90.dp).toInt().coerceIn(4, 10), labelColor = ink,
-                                onLaunch = { onLaunchFrom(it, null) }, onActions = onActions)
-                        }
-                    } else {
-                        // Tiles stay iPhone-sized (~180dp): more columns on the wide inner screen instead of giant tiles.
-                        val columns = (libraryWidth / 190.dp).toInt().coerceIn(2, 6)
-                        items(categorized.entries.toList().chunked(columns), key = { row -> "cat-" + row.first().key.name }) { row ->
-                            Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                row.forEach { (cat, apps) ->
-                                    CategoryCard(cat.title, apps, Modifier.weight(1f), labelColor = ink, onLaunch = { onLaunchFrom(it, null) }) { openCategory = cat }
-                                }
-                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                            }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 } else if (groups.isEmpty()) item { Text(if (state.loading) "Loading apps…" else "No apps found", Modifier.padding(vertical = 20.dp)) }

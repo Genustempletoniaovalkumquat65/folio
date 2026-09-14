@@ -559,39 +559,76 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
         Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp), content = pageContent)
-    } else Row(Modifier.fillMaxSize()) {
-        val sidebarScroll = rememberScrollState()
-        Column(Modifier.width(if (fullWidth < 800.dp) 300.dp else 340.dp).fillMaxHeight().verticalScroll(sidebarScroll)
-            .padding(horizontal = 16.dp).padding(top = 44.dp, bottom = 20.dp).testTag("settings-sidebar"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SettingsLargeTitle(stringResource(R.string.folio))
-            SettingsSearchField(settingsQuery) { settingsQuery = it }
-            if (settingsQuery.isNotBlank()) SettingsSearchResults(settingsQuery, onOpen = { onPage(it) })
-            else {
-                // Like the account card at the top of iPad Settings: Folio's own page.
-                SheetGroup { SidebarAppRow(selected = page == CustomizationPage.OVERVIEW, setupLeft) { onPage(CustomizationPage.OVERVIEW) } }
-                overviewRows(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else page, true)
+    } else {
+        // Split arrangement by shape, not device: wider than tall, sidebar and page are tiled; taller than wide,
+        // the page gets the width and the sidebar opens over it from the sidebar button (iPhone Duo split views).
+        val tiled = maxWidth > maxHeight
+        // Tiled it shares the width; as an overlay it can be a little wider so rows don't wrap.
+        val sidebarWidth = if (tiled) (fullWidth * .36f).coerceIn(280.dp, 340.dp) else minOf(360.dp, fullWidth * .6f)
+        var sidebarOpen by rememberSaveable { mutableStateOf(true) }
+        var shownPage by remember { mutableStateOf(page) }
+        SideEffect { if (page != shownPage) { shownPage = page; if (!tiled) sidebarOpen = false } }
+        val sidebar: @Composable () -> Unit = {
+            val sidebarScroll = rememberScrollState()
+            Column(Modifier.width(sidebarWidth).fillMaxHeight().verticalScroll(sidebarScroll)
+                .padding(horizontal = 16.dp).padding(top = 44.dp, bottom = 20.dp).testTag("settings-sidebar"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SettingsLargeTitle(stringResource(R.string.folio))
+                SettingsSearchField(settingsQuery) { settingsQuery = it }
+                if (settingsQuery.isNotBlank()) SettingsSearchResults(settingsQuery, onOpen = { onPage(it) })
+                else {
+                    // Like the account card at the top of iPad Settings: Folio's own page.
+                    SheetGroup { SidebarAppRow(selected = page == CustomizationPage.OVERVIEW, setupLeft) { onPage(CustomizationPage.OVERVIEW) } }
+                    overviewRows(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else page, true)
+                }
             }
         }
-        Box(Modifier.fillMaxHeight().width(.5.dp).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .14f)))
-        Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 20.dp)) {
-            SettingsNavBar(if (page == CustomizationPage.TWEAK) "Tweaks" else null, onBack, onClose)
-            if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
-            Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // The space beside the list shows what the page changes, drawn from your real Home.
-                    if (page == CustomizationPage.HOME || page == CustomizationPage.STATUS)
-                        MiniHomePreview(backgrounds.previewBitmap, state, 240.dp, iconScale = (if (wide) state.expanded else state.compact).iconSize / 66f)
-                    pageContent()
+        Row(Modifier.fillMaxSize()) {
+            if (tiled) {
+                sidebar()
+                Box(Modifier.fillMaxHeight().width(.5.dp).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .14f)))
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 20.dp)) {
+                SettingsNavBar(if (page == CustomizationPage.TWEAK) "Tweaks" else null, onBack, onClose,
+                    leading = if (tiled) null else ({ SidebarButton { sidebarOpen = !sidebarOpen } }))
+                if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
+                Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // The space beside the list shows what the page changes, drawn from your real Home.
+                        if (page == CustomizationPage.HOME || page == CustomizationPage.STATUS)
+                            MiniHomePreview(backgrounds.previewBitmap, state, 240.dp, iconScale = (if (wide) state.expanded else state.compact).iconSize / 66f)
+                        pageContent()
+                    }
                 }
+            }
+        }
+        if (!tiled) {
+            val reduceMotion = LocalReduceMotion.current
+            androidx.compose.animation.AnimatedVisibility(sidebarOpen, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .4f))
+                    .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { sidebarOpen = false })
+            }
+            androidx.compose.animation.AnimatedVisibility(sidebarOpen,
+                enter = if (reduceMotion) androidx.compose.animation.fadeIn() else androidx.compose.animation.slideInHorizontally { -it },
+                exit = if (reduceMotion) androidx.compose.animation.fadeOut() else androidx.compose.animation.slideOutHorizontally { -it }) {
+                Box(Modifier.fillMaxHeight().background(androidx.compose.ui.graphics.Color(0xFF1C1C1E))) { sidebar() }
             }
         }
     }
     }
 }
 
-@Composable private fun SettingsNavBar(backLabel: String?, onBack: () -> Unit, onClose: () -> Unit) {
-    // iOS navigation bar: "‹ Back" on sub-pages, Done on the right.
+/** The iPad/iPhone Duo sidebar toggle: shows or hides the settings list over the page. */
+@Composable private fun SidebarButton(onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = "Show or hide the settings list", onClick = onClick)
+        .testTag("settings-sidebar-toggle"), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.ViewSidebar, null, tint = IosBlue, modifier = Modifier.size(26.dp))
+    }
+}
+
+@Composable private fun SettingsNavBar(backLabel: String?, onBack: () -> Unit, onClose: () -> Unit, leading: (@Composable () -> Unit)? = null) {
+    // iOS navigation bar: "‹ Back" on sub-pages (or the sidebar button), Done on the right.
     Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+        if (backLabel == null && leading != null) Box(Modifier.align(Alignment.CenterStart)) { leading() }
         if (backLabel != null) Row(Modifier.align(Alignment.CenterStart).clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onBack).padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
             verticalAlignment = Alignment.CenterVertically) {

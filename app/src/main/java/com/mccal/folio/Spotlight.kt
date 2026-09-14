@@ -203,13 +203,18 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
 
     // imeAnimationTarget changes once per keyboard show/hide (not every animation frame), so results
     // re-layout a single time instead of on each frame of the keyboard sliding in.
+    // Half folded, Spotlight moves off the hinge like iPhone Duo's system panels.
+    FoldAvoidingBox(contentAlignment = Alignment.TopCenter) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.folioSafeTop).windowInsetsPadding(WindowInsets.imeAnimationTarget).padding(horizontal = 16.dp).padding(top = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = if (wide) 640.dp else 720.dp).fillMaxWidth().testTag("spotlight"),
+        // A readable column on big screens (iPad Spotlight floats at about this width) rather than stretching edge to edge.
+        Column(Modifier.widthIn(max = 680.dp).fillMaxWidth().testTag("spotlight"),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // Search field
             val fieldScope = rememberCoroutineScope()
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(SpotGlass)
+            // iOS: the search capsule with Cancel beside it.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(SpotGlass)
                 .border(FolioGlass.edge, RoundedCornerShape(18.dp))
                 // The whole capsule is the tap target, not just the text line.
                 .clickable(remember { MutableInteractionSource() }, null) { fieldScope.launch { raiseKeyboard() } }
@@ -232,6 +237,10 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                 }
                 if (query.isNotEmpty()) Icon(Icons.Rounded.Cancel, "Clear", tint = Color.White.copy(alpha = .6f),
                     modifier = Modifier.minimumInteractiveComponentSize().clip(CircleShape).clickable { query = "" }.padding(12.dp).size(20.dp))
+            }
+            Text(stringResource(R.string.cancel), color = Color.White, fontSize = 17.sp,
+                modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
+                    .padding(horizontal = 8.dp, vertical = 12.dp).testTag("spotlight-cancel"))
             }
 
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -297,6 +306,7 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
             }
         }
     }
+    }
 }
 
 @Composable
@@ -313,7 +323,8 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 @Composable
 private fun AppGrid(apps: List<AppEntry>, onLaunch: (AppEntry) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth > 560.dp) 8 else 4
+        // As many ~84dp app cells as fit (four on a phone, up to eight on a wide column).
+        val columns = evenColumnsOnHinge((maxWidth / 84.dp).toInt().coerceIn(4, 8), 4)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             apps.chunked(columns).forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
