@@ -35,29 +35,44 @@ class PinWidgetActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launcherApps = getSystemService(LauncherApps::class.java)
-        val request = runCatching { launcherApps.getPinItemRequest(intent) }.getOrNull()
-        val provider = request?.takeIf { it.isValid && it.requestType == LauncherApps.PinItemRequest.REQUEST_TYPE_APPWIDGET }?.getAppWidgetProviderInfo(this)
-        if (request == null || provider == null) { finish(); return }
+        val request = runCatching { launcherApps.getPinItemRequest(intent) }.getOrNull()?.takeIf { it.isValid }
+        if (request == null) { finish(); return }
+        if (request.requestType == LauncherApps.PinItemRequest.REQUEST_TYPE_SHORTCUT) { showShortcut(request); return }
+        val provider = request.getAppWidgetProviderInfo(this)
+        if (provider == null) { finish(); return }
         val label = provider.loadLabel(packageManager)
         val app = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(provider.provider.packageName, 0)).toString() }.getOrDefault(label)
         val preview = runCatching { provider.loadPreviewImage(this, resources.displayMetrics.densityDpi)?.toBitmap() }.getOrNull()
             ?: runCatching { provider.loadIcon(this, resources.displayMetrics.densityDpi)?.toBitmap() }.getOrNull()
         setContent {
             var error by remember { mutableStateOf<String?>(null) }
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)).clickable(onClick = ::finish), contentAlignment = Alignment.BottomCenter) {
-                Column(Modifier.padding(16.dp).widthIn(max = 420.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1E))
-                    .pointerInput(Unit) { detectTapGestures() }.padding(20.dp).testTag("pin-widget-card"),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    preview?.let { Image(it.asImageBitmap(), null, Modifier.heightIn(max = 180.dp).clip(RoundedCornerShape(20.dp))) }
-                    Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                    Text(if (label != app) app else "Widget", color = Color.White.copy(alpha = .6f), fontSize = 15.sp)
-                    error?.let { Text(it, color = Color(0xFFFF453A), fontSize = 14.sp, textAlign = TextAlign.Center) }
-                    Box(Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF0A84FF))
-                        .clickable { error = add(request, provider) ?: run { finish(); null } }.testTag("pin-widget-add"), contentAlignment = Alignment.Center) {
-                        Text("Add to Home Screen", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    Text("Cancel", color = Color(0xFF0A84FF), fontSize = 17.sp, modifier = Modifier.clickable(onClick = ::finish).padding(8.dp))
+            PinCard(onCancel = ::finish, error = error, addLabel = "Add to Home Screen", tag = "pin-widget", onAdd = { error = add(request, provider) ?: run { finish(); null } }) {
+                preview?.let { Image(it.asImageBitmap(), null, Modifier.heightIn(max = 180.dp).clip(RoundedCornerShape(20.dp))) }
+                Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Text(if (label != app) app else "Widget", color = Color.White.copy(alpha = .6f), fontSize = 15.sp)
+            }
+        }
+    }
+
+    /** A website or app shortcut: the same card with its icon; Add pins it and puts it in the first free spot on Home. */
+    private fun showShortcut(request: LauncherApps.PinItemRequest) {
+        val info = request.shortcutInfo ?: run { finish(); return }
+        val label = (info.shortLabel ?: info.longLabel ?: "Shortcut").toString()
+        val app = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(info.`package`, 0)).toString() }.getOrDefault("")
+        val icon = runCatching { getSystemService(LauncherApps::class.java).getShortcutIconDrawable(info, resources.displayMetrics.densityDpi)?.toBitmap(192, 192) }.getOrNull()
+        setContent {
+            var error by remember { mutableStateOf<String?>(null) }
+            PinCard(onCancel = ::finish, error = error, addLabel = "Add to Home Screen", tag = "pin-shortcut", onAdd = {
+                val model = FolioSettingsBridge.liveModel?.get()
+                when {
+                    model == null -> error = "Open Folio once, then try again."
+                    runCatching { request.accept() }.getOrDefault(false) -> { model.placePinnedShortcut(info.`package`, info.id); finish() }
+                    else -> error = "The shortcut couldn't be added."
                 }
+            }) {
+                icon?.let { Image(it.asImageBitmap(), null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp))) }
+                Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                if (app.isNotEmpty()) Text(app, color = Color.White.copy(alpha = .6f), fontSize = 15.sp)
             }
         }
     }
@@ -83,5 +98,23 @@ class PinWidgetActivity : ComponentActivity() {
         val placed = accepted && model.placeWidget(WidgetPlacement(model.nextWidgetSlot(), id, page, local % GRID_COLUMNS, local / GRID_COLUMNS, span.width, span.height))
         if (!placed) { host.deleteAppWidgetId(id); return "The widget couldn't be added." }
         return null
+    }
+}
+
+/** The Add to Home Screen card: what's being added, then Add and Cancel. Tapping outside cancels. */
+@Composable
+private fun PinCard(onCancel: () -> Unit, error: String?, addLabel: String, tag: String, onAdd: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .45f)).clickable(onClick = onCancel), contentAlignment = Alignment.BottomCenter) {
+        Column(Modifier.padding(16.dp).widthIn(max = 420.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1E))
+            .pointerInput(Unit) { detectTapGestures() }.padding(20.dp).testTag("$tag-card"),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            content()
+            error?.let { Text(it, color = Color(0xFFFF453A), fontSize = 14.sp, textAlign = TextAlign.Center) }
+            Box(Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF0A84FF))
+                .clickable(onClick = onAdd).testTag("$tag-add"), contentAlignment = Alignment.Center) {
+                Text(addLabel, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text("Cancel", color = Color(0xFF0A84FF), fontSize = 17.sp, modifier = Modifier.clickable(onClick = onCancel).padding(8.dp))
+        }
     }
 }

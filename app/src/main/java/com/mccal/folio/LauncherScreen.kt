@@ -1287,7 +1287,7 @@ fun LauncherScreen(
             // iPhone-style menu next to the icon; "Edit Home Screen" starts jiggle mode for moving.
             AppContextMenu(app, onHome = pinned, hidden = app.id in state.hiddenApps,
                 onDismiss = { selectedId = null }, onMove = { selectedId = null; homeEdit.start() },
-                onAddOrRemove = { model.setPinned(app.id, !pinned); selectedId = null },
+                onAddOrRemove = { if (app.isShortcut) model.deleteShortcut(app) else model.setPinned(app.id, !pinned); selectedId = null },
                 onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
                 onWidgets = openWidgetsFor,
                 onToggleHidden = { model.setHidden(app.id, app.id !in state.hiddenApps); selectedId = null },

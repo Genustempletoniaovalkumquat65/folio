@@ -213,8 +213,9 @@ class DiscoverActivity : DiscoverPageActivity() {
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
                 ?: throw IllegalStateException("Profile is unavailable")
-            getSystemService(LauncherApps::class.java).startMainActivity(
-                app.component, user, null, null)
+            val launcherApps = getSystemService(LauncherApps::class.java)
+            app.shortcutId?.let { launcherApps.startShortcut(app.packageName, it, null, null, user) }
+                ?: launcherApps.startMainActivity(app.component, user, null, null)
         } catch (_: RuntimeException) { Toast.makeText(this, "${app.label} is unavailable.", Toast.LENGTH_SHORT).show() }
     }
 }

@@ -374,7 +374,10 @@ class MainActivity : ComponentActivity() {
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
                 ?: throw IllegalStateException("Profile is unavailable")
-            getSystemService(LauncherApps::class.java).startMainActivity(app.component, user, screenBounds(bounds), launchOptions(bounds))
+            val launcherApps = getSystemService(LauncherApps::class.java)
+            val shortcut = app.shortcutId
+            if (shortcut != null) launcherApps.startShortcut(app.packageName, shortcut, screenBounds(bounds), launchOptions(bounds), user)
+            else launcherApps.startMainActivity(app.component, user, screenBounds(bounds), launchOptions(bounds))
         } catch (_: Exception) { Toast.makeText(this, "${app.label} is unavailable.", Toast.LENGTH_SHORT).show(); model.refresh() }
     }
 

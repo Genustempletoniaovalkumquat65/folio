@@ -87,7 +87,7 @@ internal fun AppContextMenu(
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .72f, stiffness = Spring.StiffnessMediumLow)) }
     DisposableEffect(Unit) { LauncherSheetsOpen.intValue++; onDispose { LauncherSheetsOpen.intValue-- } }
 
-    val actions by produceState(emptyList<QuickAction>(), app.id) { value = withContext(Dispatchers.IO) { loadQuickActions(context, app) } }
+    val actions by produceState(emptyList<QuickAction>(), app.id) { if (!app.isShortcut) value = withContext(Dispatchers.IO) { loadQuickActions(context, app) } }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val view = LocalView.current
@@ -159,8 +159,10 @@ internal fun AppContextMenu(
                 }
                 MenuRow("Edit Home Screen", Icons.Rounded.AppRegistration) { onMove() }
                 MenuDivider()
-                MenuRow(if (onHome) "Remove from Home" else "Add to Home", if (onHome) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.AddCircleOutline,
-                    destructive = onHome) { onAddOrRemove() }
+                // A shortcut exists only as this icon, so removing it deletes it (like iOS's "Delete Bookmark").
+                MenuRow(when { app.isShortcut -> "Delete Shortcut"; onHome -> "Remove from Home"; else -> "Add to Home" },
+                    if (onHome || app.isShortcut) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.AddCircleOutline,
+                    destructive = onHome || app.isShortcut) { onAddOrRemove() }
                 MenuDivider()
                 // iOS keeps context menus short: the less common actions sit behind "More".
                 if (!more) MenuRow("More", Icons.Rounded.MoreHoriz) { more = true }
@@ -170,7 +172,7 @@ internal fun AppContextMenu(
                     MenuDivider()
                     MenuRow(if (hidden) "Show in App Library" else "Hide from App Library", if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff) { onToggleHidden() }
                     MenuDivider()
-                    MenuRow("App Info", Icons.Rounded.Info) { onInfo() }
+                    MenuRow(if (app.isShortcut) "Info for App" else "App Info", Icons.Rounded.Info) { onInfo() }
                 }
             }
         }

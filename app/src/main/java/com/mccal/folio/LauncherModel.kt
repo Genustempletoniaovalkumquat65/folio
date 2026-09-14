@@ -37,7 +37,13 @@ data class AppEntry(
     val available: Boolean = true,
 ) {
     val packageName: String get() = component.packageName
+    /** A pinned shortcut (a website or app action someone added to Home) rather than an app. */
+    val isShortcut: Boolean get() = component.className.startsWith(SHORTCUT_CLASS_PREFIX)
+    val shortcutId: String? get() = component.className.takeIf { isShortcut }?.removePrefix(SHORTCUT_CLASS_PREFIX)
 }
+
+/** Pinned shortcuts live on Home as entries whose component names the owning app and "#shortcut:" plus the shortcut id. */
+const val SHORTCUT_CLASS_PREFIX = "#shortcut:"
 
 data class LauncherState(
     val apps: List<AppEntry> = emptyList(),
@@ -189,6 +195,27 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     private val unavailablePackages = mutableSetOf<Pair<Long, String>>()
     /** New downloads waiting for the refresh that brings their apps in (for "Add to Home Screen"). */
     private val addedPackages = mutableSetOf<String>()
+    /** Shortcuts just accepted from a pin request, to put on Home once the refresh brings them in (package, shortcut id). */
+    private val pendingShortcuts = mutableSetOf<Pair<String, String>>()
+
+    /** After Android pins a shortcut for Folio, refresh and place it in the first free spot on Home. */
+    fun placePinnedShortcut(packageName: String, shortcutId: String) {
+        pendingShortcuts += packageName to shortcutId
+        refresh(packageName)
+    }
+
+    /** Deletes a pinned shortcut (iOS "Delete Bookmark"): unpins it in Android, which removes it from Home and the App Library. */
+    fun deleteShortcut(app: AppEntry) {
+        val id = app.shortcutId ?: return
+        runCatching {
+            val remaining = launcherApps.getShortcuts(LauncherApps.ShortcutQuery().setPackage(app.packageName)
+                .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED), app.user)?.map { it.id }.orEmpty() - id
+            launcherApps.pinShortcuts(app.packageName, remaining, app.user)
+        }
+        setPinned(app.id, false)
+        removedPackages += app.userSerial to app.packageName
+        refresh(app.packageName, app.user)
+    }
     // Accessed only in the serialized IO refresh. Returning Home reuses existing bitmaps.
     private val iconCache = mutableMapOf<String, AppEntry>()
     private var iconConfiguration = ""
@@ -208,6 +235,10 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             refresh(packageName, user)
         }
         override fun onPackageChanged(packageName: String, user: UserHandle) = refresh(packageName, user)
+        // Apps update their dynamic shortcuts often; only pinned ones matter to Home.
+        override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<android.content.pm.ShortcutInfo>, user: UserHandle) {
+            if (shortcuts.any { it.isPinned } || mutable.value.apps.any { it.isShortcut && it.packageName == packageName }) refresh(packageName, user)
+        }
         override fun onPackagesAvailable(packages: Array<out String>, user: android.os.UserHandle, replacing: Boolean) {
             packages.forEach {
                 val key = userManager.getSerialNumberForUser(user) to it
@@ -269,7 +300,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     val cached = cachedBeforeProfiles.filterNot { it.isWork && it.userSerial in removedProfileSerials }
                     val authoritativeProfiles = mutableSetOf<Long>()
                     authoritativeProfiles += removedProfileSerials
-                    val live = handles.flatMap { profile ->
+                    val liveApps = handles.flatMap { profile ->
                         val serial = userManager.getSerialNumberForUser(profile)
                         val descriptor = profiles.first { it.userSerial == serial }
                         val activityList = if (descriptor.available) runCatching { launcherApps.getActivityList(null, profile) }.getOrNull() else null
@@ -285,6 +316,28 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                     }
+                    // Pinned shortcuts (e.g. Chrome's "Add to Home screen"). Only the default Home app may read them;
+                    // if the query fails, the shortcuts Folio already knows stay put rather than vanish from Home.
+                    val shortcuts = handles.flatMap { profile ->
+                        val serial = userManager.getSerialNumberForUser(profile)
+                        val descriptor = profiles.first { it.userSerial == serial }
+                        if (!descriptor.available) return@flatMap emptyList()
+                        val pinned = runCatching { launcherApps.getShortcuts(LauncherApps.ShortcutQuery()
+                            .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED), profile) }.getOrNull()
+                            ?: return@flatMap cached.filter { it.isShortcut && it.userSerial == serial }.map { it.copy(available = true) }
+                        pinned.filter { it.isEnabled && it.`package` != application.packageName }.map { info ->
+                            val component = ComponentName(info.`package`, SHORTCUT_CLASS_PREFIX + info.id)
+                            val id = profileAppId(component.flattenToString(), serial, personalSerial)
+                            val label = (info.shortLabel ?: info.longLabel ?: "Shortcut").toString()
+                            iconCache[id]?.takeIf { it.label == label && it.available } ?: run {
+                                val icon = runCatching { launcherApps.getShortcutBadgedIconDrawable(info, resources.displayMetrics.densityDpi) }.getOrNull()
+                                    ?: application.packageManager.defaultActivityIcon
+                                AppEntry(id, label, launcherIcon(icon), component, profile, serial, descriptor.label, descriptor.isWork, available = true)
+                                    .also { iconCache[id] = it }
+                            }
+                        }
+                    }
+                    val live = liveApps + shortcuts
                     val liveIds = live.mapTo(mutableSetOf(), AppEntry::id)
                     val profileBySerial = profiles.associateBy(AppProfile::userSerial)
                     val unavailable = cached.filter { it.id !in liveIds }.mapNotNull { cachedEntry ->
@@ -320,9 +373,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                         apps.removedProfiles)
                     // iOS "Add to Home Screen": a newly downloaded app also goes to the first free spot on Home.
                     val oldIds = old.apps.mapTo(mutableSetOf(), AppEntry::id)
-                    val arrivals = entries.filter { it.packageName in addedPackages && it.id !in oldIds && !it.isWork }
+                    val arrivals = entries.filter { it.packageName in addedPackages && it.id !in oldIds && !it.isWork && !it.isShortcut }
+                    val newShortcuts = entries.filter { app -> app.isShortcut && pendingShortcuts.any { it.first == app.packageName && it.second == app.shortcutId } }
+                    pendingShortcuts.removeAll { p -> newShortcuts.any { it.packageName == p.first && it.shortcutId == p.second } }
                     addedPackages.removeAll(arrivals.map { it.packageName }.toSet())
-                    val withArrivals = if (!old.addNewAppsToHome) pins else arrivals.fold(pins) { slots, app ->
+                    val homeArrivals = (if (old.addNewAppsToHome) arrivals else emptyList()) + newShortcuts
+                    val withArrivals = homeArrivals.fold(pins) { slots, app ->
                         if (app.id in old.dock || app.id in old.leadingSlots || old.folders.any { app.id in it.appIds }) slots
                         else pinHomeApp(slots, app.id, true, old.widgetPlacements.filter { it.page >= 0 }.flatMap { it.coveredIndices() }.toSet())
                     }

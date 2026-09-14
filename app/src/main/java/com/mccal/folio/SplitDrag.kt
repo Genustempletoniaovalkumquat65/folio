@@ -16,7 +16,8 @@ import android.view.View
  * (Android 12+). Idea credited to QuickLaunch (AhmedTheGeek); implemented independently.
  */
 internal fun startSplitDrag(view: View, context: Context, component: ComponentName, user: UserHandle, label: String, icon: Bitmap?): Boolean =
-    runCatching {
+    // Shortcuts aren't activities Folio can hand to split screen.
+    if (component.className.startsWith(SHORTCUT_CLASS_PREFIX)) false else runCatching {
         // The activity-drag contract (MIME type + extras) isn't in the public SDK, so use its stable string
         // values; the PendingIntent is Folio's own, launching the app's main activity.
         val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)

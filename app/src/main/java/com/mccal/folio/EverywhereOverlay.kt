@@ -252,7 +252,10 @@ internal class EverywhereOverlay(private val service: AccessibilityService) {
 
     private fun launch(app: DockApp) {
         runCatching {
-            service.getSystemService(android.content.pm.LauncherApps::class.java).startMainActivity(app.component, app.user, null, null)
+            val launcherApps = service.getSystemService(android.content.pm.LauncherApps::class.java)
+            if (app.component.className.startsWith(SHORTCUT_CLASS_PREFIX))
+                launcherApps.startShortcut(app.component.packageName, app.component.className.removePrefix(SHORTCUT_CLASS_PREFIX), null, null, app.user)
+            else launcherApps.startMainActivity(app.component, app.user, null, null)
         }
     }
 
