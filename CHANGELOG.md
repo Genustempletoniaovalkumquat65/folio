@@ -18,10 +18,11 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - What's New after an update.
 
 ### Changed
+- The side column is now called the Side Bar (status bar, Dynamic Island and dock), as on iPhone Duo.
 - Edit while icons wiggle opens a short iOS 18-style menu under the button.
 - Smart Rotate moves a stack to the widget that matters now.
-- Settings previews draw Home with its real layout, widgets, rail and dock.
-- The status rail shows cellular bars, an airplane, or a searching fan when there's no Wi-Fi, instead of a line.
+- Settings previews draw Home with its real layout, widgets, status bar and dock.
+- The status bar shows cellular bars, an airplane, or a searching fan when there's no Wi-Fi, instead of a line.
 
 ### Fixed
 - Long app menus no longer push Edit Home Screen and More out of view.
@@ -34,7 +35,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - iPhone Duo-style Home: two columns on the cover in landscape, a centered page with a bottom dock bar in unfolded portrait.
 - Settings split view with a sidebar on the unfolded screen; centered form sheets and iOS alerts.
 - Hinge awareness: sheets, alerts and panels move off the fold when the phone is partly folded.
-- Dynamic Island that wraps a side-edge camera, expands along the edge, and handles calls; live activities under the status as an option.
+- Dynamic Island that wraps a side-edge camera, expands along the edge, and handles calls; live activities under the status bar as an option.
 - Arrange Like iPhone; Lock Cover layout for wide windows; fold effect that follows the hinge and rotation.
 
 ## [0.2.0] - 2026-09-14

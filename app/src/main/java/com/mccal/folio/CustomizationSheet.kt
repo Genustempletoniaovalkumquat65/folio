@@ -59,7 +59,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.SETUP -> "Setup Checklist"
         CustomizationPage.WALLPAPER -> "Wallpaper & Appearance"
         CustomizationPage.HOME -> "Home Screen & Dock"
-        CustomizationPage.STATUS -> "Icons & Side Rail"
+        CustomizationPage.STATUS -> "Icons & Side Bar"
         CustomizationPage.GESTURES -> "Gestures & Actions"
         CustomizationPage.FOLD -> "Fold & Displays"
         CustomizationPage.BACKUP -> "Backup"
@@ -98,7 +98,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.Palette, 0xFFFF375F, "Themes", "customization-themes",
                             FolioTheme.PRESETS.firstOrNull { state.looksLike(it) }?.name ?: "Custom", selected = selected == CustomizationPage.THEMES, chevron = !sidebar) { onPage(CustomizationPage.THEMES) }
                         MenuDivider()
-                        TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Rail", "customization-status", selected = selected == CustomizationPage.STATUS, chevron = !sidebar) { onPage(CustomizationPage.STATUS) }
+                        TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Bar", "customization-status", selected = selected == CustomizationPage.STATUS, chevron = !sidebar) { onPage(CustomizationPage.STATUS) }
                     }
                     SheetGroup {
                         TweakRow(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "customization-island", selected = selected == CustomizationPage.ISLAND, chevron = !sidebar) { onPage(CustomizationPage.ISLAND) }
@@ -466,7 +466,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             if (on && !IslandListenerService.hasAccess(islandContext))
                                 runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }, "island-switch")
-                        if (state.island && state.verticalStatus) SettingsSwitch("Live Activities Under the Status", state.railActivities, model::setRailActivities, "rail-activities-switch")
+                        if (state.island && state.verticalStatus) SettingsSwitch("Live Activities Under the Status Bar", state.railActivities, model::setRailActivities, "rail-activities-switch")
                         if (state.island && !IslandListenerService.hasAccess(islandContext)) TextButton(onClick = {
                             runCatching { islandContext.startActivity(IslandListenerService.accessSettingsIntent(islandContext)) }
                         }) { Text(stringResource(R.string.allow_notification_access)) }
@@ -808,7 +808,7 @@ private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = lis
     Triple("Icon pack, shape & style", "icons pack squircle circle tinted dark", CustomizationPage.STATUS),
     Triple("Notification badges", "badge dot count color soft", CustomizationPage.STATUS),
     Triple("Live Clock and Calendar icons", "live clock calendar", CustomizationPage.STATUS),
-    Triple("Side rail & status", "rail status battery wifi time left-handed labels app names", CustomizationPage.STATUS),
+    Triple("Side Bar & Status Bar", "side bar rail status bar battery wifi time left-handed labels app names", CustomizationPage.STATUS),
     Triple("Dynamic Island", "island pill camera pop-ups calls messages charging bluetooth", CustomizationPage.ISLAND),
     Triple("Island and dock in every app", "overlay everywhere other apps handle", CustomizationPage.ISLAND),
     Triple("Notification Center", "notifications clock stack group split blur", CustomizationPage.NOTIFICATIONS),
@@ -964,7 +964,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             }
         }
     }
-    Text("A theme changes icons, badges, glass, text on Home and the status rail. Your apps, pages and widgets stay as they are.",
+    Text("A theme changes icons, badges, glass, text on Home and the status bar. Your apps, pages and widgets stay as they are.",
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
     SheetGroup {
         IosActionRow("Save Current Look as Theme…", "theme-save") { save.launch("folio-theme.json") }

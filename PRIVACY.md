@@ -6,7 +6,7 @@ Duo Launcher stores settings, Home layout, widget placement, and selected wallpa
 
 - Installed app names, icons, launch activities, and eligible work-profile entries populate Home and All apps.
 - Widget providers control their content, accounts, and network activity; Android hosts their widgets.
-- Battery, Wi-Fi, cellular signal, and airplane-mode readings populate the Home status rail while visible. Signal display does not require location access.
+- Battery, Wi-Fi, cellular signal, and airplane-mode readings populate the Home status bar while visible. Signal display does not require location access.
 - Selecting a photo creates a local preview. Apply commits it; cancel preserves the previous background. Android's picker grants access to chosen images only.
 - Sunrise/sunset appearance stores coordinates you enter or explicitly request through approximate location. Times are calculated locally. There is no background location tracking, and Clear location removes the stored coordinates.
 
