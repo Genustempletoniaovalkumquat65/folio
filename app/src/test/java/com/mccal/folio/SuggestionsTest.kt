@@ -23,4 +23,11 @@ class SuggestionsTest {
         assertTrue(scores.getValue("reader") > .5)
         assertTrue(scores.getValue("reader") > scores.getValue("old"))
     }
+
+    @Test fun `smart rotate only moves to a clearly more relevant card`() {
+        org.junit.Assert.assertEquals(2, Suggestions.smartStackPick(listOf(.1, .2, 1.0), 0))
+        org.junit.Assert.assertNull(Suggestions.smartStackPick(listOf(.8, 1.0), 0)) // not half again as relevant
+        org.junit.Assert.assertNull(Suggestions.smartStackPick(listOf(0.0, .2), 0)) // below the floor
+        org.junit.Assert.assertNull(Suggestions.smartStackPick(listOf(.1, .9), 1)) // already showing the best
+    }
 }

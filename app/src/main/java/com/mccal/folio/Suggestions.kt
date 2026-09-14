@@ -73,6 +73,25 @@ internal object Suggestions {
         return out
     }
 
+    /**
+     * Smart Rotate: the card to show now, or null to stay. A card takes over only when it's clearly more relevant
+     * than the one showing (half again as relevant and above a floor), so a stack doesn't flip back and forth.
+     */
+    fun smartStackPick(relevance: List<Double>, current: Int): Int? {
+        val best = relevance.indices.maxByOrNull { relevance[it] } ?: return null
+        val now = relevance.getOrElse(current) { 0.0 }
+        return best.takeIf { it != current && relevance[it] >= .3 && relevance[it] > now * 1.5 }
+    }
+
+    /** Relevance by package for right now (same scoring as [forNow]). Call off the main thread. */
+    fun packageRelevance(context: Context, apps: List<AppEntry>, now: Long = System.currentTimeMillis()): Map<String, Double> {
+        val byId = apps.associateBy { it.id }
+        val out = HashMap<String, Double>()
+        scores(launches(context).filter { it.first in byId }, now).forEach { (id, s) -> byId[id]?.let { out.merge(it.packageName, s, Double::plus) } }
+        scores(usage(context, now), now).forEach { (pkg, s) -> out.merge(pkg, s * .6, Double::plus) }
+        return out
+    }
+
     /** Suggested apps for right now, best first. Call off the main thread. */
     fun forNow(context: Context, apps: List<AppEntry>, limit: Int = 8, now: Long = System.currentTimeMillis()): List<AppEntry> {
         val byId = apps.associateBy { it.id }

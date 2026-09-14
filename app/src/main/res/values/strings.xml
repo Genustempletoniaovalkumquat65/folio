@@ -208,7 +208,7 @@
     <string name="smart_stack">Smart Stack</string>
     <string name="show_first">Show First</string>
     <string name="smart_rotate">Smart Rotate</string>
-    <string name="show_the_next_widget_every_30_minutes">Show the next widget every 30 minutes</string>
+    <string name="show_the_next_widget_every_30_minutes">Show the widget that matters now, like an event coming up</string>
     <string name="swipe_up_or_down_on_the_stack_to_flip_be">Swipe up or down on the stack to flip between widgets.</string>
     <string name="review_restored_layout">Review restored layout</string>
     <string name="includes_your_unfolded_only_page">Includes your unfolded-only page.</string>

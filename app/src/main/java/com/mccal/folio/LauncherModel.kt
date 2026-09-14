@@ -106,7 +106,7 @@ data class LauncherState(
     val ncSplit: Boolean = true,
     /** Smart Stacks: widget placement slot → extra widget ids stacked behind that placement's widget. */
     val widgetStacks: Map<Int, List<Int>> = emptyMap(),
-    /** Smart Rotate: stacks flip to their next widget every so often. */
+    /** Smart Rotate: stacks move to the widget that matters now. */
     val stackRotate: Boolean = true,
     /** Live activities (music, calls, timers…) under the status in the side rail instead of at the camera. Off: the island stays on the camera. */
     val railActivities: Boolean = false,

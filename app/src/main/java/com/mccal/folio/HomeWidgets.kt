@@ -253,7 +253,7 @@ internal fun BuiltinWidgetCard(id: Int, slot: Int, onAdd: () -> Unit) {
 
 /**
  * iOS Smart Stack: swipe up or down between the widgets in one spot. Dots on the side show while flipping;
- * with Smart Rotate on, the stack moves to its next widget every 30 minutes while Home is open.
+ * with Smart Rotate on, the stack moves to the most relevant widget while Home is open.
  */
 @Composable
 internal fun SmartStack(cards: List<Int>, slot: Int, controller: WidgetController, modifier: Modifier, onAdd: () -> Unit) {
@@ -265,10 +265,24 @@ internal fun SmartStack(cards: List<Int>, slot: Int, controller: WidgetControlle
         if (pager.settledPage != lastSettled) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
         lastSettled = pager.settledPage
     }
-    LaunchedEffect(rotate, cards.size) {
+    // Smart Rotate, like iOS: every 15 minutes the stack moves to the widget that matters now: an event starting
+    // within the hour for Up Next, or an app you usually open around this time for its widget.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val homeApps = LocalHomeApps.current
+    LaunchedEffect(rotate, cards) {
         if (rotate) while (true) {
-            delay(30 * 60_000L)
-            if (!pager.isScrollInProgress) pager.animateScrollToPage((pager.currentPage + 1) % cards.size)
+            delay(15 * 60_000L)
+            val relevance = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val apps = Suggestions.packageRelevance(context, homeApps.apps)
+                val soon = UpNext.events(context, limit = 1).firstOrNull()?.let { !it.allDay && it.begin - System.currentTimeMillis() in 0..60 * 60_000L } == true
+                cards.map { id -> when {
+                    id == UP_NEXT_WIDGET -> if (soon) 5.0 else 0.0
+                    id >= 0 -> controller.manager.getAppWidgetInfo(id)?.provider?.packageName?.let { apps[it] } ?: 0.0
+                    else -> 0.0
+                } }
+            }
+            val pick = Suggestions.smartStackPick(relevance, pager.currentPage)
+            if (pick != null && !pager.isScrollInProgress) pager.animateScrollToPage(pick)
         }
     }
     var dotsVisible by remember { mutableStateOf(false) }
