@@ -176,7 +176,9 @@ class WidgetController(
     }
 
     fun sizing(provider: AppWidgetProviderInfo, grid: WidgetGridSizing): WidgetSpanConstraints? {
-        val density = activity.resources.displayMetrics.density
+        // Home's grid is measured in Folio's scaled dp on big screens (uiScale), so provider sizes use the same unit.
+        val config = activity.resources.configuration
+        val density = activity.resources.displayMetrics.density * uiScale(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat())
         fun dp(pixels: Int) = pixels / density
         return widgetSpanConstraints(WidgetProviderSizing(
             minWidthDp = dp(provider.minWidth), minHeightDp = dp(provider.minHeight),
