@@ -85,12 +85,12 @@ class LayoutModelTest {
     @Test fun `two-column pages keep widgets whole and rows aligned`() {
         val g = homeGeometry(751f, 459f, LayoutPreset(), true, labelHeight = 21f)
         assertTrue(g.splitColumns)
-        // Widgets up top: widget rows and two app rows on the left, the other app rows on the right, both from the top.
+        // Widgets up top: the widget row and one app row on the left, three app rows on the right, both from the top.
         val withWidgets = HomeCellLayout.forPage(g, listOf(0 to 2))
-        assertEquals(4, withWidgets.splitRow)
-        assertEquals(0f, withWidgets.y(4), .01f)
+        assertEquals(3, withWidgets.splitRow)
+        assertEquals(0f, withWidgets.y(3), .01f)
         assertEquals(g.widgetHeight, withWidgets.spanHeight(0, 2) - 18f, .01f)
-        assertTrue(withWidgets.x(0, 4) >= withWidgets.x(3, 3) + g.cellWidth)
+        assertTrue(withWidgets.x(0, 3) >= withWidgets.x(3, 2) + g.cellWidth)
         assertTrue(withWidgets.height(6) <= 459f - 16f - 44f + .01f)
         // Apps only: three full rows per half.
         val appsOnly = HomeCellLayout.forPage(g, emptyList())
@@ -98,6 +98,7 @@ class LayoutModelTest {
         assertEquals(g.rowHeight * 3, appsOnly.height(6), .01f)
         // A widget that would be cut in half picks another split, or the page stays stacked.
         assertEquals(2, HomeCellLayout.forPage(g, listOf(2 to 3)).splitRow)
+        assertEquals(4, HomeCellLayout.forPage(g, listOf(2 to 2)).splitRow)
         assertEquals(null, HomeCellLayout.forPage(g, listOf(1 to 2, 3 to 2, 2 to 2)).splitRow)
         // Stacked layouts are unchanged: rows 0-1 are half pitch, then app rows.
         val portrait = homeGeometry(475f, 700f, LayoutPreset(), true)

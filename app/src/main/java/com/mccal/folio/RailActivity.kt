@@ -213,13 +213,19 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
         val hole = minOf(camera.width(), camera.height()).toDp()
         val edge = SIDE_ISLAND_EDGE
         val thickness = sideIslandThickness(hole)
-        val width by androidx.compose.animation.core.animateDpAsState(if (expanded) 76.dp else thickness,
+        // Tall windows (inner portrait) expand the island along the edge. Short ones (the cover turned sideways) don't
+        // have the height, so the island stays slim and its controls open in a card beside the rail instead.
+        val room = maxOf(camera.centerY(), windowHeight - camera.centerY()).toDp()
+        val alongEdge = room >= 330.dp
+        val grown = expanded && alongEdge
+        val card = expanded && !alongEdge
+        val width by androidx.compose.animation.core.animateDpAsState(if (grown) 76.dp else thickness,
             androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "vertical island width")
         val glyph = thickness - 14.dp
         val gapHalf = hole / 2 + 4.dp
         val growUp = camera.centerY() > windowHeight / 2
         // Collapsed: the same inset as around the camera. Expanded: the growing end clears its rounded corner.
-        val padFar = if (expanded) 22.dp else 7.dp
+        val padFar = if (grown) 22.dp else 7.dp
         val padTop = if (growUp) padFar else 7.dp
         val padBottom = if (growUp) 7.dp else padFar
         val accent = media?.let { rememberAccent(it.art)?.let { a -> mixColor(a, Color.White, .25f) } } ?: IslandGreen
@@ -228,8 +234,8 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
         val scale by androidx.compose.animation.core.animateFloatAsState(if (isPressed) .95f else 1f,
             androidx.compose.animation.core.spring(dampingRatio = .6f, stiffness = 700f), label = "vertical island press")
         val expandedStack: @Composable () -> Unit = {
-            if (expanded && media != null) RailNowPlaying(media, accent, 76.dp - 20.dp)
-            if (expanded && call != null && callControls) RailCallButtons(call)
+            if (grown && media != null) RailNowPlaying(media, accent, 76.dp - 20.dp)
+            if (grown && call != null && callControls) RailCallButtons(call)
         }
         val leading: @Composable () -> Unit = {
             Column(Modifier.animateContentSize(if (reduceMotion) androidx.compose.animation.core.snap() else bouncy),
@@ -237,7 +243,7 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
                 if (growUp) expandedStack()
                 when {
                     media != null -> (media.art ?: media.icon)?.let {
-                        val art by androidx.compose.animation.core.animateDpAsState(if (expanded) 76.dp - 20.dp else glyph,
+                        val art by androidx.compose.animation.core.animateDpAsState(if (grown) 76.dp - 20.dp else glyph,
                             androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "vertical island art")
                         androidx.compose.foundation.Image(it.asImageBitmap(), media.title, Modifier.size(art).clip(RoundedCornerShape(art * .24f)),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop)
@@ -281,7 +287,21 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
                 else -> ((content as? IslandContent.Event)?.event as? IslandEvent.Message)?.let(onMessage)
             }
         }
+        val cardGrow = remember { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(card) {
+            if (card) { if (reduceMotion) cardGrow.snapTo(1f) else cardGrow.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 520f)) }
+            else cardGrow.snapTo(0f)
+        }
         androidx.compose.ui.layout.Layout(content = {
+            // Tapping anywhere else closes the card, as with the island's expanded card.
+            Box(if (card) Modifier.clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { expanded = false } else Modifier)
+            Box(Modifier.graphicsLayer {
+                val g = cardGrow.value
+                alpha = g.coerceIn(0f, 1f); scaleX = .6f + .4f * g; scaleY = .6f + .4f * g
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (side > 0) 1f else 0f, .5f)
+            }.shadow(16.dp, RoundedCornerShape(34.dp)).clip(RoundedCornerShape(34.dp)).background(Color.Black).testTag("vertical-island-card")) {
+                if (card && live != null) ExpandedCardContent(live) { expanded = false; onOpen(live) }
+            }
             Box(Modifier.shadow(8.dp, RoundedCornerShape(width / 2)).clip(RoundedCornerShape(width / 2)).background(Color.Black)
                 .clickable(pressed, null, onClickLabel = if (media != null || callControls) (if (expanded) "Collapse" else "Expand") else describe(content)) { onTap() }
                 .semantics { contentDescription = describe(content) }.testTag("vertical-island"))
@@ -290,15 +310,29 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
         }, modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale }) { measurables, constraints ->
             val w = width.roundToPx()
             val loose = androidx.compose.ui.unit.Constraints(maxWidth = w, maxHeight = constraints.maxHeight)
-            val above = measurables[1].measure(loose)
-            val below = measurables[2].measure(loose)
+            val scrim = measurables[0].measure(if (card) androidx.compose.ui.unit.Constraints.fixed(constraints.maxWidth, constraints.maxHeight)
+                else androidx.compose.ui.unit.Constraints.fixed(0, 0))
+            val cardWidth = minOf(340.dp.roundToPx(), windowWidth / 2)
+            val cardPlaceable = measurables[1].measure(if (card) androidx.compose.ui.unit.Constraints(minWidth = cardWidth, maxWidth = cardWidth,
+                maxHeight = windowHeight - 24.dp.roundToPx()) else androidx.compose.ui.unit.Constraints.fixed(0, 0))
+            val bgMeasurable = measurables[2]
+            val above = measurables[3].measure(loose)
+            val below = measurables[4].measure(loose)
             val cy = camera.centerY()
             val top = cy - gapHalf.roundToPx() - above.height - padTop.roundToPx()
             val bottom = cy + gapHalf.roundToPx() + below.height + padBottom.roundToPx()
-            val bg = measurables[0].measure(androidx.compose.ui.unit.Constraints.fixed(w, (bottom - top).coerceAtLeast(w)))
+            val bg = bgMeasurable.measure(androidx.compose.ui.unit.Constraints.fixed(w, (bottom - top).coerceAtLeast(w)))
             // Hug the camera's edge with a margin, never past the screen edge.
             val left = if (side > 0) windowWidth - edge.roundToPx() - w else edge.roundToPx()
             layout(constraints.maxWidth, constraints.maxHeight) {
+                scrim.place(0, 0)
+                if (card) {
+                    // Beside the island, past the side rail, centered on the camera and kept on screen.
+                    val clear = (edge + thickness + RAIL_CLEARANCE).roundToPx()
+                    val cardX = if (side > 0) windowWidth - clear - cardWidth else clear
+                    val cardY = (cy - cardPlaceable.height / 2).coerceIn(12.dp.roundToPx(), maxOf(12.dp.roundToPx(), windowHeight - cardPlaceable.height - 12.dp.roundToPx()))
+                    cardPlaceable.place(cardX, cardY)
+                }
                 bg.place(left, top)
                 above.place(left + (w - above.width) / 2, cy - gapHalf.roundToPx() - above.height)
                 below.place(left + (w - below.width) / 2, cy + gapHalf.roundToPx())
@@ -335,6 +369,8 @@ private fun RailCallButton(icon: androidx.compose.ui.graphics.vector.ImageVector
 }
 
 private val SIDE_ISLAND_EDGE = 6.dp
+/** Room left for the side rail (widest dock plus its gaps) between the island and a card opened beside it. */
+private val RAIL_CLEARANCE = 4.dp + 12.dp + 84.dp + 14.dp
 private fun sideIslandThickness(hole: androidx.compose.ui.unit.Dp) = maxOf(hole + 14.dp, 40.dp)
 
 /**

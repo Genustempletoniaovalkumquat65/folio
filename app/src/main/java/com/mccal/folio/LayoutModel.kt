@@ -43,9 +43,10 @@ data class HomeGeometry(
  * half-height widget rows. Two columns (short, wide windows): rows before [splitRow] on the left and the
  * rest on the right, like a stacked iOS layout rearranging into two columns when there's width for it.
  */
-data class HomeCellLayout(val cellWidth: Float, val topPitch: Float, val rowHeight: Float, val splitRow: Int?, val zoneGap: Float) {
-    /** Rows 0–1 are widget-height halves, except on a two-column page with no widgets up there. */
-    fun pitch(row: Int) = if (row < 2 && splitRow != 3) topPitch else rowHeight
+data class HomeCellLayout(val cellWidth: Float, val topPitch: Float, val rowHeight: Float, val splitRow: Int?, val zoneGap: Float,
+    val widgetsOnTop: Boolean = true) {
+    /** Rows 0–1 are widget-height halves, except on a two-column page with no widgets up there (then they're app rows). */
+    fun pitch(row: Int) = if (row < 2 && (splitRow == null || widgetsOnTop)) topPitch else rowHeight
     private fun onRight(row: Int) = splitRow != null && row >= splitRow
     fun x(column: Int, row: Int) = (if (onRight(row)) 4f * cellWidth + zoneGap else 0f) + column * cellWidth
     fun y(row: Int) = ((if (onRight(row)) splitRow!! else 0) until row).fold(0f) { sum, r -> sum + pitch(r) }
@@ -58,9 +59,11 @@ data class HomeCellLayout(val cellWidth: Float, val topPitch: Float, val rowHeig
             val topPitch = (geometry.widgetHeight + 18f) / 2f
             val split = if (!geometry.splitColumns) null else
                 // Like iPhone Duo's Home: widgets top-left with app rows under them, the rest of the apps on the right.
-                (if (widgets.any { it.first < 2 }) listOf(4, 2, 3) else listOf(3, 4, 2))
+                // Three rows a side keeps the halves about the same height (a widget row is about two app rows tall).
+                listOf(3, 4, 2)
                     .firstOrNull { s -> widgets.none { (row, span) -> row < s && row + span > s } }
-            return HomeCellLayout(geometry.cellWidth, topPitch, geometry.rowHeight, split, geometry.zoneGap)
+            return HomeCellLayout(geometry.cellWidth, topPitch, geometry.rowHeight, split, geometry.zoneGap,
+                widgetsOnTop = widgets.any { it.first < 2 })
         }
     }
 }
@@ -125,7 +128,9 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
         if (needed() > fitHeight) widget = minOf(widget, (fitHeight - 18f - 4f * rowFor(icon, gap)).coerceAtLeast(88f))
     }
     val row = rowFor(icon, gap)
-    val contentTop = ((height - (if (splitColumns) 4f * row else widget + 18f + 4f * row) - homeBottomSpace) / 2f).coerceIn(16f, 72f)
+    // Center the page vertically: two columns are about three rows tall (the widget row plus one row on the left).
+    val pageHeight = if (splitColumns) maxOf(widget + 18f + row, 3f * row) else widget + 18f + 4f * row
+    val contentTop = ((height - pageHeight - homeBottomSpace) / 2f).coerceIn(16f, 72f)
     // Search reclaims the redundant bottom controls' space for all four dock apps.
     // Extremely short windows still scroll rather than reduce touch targets below 48dp.
     // The status rail sits at the content top; in two columns the dock shares its edge with it, so it starts below.
