@@ -58,9 +58,8 @@ data class HomeCellLayout(val cellWidth: Float, val topPitch: Float, val rowHeig
         fun forPage(geometry: HomeGeometry, widgets: List<Pair<Int, Int>>): HomeCellLayout {
             val topPitch = (geometry.widgetHeight + 18f) / 2f
             val split = if (!geometry.splitColumns) null else
-                // Like iPhone Duo's Home: widgets top-left with app rows under them, the rest of the apps on the right.
-                // Three rows a side keeps the halves about the same height (a widget row is about two app rows tall).
-                listOf(3, 4, 2)
+                // Like iPhone Duo's Home: widgets top-left with two app rows under them, the other app rows on the right.
+                (if (widgets.any { it.first < 2 }) listOf(4, 2, 3) else listOf(3, 4, 2))
                     .firstOrNull { s -> widgets.none { (row, span) -> row < s && row + span > s } }
             return HomeCellLayout(geometry.cellWidth, topPitch, geometry.rowHeight, split, geometry.zoneGap,
                 widgetsOnTop = widgets.any { it.first < 2 })
@@ -128,8 +127,8 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
         if (needed() > fitHeight) widget = minOf(widget, (fitHeight - 18f - 4f * rowFor(icon, gap)).coerceAtLeast(88f))
     }
     val row = rowFor(icon, gap)
-    // Center the page vertically: two columns are about three rows tall (the widget row plus one row on the left).
-    val pageHeight = if (splitColumns) maxOf(widget + 18f + row, 3f * row) else widget + 18f + 4f * row
+    // Center the page vertically. Two columns: the left half (widget row plus two app rows) is the taller one.
+    val pageHeight = if (splitColumns) maxOf(widget + 18f + 2f * row, 3f * row) else widget + 18f + 4f * row
     val contentTop = ((height - pageHeight - homeBottomSpace) / 2f).coerceIn(16f, 72f)
     // Search reclaims the redundant bottom controls' space for all four dock apps.
     // Extremely short windows still scroll rather than reduce touch targets below 48dp.
