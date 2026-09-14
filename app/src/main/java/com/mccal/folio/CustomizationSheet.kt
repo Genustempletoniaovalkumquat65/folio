@@ -1033,7 +1033,17 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         IosChip(!wide, { onWide(false) }, label = { Text(stringResource(R.string.cover)) })
         IosChip(wide, { onWide(true) }, label = { Text(stringResource(R.string.inner)) })
     }
-    SheetGroup { IosActionRow(stringResource(R.string.choose_home_apps), onClick = onEditPins) }
+    var confirmIPhone by remember { mutableStateOf(false) }
+    SheetGroup {
+        IosActionRow(stringResource(R.string.choose_home_apps), onClick = onEditPins)
+        MenuDivider()
+        IosActionRow("Arrange Like iPhone…", "arrange-like-iphone", onClick = { confirmIPhone = true })
+    }
+    if (confirmIPhone) AlertDialog(onDismissRequest = { confirmIPhone = false },
+        title = { Text("Arrange Like iPhone?") },
+        text = { Text("Your first Home page and dock get iPhone’s layout (FaceTime, Calendar, Photos, Camera… with Phone, Safari, Messages and Music in the dock) using the matching apps on this phone. Apps already there move to your next page. You can undo this.") },
+        confirmButton = { TextButton(onClick = { confirmIPhone = false; model.arrangeLikeIPhone() }) { Text("Arrange") } },
+        dismissButton = { TextButton(onClick = { confirmIPhone = false }) { Text(stringResource(R.string.cancel)) } })
     CustomizationSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
     CustomizationSlider("Space between rows", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
     CustomizationSlider("Dock width", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }

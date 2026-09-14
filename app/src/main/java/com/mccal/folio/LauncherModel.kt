@@ -548,6 +548,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun removeTodayWidget(id: Int) = updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.remove(it.todayWidgets, id)) }
     fun moveTodayWidget(id: Int, delta: Int) = updateSettings(soon = false) { it.copy(todayWidgets = TodayWidgets.move(it.todayWidgets, id, delta)) }
     fun removePlacement(source: DropTarget) = commitLayout(removePlacement(mutable.value.layout, source))
+    /** Arranges Home's first page and dock like iPhone's with the matching installed apps (undoable). */
+    fun arrangeLikeIPhone(): Boolean {
+        val state = mutable.value
+        return commitLayout(arrangeLikeIPhone(state.layout, resolveIPhoneApps(getApplication(), state.apps, state.messagesApp)))
+    }
     private fun commitLayout(next: HomeLayout): Boolean {
         if (statePayloadInvalid) return false
         val old = mutable.value
