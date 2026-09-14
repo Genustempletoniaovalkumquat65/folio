@@ -107,34 +107,23 @@ internal fun AppLibrary(
             listOf(Color.White.copy(alpha = .09f), Color.Transparent) else listOf(Color.Transparent, Color.Transparent)))
             .padding(horizontal = 16.dp).padding(top = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (editing) "Choose home apps" else "App Library", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
+                Text(if (editing) "Choose Home Apps" else "App Library", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = if (editing) FontWeight.Bold else FontWeight.Medium)
                 Text(if (editing) "${pinned.size} pinned" else "${visibleApps.size}", color = ink, fontSize = 12.sp)
             }
             if (hasWork || hiddenCount > 0 || showHidden) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasWork) {
-                    FilterChip(selected = !showWork, onClick = { showWork = false }, label = { Text(stringResource(R.string.personal)) })
-                    FilterChip(selected = showWork, onClick = { showWork = true }, label = { Text(stringResource(R.string.work)) })
+                    IosChip(selected = !showWork, onClick = { showWork = false }, label = { Text(stringResource(R.string.personal)) })
+                    IosChip(selected = showWork, onClick = { showWork = true }, label = { Text(stringResource(R.string.work)) })
                 }
-                FilterChip(selected = showHidden, onClick = { showHidden = !showHidden }, label = { Text("Hidden ($hiddenCount)") },
-                    leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp)) }, modifier = Modifier.testTag("hidden-apps-chip"))
+                if (!editing) IosChip(selected = showHidden, onClick = { showHidden = !showHidden }, label = { Text("Hidden ($hiddenCount)") },
+                    modifier = Modifier.testTag("hidden-apps-chip"))
             }
-            OutlinedTextField(query, onQuery, Modifier.fillMaxWidth().padding(vertical = 12.dp).then(if (editing) Modifier else Modifier.focusRequester(searchFocus)).testTag(if (editing) "pin-search" else "library-search"),
-                placeholder = { Text(if (editing) "Search apps" else "Search apps, web or ask AI") }, singleLine = true, shape = RoundedCornerShape(16.dp),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
+            IosSearchField(query, onQuery, if (editing) "Search apps" else "Search apps, web or ask AI", Modifier.padding(vertical = 12.dp),
+                fieldModifier = (if (editing) Modifier else Modifier.focusRequester(searchFocus)).testTag(if (editing) "pin-search" else "library-search"),
+                ink = ink, onSearch = {
                     if (!editing && query.isNotBlank()) openWebSearch(context,
                         runCatching { WebSearchTarget.valueOf(state.searchEngine) }.getOrDefault(WebSearchTarget.GOOGLE), query)
-                }),
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Clear search") } },
-                colors = if (glass) OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = ink, unfocusedTextColor = ink, cursorColor = ink,
-                    focusedContainerColor = Color.White.copy(alpha = .18f), unfocusedContainerColor = Color.White.copy(alpha = .12f),
-                    focusedBorderColor = Color.White.copy(alpha = .8f), unfocusedBorderColor = Color.White.copy(alpha = .45f),
-                    focusedPlaceholderColor = ink, unfocusedPlaceholderColor = ink,
-                    focusedLeadingIconColor = ink, unfocusedLeadingIconColor = ink,
-                    focusedTrailingIconColor = ink, unfocusedTrailingIconColor = ink,
-                ) else OutlinedTextFieldDefaults.colors())
+                })
             var libraryWidth by remember { mutableStateOf(360.dp) }
             val density = androidx.compose.ui.platform.LocalDensity.current
             LazyColumn(Modifier.weight(1f).onSizeChanged { libraryWidth = with(density) { it.width.toDp() } }.testTag("all-apps-list"), state = listState,
@@ -201,10 +190,11 @@ internal fun AppLibrary(
                                 .onGloballyPositioned { launchBounds.set(it.boundsInWindow().toAndroidBounds()) }.clip(RoundedCornerShape(10.dp)))
                             Text(app.label, Modifier.weight(1f).padding(start = 12.dp), maxLines = 2, fontSize = 14.sp)
                             if (editing) IconButton(onClick = { onPin(app.id, !isPinned) }, Modifier.testTag("pin-${app.id}")) {
-                                Icon(if (isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
+                                // iOS selection: filled blue check when on Home, empty ring when not.
+                                Icon(if (isPinned) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                                     if (isPinned) "Remove ${app.label} from home" else "Pin ${app.label} to home",
-                                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(20.dp))
+                                    tint = if (isPinned) Color(0xFF0A84FF) else ink.copy(alpha = .35f),
+                                    modifier = Modifier.size(24.dp))
                             }
                         }
                     }

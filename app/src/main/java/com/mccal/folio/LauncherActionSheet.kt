@@ -5,6 +5,10 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.findViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,17 +58,24 @@ internal fun EmptySpaceActionSheet(onWidgets: () -> Unit, onWallpaper: () -> Uni
     val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .75f).toDp() }
     Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.add_to_home), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close empty space options") }
+        // iOS action sheet: a small centered title, grouped rows, then a separate Cancel.
+        Column(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(R.string.add_to_home), color = Color.White.copy(alpha = .6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.choose_what_belongs_in_this_space), color = Color.White.copy(alpha = .5f), fontSize = 13.sp)
         }
-        Text(stringResource(R.string.choose_what_belongs_in_this_space), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-        ActionRow(Icons.Rounded.Widgets, "Widgets", onWidgets, Modifier.testTag("empty-space-widgets"))
-        ActionRow(Icons.Rounded.Wallpaper, "Wallpaper", onWallpaper, Modifier.testTag("empty-space-wallpaper"))
-        onAddPage?.let { ActionRow(Icons.Rounded.AddToPhotos, "Add page", it, Modifier.testTag("empty-space-add-page")) }
-        onRemovePage?.let { ActionRow(Icons.Rounded.DeleteOutline, "Remove this empty page", it, Modifier.testTag("empty-space-remove-page")) }
-        ActionRow(Icons.Rounded.Tune, "Customize launcher", onCustomize, Modifier.testTag("empty-space-customize"))
+        SheetGroup {
+            Box(Modifier.testTag("empty-space-widgets")) { MenuRow("Add Widget", Icons.Rounded.Widgets, onClick = onWidgets) }
+            MenuDivider()
+            onAddPage?.let { Box(Modifier.testTag("empty-space-add-page")) { MenuRow("Add Page", Icons.Rounded.AddToPhotos, onClick = it) }; MenuDivider() }
+            Box(Modifier.testTag("empty-space-wallpaper")) { MenuRow("Wallpaper", Icons.Rounded.Wallpaper, onClick = onWallpaper) }
+            MenuDivider()
+            Box(Modifier.testTag("empty-space-customize")) { MenuRow("Customize Folio", Icons.Rounded.Tune, onClick = onCustomize) }
+            onRemovePage?.let { MenuDivider(); Box(Modifier.testTag("empty-space-remove-page")) { MenuRow("Remove This Empty Page", Icons.Rounded.DeleteOutline, destructive = true, onClick = it) } }
+        }
+        Spacer(Modifier.height(10.dp))
+        SheetGroup { Text(stringResource(R.string.cancel), color = Color(0xFF0A84FF), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Close empty space options", onClick = onClose).padding(vertical = 14.dp)) }
     }
 }
 

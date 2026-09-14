@@ -2,6 +2,7 @@ package com.mccal.folio
 
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -99,10 +100,11 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         SettingsSearchResults(settingsQuery, onOpen = { settingsQuery = ""; if (it == CustomizationPage.TWEAKS) onPage(it) else onPage(it) })
                         return@Column
                     }
-                    if (!isDefaultHome) Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .testTag("default-home-settings")) { Text(stringResource(R.string.set_as_home_app)) }
-                    if (state.canUndoEdit) OutlinedButton(onClick = { model.undoEdit(); onClose() },
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.undo_last_layout_change)) }
+                    if (!isDefaultHome || state.canUndoEdit) SheetGroup {
+                        if (!isDefaultHome) IosActionRow(stringResource(R.string.set_as_home_app), "default-home-settings", onClick = onMakeDefault)
+                        if (!isDefaultHome && state.canUndoEdit) MenuDivider()
+                        if (state.canUndoEdit) IosActionRow(stringResource(R.string.undo_last_layout_change), onClick = { model.undoEdit(); onClose() })
+                    }
                     val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
                     val setupLeft = setupSteps.count { it.required && !it.done }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
@@ -156,8 +158,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         MenuDivider()
                         TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits") { onPage(CustomizationPage.CREDITS) }
                     }
-                    if (isDefaultHome) TextButton(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .testTag("default-home-settings")) { Text(stringResource(R.string.change_home_app)) }
+                    if (isDefaultHome) SheetGroup { IosActionRow(stringResource(R.string.change_home_app), "default-home-settings", onClick = onMakeDefault) }
                 }
                 CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper))
                 CustomizationPage.WALLPAPER -> {
@@ -196,35 +197,30 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     if (!state.systemWallpaper) {
                     MiniHomePreview(backgrounds.previewBitmap, state, 228.dp)
-                    Text(stringResource(R.string.launcher_background), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.changes_the_image_behind_folio_s_home_sc), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = backgrounds::choosePhoto, enabled = !backgrounds.loading,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("background-choose")) {
-                        Text(if (backgrounds.previewPending) "Choose a different photo" else "Choose a photo")
+                    SheetGroupLabel(stringResource(R.string.launcher_background))
+                    SheetGroup {
+                        IosActionRow(if (backgrounds.previewPending) "Choose a Different Photo…" else "Choose a Photo…", "background-choose",
+                            enabled = !backgrounds.loading, onClick = backgrounds::choosePhoto)
+                        if (backgrounds.previewPending) {
+                            MenuDivider()
+                            IosActionRow(stringResource(R.string.apply), "background-preview-apply", enabled = backgrounds.previewBitmap != null, onClick = backgrounds::applyPreview)
+                            MenuDivider()
+                            IosActionRow(stringResource(R.string.cancel), "background-preview-cancel", onClick = backgrounds::cancelPreview)
+                        }
+                        if (backgrounds.photoSelected && !backgrounds.previewPending) {
+                            MenuDivider()
+                            IosActionRow(stringResource(R.string.reset_to_default_dunes), "background-reset", destructive = true, onClick = backgrounds::reset)
+                        }
+                        MenuDivider()
+                        IosActionRow(stringResource(R.string.preview_as_phone_wallpaper), "wallpaper-preview", onClick = onWallpaperPreview)
                     }
-                    if (backgrounds.previewPending) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = backgrounds::cancelPreview, Modifier.weight(1f).heightIn(min = 48.dp)
-                            .testTag("background-preview-cancel")) { Text(stringResource(R.string.cancel)) }
-                        Button(onClick = backgrounds::applyPreview, enabled = backgrounds.previewBitmap != null,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("background-preview-apply")) { Text(stringResource(R.string.apply)) }
-                    }
-                    if (backgrounds.photoSelected && !backgrounds.previewPending) OutlinedButton(onClick = backgrounds::reset,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("background-reset")) { Text(stringResource(R.string.reset_to_default_dunes)) }
                     if (backgrounds.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("background-loading"))
+                    Text(stringResource(R.string.changes_the_image_behind_folio_s_home_sc) + " " + stringResource(R.string.opens_android_s_preview_to_use_folio_s_b),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
                     (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
                         TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }
                     }
                     }
-                    if (!state.systemWallpaper) {
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text(stringResource(R.string.folio_background_as_phone_wallpaper), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.opens_android_s_preview_to_use_folio_s_b),
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                            .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.preview_as_phone_wallpaper)) }
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
                 }
                 CustomizationPage.HOME -> HomeLayoutSettings(state, wide, { wide = it }, model, homePage,
@@ -504,13 +500,13 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                 }
                 CustomizationPage.BACKUP -> {
-                    Text(stringResource(R.string.save_the_current_home_layout_folders_wid),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onExportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-export")) { Text(stringResource(R.string.save)) }
-                        Button(onClick = onImportLayout, Modifier.weight(1f).heightIn(min = 48.dp).testTag("layout-import")) { Text(stringResource(R.string.restore)) }
+                    SheetGroup {
+                        IosActionRow("Save Backup…", "layout-export", onClick = onExportLayout)
+                        MenuDivider()
+                        IosActionRow("Restore from Backup…", "layout-import", onClick = onImportLayout)
                     }
-                    Text(stringResource(R.string.restore_shows_a_review_before_changing_h), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.save_the_current_home_layout_folders_wid) + " " + stringResource(R.string.restore_shows_a_review_before_changing_h),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
                 }
                 CustomizationPage.SIDE_KEY -> SideKeyPage()
                 CustomizationPage.LOCK -> {
@@ -564,42 +560,41 @@ private fun LauncherHelp(
     onAddWidget: () -> Unit,
     onShadeSetup: () -> Unit,
 ) {
-    HelpSection(Icons.Rounded.Home, "Home app",
-        if (isDefaultHome) "Folio is your Home app. You can switch launchers in Android’s Home settings."
-        else "Choose Folio in Android’s Home settings to use it when you press Home.")
-    Button(onClick = onHomeSettings, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-home-settings")) {
-        Text(if (isDefaultHome) "Change home app" else "Set Folio as Home")
+    SheetGroup {
+        HelpTip(Icons.Rounded.Home, 0xFF0A84FF, "Edit Home", "Hold an app for its menu, or move while holding to start jiggle mode. Long-press empty space for widgets and pages.")
+        MenuDivider()
+        HelpTip(Icons.Rounded.Widgets, 0xFF5E5CE6, "Widgets & Smart Stacks", "Hold a widget and let go for sizes, stacks and Smart Rotate. Swipe a stack up or down.")
+        MenuDivider()
+        HelpTip(Icons.Rounded.SwipeDown, 0xFFFF3B30, "Notifications & Control Center", "Pull down from the top left or top right. Swipe down lower on Home for Spotlight.")
+        MenuDivider()
+        HelpTip(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "Tap it for details, hold and drag to move it. On the inner screen, drag it onto the camera once.")
+        MenuDivider()
+        HelpTip(Icons.Rounded.Devices, 0xFFFF375F, "Folding", "Folio fades between screens and keeps the cover awake when you fold from Home.")
     }
-    HorizontalDivider(Modifier.padding(vertical = 4.dp))
-    HelpSection(Icons.Rounded.TouchApp, "Customize any page",
-        "Long-press empty space, then choose Customize launcher. If a page is full, long-press the slim area at its left edge.")
-    HelpSection(Icons.Rounded.Widgets, "Widgets",
-        "Add Android widgets to empty Home cells. Hold a widget to move or remove it.")
-    OutlinedButton(onClick = onAddWidget, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-add-widget")) {
-        Text(stringResource(R.string.add_widget_to_this_page))
+    SheetGroup {
+        IosActionRow(if (isDefaultHome) "Change Home App" else "Set Folio as Home", "help-home-settings", onClick = onHomeSettings)
+        MenuDivider()
+        IosActionRow("Add Widget to This Page", "help-add-widget", onClick = onAddWidget)
+        MenuDivider()
+        IosActionRow("Set Up Pull-Down Gestures", "help-shade-setup", onClick = onShadeSetup)
     }
-    HorizontalDivider(Modifier.padding(vertical = 4.dp))
-    HelpSection(Icons.Rounded.SwipeDown, "Notifications and quick settings",
-        "Pull down from the top of Home. The first time, Folio explains Android’s optional Accessibility setting, which opens the system panels and, if you turn them on, shows the dock handle and island over other apps.")
-    TextButton(onClick = onShadeSetup, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("help-shade-setup")) {
-        Text(stringResource(R.string.set_up_shade_gestures))
-    }
-    HelpSection(Icons.Rounded.Explore, "Discover",
-        "Swipe right from the first Home page. If Google can’t provide the feed, Folio keeps a Home return and recovery actions available.")
 }
 
 @Composable
-private fun HelpSection(icon: ImageVector, title: String, detail: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
-        Icon(icon, null, Modifier.padding(top = 2.dp).size(22.dp), tint = MaterialTheme.colorScheme.primary)
+private fun HelpTip(icon: ImageVector, color: Long, title: String, detail: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(androidx.compose.ui.graphics.Color(color)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(19.dp))
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(detail, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp)
+            Text(detail, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 14.sp)
         }
     }
 }
+
+
 
 private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
 
@@ -608,11 +603,19 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
     val context = androidx.compose.ui.platform.LocalContext.current
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(
-            listOf(androidx.compose.ui.graphics.Color(0xFF5E5CE6), androidx.compose.ui.graphics.Color(0xFF0A84FF)))),
-            contentAlignment = Alignment.Center) {
-            Text("F", color = androidx.compose.ui.graphics.Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-        }
+        // Folio's own launcher icon, like a tweak's preference banner.
+        // Drawn from the adaptive icon's layers so it gets an iOS rounded square, not the device's icon mask.
+        val icon = remember { runCatching {
+            val adaptive = context.getDrawable(R.mipmap.ic_launcher) as android.graphics.drawable.AdaptiveIconDrawable
+            val size = 216
+            android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888).also { bitmap ->
+                val canvas = android.graphics.Canvas(bitmap)
+                listOfNotNull(adaptive.background, adaptive.foreground).forEach { layer ->
+                    layer.setBounds(-size / 4, -size / 4, size * 5 / 4, size * 5 / 4); layer.draw(canvas)
+                }
+            }.asImageBitmap()
+        }.getOrNull() }
+        if (icon != null) androidx.compose.foundation.Image(icon, null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
         Text(stringResource(R.string.folio), color = androidx.compose.ui.graphics.Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         Text("iPhone Duo for your Fold · v$version", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 14.sp)
     }
@@ -667,21 +670,8 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
 }
 
 /** iOS Settings search field. */
-@Composable private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .12f))
-        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.Search, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
-        Box(Modifier.weight(1f)) {
-            if (query.isEmpty()) Text("Search", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 17.sp)
-            androidx.compose.foundation.text.BasicTextField(query, onQuery, Modifier.fillMaxWidth().testTag("settings-search"), singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.White))
-        }
-        if (query.isNotEmpty()) Icon(Icons.Rounded.Cancel, "Clear search", tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f),
-            modifier = Modifier.size(20.dp).clickable { onQuery("") })
-    }
-}
+@Composable private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) =
+    IosSearchField(query, onQuery, "Search", fieldModifier = Modifier.testTag("settings-search"))
 
 /** Where each setting lives, for Settings search (titles as shown, plus words people search for). */
 private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = listOf(
@@ -944,23 +934,27 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         IosChip(!wide, { onWide(false) }, label = { Text(stringResource(R.string.cover)) })
         IosChip(wide, { onWide(true) }, label = { Text(stringResource(R.string.inner)) })
     }
-    OutlinedButton(onClick = onEditPins, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.choose_home_apps)) }
+    SheetGroup { IosActionRow(stringResource(R.string.choose_home_apps), onClick = onEditPins) }
     CustomizationSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
     CustomizationSlider("Space between rows", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
     CustomizationSlider("Dock width", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }
     SettingsSwitch(stringResource(R.string.align_dock_with_app_rows), p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
     if (!p.dockAlignToGrid) CustomizationSlider("Dock height on screen", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
-    TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }, Modifier.fillMaxWidth()) { Text(stringResource(R.string.reset_this_layout)) }
-    HorizontalDivider(Modifier.padding(vertical = 6.dp))
-    Text("Widgets · Page ${homePage + 1}", style = MaterialTheme.typography.titleMedium)
-    state.widgetPlacements.filter { it.page == homePage || (wide && it.page == -1) }.forEach { placement ->
-        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (placement.page == -1) "Unfolded-only page" else "${placement.spanX} × ${placement.spanY} widget · row ${placement.row + 1}", Modifier.weight(1f))
-            IconButton(onClick = { onRemoveWidget(placement.slot) }, modifier = Modifier.semantics { contentDescription = if (placement.page == -1) "Remove widget from Unfolded-only page" else "Remove widget" }) { Icon(Icons.Rounded.DeleteOutline, null) }
-            TextButton(onClick = { onWidget(placement.slot) }) { Text(stringResource(R.string.replace)) }
+    SheetGroup { IosActionRow(stringResource(R.string.reset_this_layout), destructive = true, onClick = { model.setPreset(wide, LayoutPreset()) }) }
+    SheetGroupLabel("Widgets · Page ${homePage + 1}")
+    SheetGroup {
+        state.widgetPlacements.filter { it.page == homePage || (wide && it.page == -1) }.forEach { placement ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (placement.page == -1) "Unfolded-only page" else "${placement.spanX} × ${placement.spanY} widget · row ${placement.row + 1}", Modifier.weight(1f),
+                    color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp)
+                TextButton(onClick = { onWidget(placement.slot) }) { Text(stringResource(R.string.replace)) }
+                IconButton(onClick = { onRemoveWidget(placement.slot) }, modifier = Modifier.semantics { contentDescription = if (placement.page == -1) "Remove widget from Unfolded-only page" else "Remove widget" }) {
+                    Icon(Icons.Rounded.RemoveCircle, null, tint = androidx.compose.ui.graphics.Color(0xFFFF453A)) }
+            }
+            MenuDivider()
         }
+        IosActionRow(stringResource(R.string.add_widget_to_this_page), onClick = { onAddWidget(homePage) })
     }
-    TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.add_widget_to_this_page)) }
 }
 
 /** Keeps Android's pop-up and Folio's island message card from showing for the same message. */

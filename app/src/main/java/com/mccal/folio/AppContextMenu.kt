@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -82,6 +83,7 @@ internal fun AppContextMenu(
     val context = LocalContext.current
     val density = LocalDensity.current
     val appear = remember { Animatable(0f) }
+    var more by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .72f, stiffness = Spring.StiffnessMediumLow)) }
     DisposableEffect(Unit) { LauncherSheetsOpen.intValue++; onDispose { LauncherSheetsOpen.intValue-- } }
 
@@ -122,16 +124,21 @@ internal fun AppContextMenu(
             val safeBottom = with(density) { 32.dp.toPx() }
             val spaceBelow = screenH - (iconTop + iconSize * 1.1f + gap) - safeBottom
             val spaceAbove = iconTop - gap - safeTop
-            val estimatedH = with(density) { (49.dp * (actions.size + 6) + 8.dp).toPx() }
+            val estimatedH = with(density) { (49.dp * (actions.size + 3) + 8.dp).toPx() }
             // Prefer below (like iOS) when it fits; otherwise whichever side has more room, scrolling if needed.
             val below = estimatedH <= spaceBelow || spaceBelow >= spaceAbove
             val maxMenuH = with(density) { (if (below) spaceBelow else spaceAbove).coerceAtLeast(120f).toDp() }
             val menuLeft = (iconLeft + iconSize / 2 - menuW / 2).coerceIn(gap, screenW - menuW - gap)
             val origX = ((iconLeft + iconSize / 2 - menuLeft) / menuW).coerceIn(0f, 1f)
+            // Positioned from the measured menu height: the dialog can be shorter than the screen (navigation bar),
+            // so aligning to its bottom edge made the menu overlap the lifted icon.
+            var menuH by remember { mutableIntStateOf(0) }
+            val lift = iconSize * .05f
             Column(Modifier.offset {
-                    IntOffset(menuLeft.roundToInt(), if (below) (iconTop + iconSize * 1.1f + gap).roundToInt() else 0)
+                    IntOffset(menuLeft.roundToInt(),
+                        if (below) (iconTop + iconSize + lift + gap).roundToInt() else (iconTop - lift - gap - menuH).roundToInt())
                 }
-                .then(if (below) Modifier else Modifier.padding(bottom = with(density) { (screenH - iconTop + gap).toDp() }).align(Alignment.BottomStart))
+                .onSizeChanged { menuH = it.height }
                 .width(260.dp)
                 .heightIn(max = maxMenuH)
                 .graphicsLayer {
@@ -155,12 +162,16 @@ internal fun AppContextMenu(
                 MenuRow(if (onHome) "Remove from Home" else "Add to Home", if (onHome) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.AddCircleOutline,
                     destructive = onHome) { onAddOrRemove() }
                 MenuDivider()
-                MenuRow("Create Folder", Icons.Rounded.CreateNewFolder) { onCreateFolder() }
-                onWidgets?.let { MenuDivider(); MenuRow("Widgets", Icons.Rounded.Widgets) { it() } }
-                MenuDivider()
-                MenuRow(if (hidden) "Show in App Library" else "Hide from App Library", if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff) { onToggleHidden() }
-                MenuDivider()
-                MenuRow("App Info", Icons.Rounded.Info) { onInfo() }
+                // iOS keeps context menus short: the less common actions sit behind "More".
+                if (!more) MenuRow("More", Icons.Rounded.MoreHoriz) { more = true }
+                else {
+                    MenuRow("Create Folder", Icons.Rounded.CreateNewFolder) { onCreateFolder() }
+                    onWidgets?.let { MenuDivider(); MenuRow("Widgets", Icons.Rounded.Widgets) { it() } }
+                    MenuDivider()
+                    MenuRow(if (hidden) "Show in App Library" else "Hide from App Library", if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff) { onToggleHidden() }
+                    MenuDivider()
+                    MenuRow("App Info", Icons.Rounded.Info) { onInfo() }
+                }
             }
         }
     }

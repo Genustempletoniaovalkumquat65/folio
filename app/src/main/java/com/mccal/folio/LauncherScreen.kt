@@ -2127,11 +2127,9 @@ private fun AppPicker(apps: List<AppEntry>, dockSlot: Int?, onSelect: (AppEntry)
     var query by rememberSaveable { mutableStateOf("") }
     val filtered = remember(apps, query) { apps.filter { it.label.contains(query.trim(), ignoreCase = true) } }
     Column(Modifier.fillMaxWidth().fillMaxHeight(.88f).padding(horizontal = 20.dp).imePadding()) {
-        Text(if (dockSlot == null) "Your apps" else "Dock position ${dockSlot + 1}", style = MaterialTheme.typography.headlineSmall)
-        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 16.dp).testTag("search-field"),
-            placeholder = { Text(stringResource(R.string.search_apps)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear search") } }, shape = RoundedCornerShape(20.dp))
-        if (dockSlot != null) TextButton(onClick = onClear) { Text(stringResource(R.string.leave_this_position_empty)) }
+        Text(if (dockSlot == null) "Your Apps" else "Dock Position ${dockSlot + 1}", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        IosSearchField(query, { query = it }, stringResource(R.string.search_apps), Modifier.padding(vertical = 12.dp), fieldModifier = Modifier.testTag("search-field"))
+        if (dockSlot != null) SheetGroup(Modifier.padding(bottom = 8.dp)) { IosActionRow(stringResource(R.string.leave_this_position_empty), destructive = true, onClick = onClear) }
         if (blockedHint != null) Text(blockedHint, color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp).testTag("dock-full-guidance"))
         LazyColumn(Modifier.weight(1f)) {
@@ -2144,7 +2142,7 @@ private fun AppPicker(apps: List<AppEntry>, dockSlot: Int?, onSelect: (AppEntry)
                     .padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     AppIcon(app, null, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)))
                     Text(app.label, Modifier.padding(start = 16.dp).weight(1f), maxLines = 2)
-                    if (dockSlot != null && enabled) Icon(Icons.Rounded.Add, "Choose ${app.label}")
+                    if (dockSlot != null && enabled) Icon(Icons.Rounded.AddCircle, "Choose ${app.label}", tint = Color(0xFF0A84FF))
                 }
             }
         }
@@ -2260,7 +2258,7 @@ private fun SettingsPanel(state: LauncherState, initiallyWide: Boolean, model: L
 private fun SettingSlider(label: String, valueLabel: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
     Column(Modifier.padding(top = 14.dp)) {
         Row { Text(label, Modifier.weight(1f)); Text(valueLabel, color = MaterialTheme.colorScheme.secondary) }
-        Slider(value, onChange, valueRange = range, modifier = Modifier.semantics { contentDescription = label })
+        IosSlider(value, onChange, valueRange = range, modifier = Modifier.semantics { contentDescription = label })
     }
 }
 

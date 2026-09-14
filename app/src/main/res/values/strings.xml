@@ -36,7 +36,6 @@
     <string name="cancel">Cancel</string>
     <string name="apply">Apply</string>
     <string name="reset_to_default_dunes">Reset to default dunes</string>
-    <string name="folio_background_as_phone_wallpaper">Folio background as phone wallpaper</string>
     <string name="opens_android_s_preview_to_use_folio_s_b">Opens Android’s preview to use Folio’s background as your phone’s wallpaper too (a live wallpaper), so it matches outside Folio.</string>
     <string name="preview_as_phone_wallpaper">Preview as phone wallpaper</string>
     <string name="gestures">Gestures</string>
