@@ -129,3 +129,8 @@ internal fun HomeSearchPill(onClick: () -> Unit) {
         Text(stringResource(R.string.search), color = ink.primary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
+
+/** Extra top inset for the jiggle bar when the Dynamic Island is on, so its pills don't sit under the island. */
+internal val JIGGLE_BAR_ISLAND_GAP = 8.dp
+/** Where the jiggle bar's bottom edge falls (top inset + 48dp touch height + a little air), for Home's first-row clearance. */
+internal val JIGGLE_BAR_BOTTOM = JIGGLE_BAR_ISLAND_GAP + 48.dp + 4.dp

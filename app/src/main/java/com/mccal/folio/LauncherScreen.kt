@@ -781,10 +781,17 @@ fun LauncherScreen(
                 }
             }
             androidx.compose.animation.AnimatedVisibility(homeEdit.active && sheet.isEmpty(),
-                Modifier.align(if (state.leftHanded) Alignment.TopEnd else Alignment.TopStart).width(pagerWidth),
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 }) {
-                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 2.dp).testTag("jiggle-bar"),
+                // Unfolded, the bar sits in the free strip at the bottom of the Home half beside the page dots, so it neither
+                // covers the widget row nor pushes the grid; folded, it's at the top, clear of the Dynamic Island.
+                Modifier.align(when {
+                    geometry.expanded -> if (state.leftHanded) Alignment.BottomStart else Alignment.BottomEnd
+                    state.leftHanded -> Alignment.TopEnd
+                    else -> Alignment.TopStart
+                }).width(pagerWidth),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { if (geometry.expanded) it / 2 else -it / 2 },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { if (geometry.expanded) it / 2 else -it / 2 }) {
+                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp,
+                    top = if (geometry.expanded) 0.dp else if (state.island) JIGGLE_BAR_ISLAND_GAP else 2.dp).testTag("jiggle-bar"),
                     horizontalArrangement = if (geometry.expanded) Arrangement.spacedBy(8.dp, Alignment.End) else Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically) {
                     val editPage = pager.currentPage.coerceIn(0, homePages - 1)

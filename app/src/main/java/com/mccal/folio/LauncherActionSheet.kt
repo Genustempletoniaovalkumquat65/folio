@@ -80,7 +80,10 @@ internal fun HomeEditMenu(anchor: androidx.compose.ui.unit.IntRect?, onDismiss: 
                 val x = (if (fromStart + popupContentSize.width + margin <= windowSize.width) fromStart else fromEnd)
                     .coerceIn(margin, maxOf(margin, windowSize.width - popupContentSize.width - margin))
                 alignEnd = x != fromStart
-                val y = (a.bottom + margin / 2).coerceAtMost(maxOf(margin, windowSize.height - popupContentSize.height - margin))
+                // Below the button, or above it when the button is near the bottom (the unfolded Edit bar).
+                val below = a.bottom + margin / 2
+                val y = if (below + popupContentSize.height + margin <= windowSize.height) below
+                    else (a.top - margin / 2 - popupContentSize.height).coerceAtLeast(margin)
                 return IntOffset(x, y)
             }
         }

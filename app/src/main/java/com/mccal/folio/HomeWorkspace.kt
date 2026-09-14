@@ -311,7 +311,10 @@ internal fun HomePagePane(
         // Frozen while something is held: sliding the grid under a finger would change where it drops.
         var roomWanted by remember { mutableStateOf(edit.active) }
         if (!drag.active) roomWanted = edit.active
-        val editRoom by animateDpAsState(if (roomWanted) 44.dp else 0.dp, label = "jiggle room")
+        // Only as much room as the Edit bar actually needs above this page's first row; pushing the whole grid down by a
+        // fixed amount cut off the bottom row's labels on screens that already had space at the top.
+        // Unfolded, the bar sits in the space above the widget row, so the grid doesn't move at all (like iPad).
+        val editRoom by animateDpAsState(if (roomWanted && !geometry.expanded) (JIGGLE_BAR_BOTTOM - geometry.contentTop.dp).coerceAtLeast(0.dp) else 0.dp, label = "jiggle room")
         Column(Modifier.offset(x = 16.dp).width(geometry.gridWidth.dp).fillMaxHeight()
             .verticalScroll(homeScroll).padding(top = geometry.contentTop.dp + editRoom, bottom = 8.dp)) {
             val (pageIcon, pageLabels) = (state.pageStyles[page] ?: PageStyle()).apply(geometry, state.labels)
