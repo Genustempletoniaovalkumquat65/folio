@@ -183,16 +183,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.WALLPAPER -> {
                     val wallpaperContext = androidx.compose.ui.platform.LocalContext.current
                     SettingsCard(stringResource(R.string.background)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = state.systemWallpaper, onClick = {
-                                if (!state.systemWallpaper) { model.setSystemWallpaper(true); (wallpaperContext as? android.app.Activity)?.recreate() }
-                            },
-                                label = { Text(stringResource(R.string.android_wallpaper)) }, modifier = Modifier.weight(1f).testTag("background-system"))
-                            IosChip(selected = !state.systemWallpaper, onClick = {
-                                if (state.systemWallpaper) { model.setSystemWallpaper(false); (wallpaperContext as? android.app.Activity)?.recreate() }
-                            },
-                                label = { Text(stringResource(R.string.folio_background)) }, modifier = Modifier.weight(1f).testTag("background-folio"))
-                        }
+                        IosSegmented(listOf(true to stringResource(R.string.android_wallpaper), false to stringResource(R.string.folio_background)),
+                            state.systemWallpaper, { system -> model.setSystemWallpaper(system); (wallpaperContext as? android.app.Activity)?.recreate() },
+                            Modifier.padding(vertical = 6.dp), tag = "background-choice")
                         Text(if (state.systemWallpaper) "Uses the same wallpaper as your phone’s home screen (including live wallpapers), so it matches what you had in Samsung’s or another launcher."
                             else "Folio’s dunes or a photo you choose, only behind Folio.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -202,12 +195,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }, modifier = Modifier.testTag("background-change-system")) { Text(stringResource(R.string.change_android_wallpaper)) }
                     }
                     SettingsCard(stringResource(R.string.text_on_home)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("AUTO" to "Automatic", "LIGHT" to "Light", "DARK" to "Dark").forEach { (value, label) ->
-                                IosChip(selected = state.homeInk == value, onClick = { model.setHomeInk(value) }, label = { Text(label) },
-                                    modifier = Modifier.weight(1f))
-                            }
-                        }
+                        IosMenuRow("Text Color", listOf("AUTO" to "Automatic", "LIGHT" to "Light", "DARK" to "Dark"), state.homeInk, model::setHomeInk, tag = "home-ink")
                         Text(stringResource(R.string.labels_status_page_dots_and_widget_text),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         SettingsSwitch(stringResource(R.string.tint_glass_with_wallpaper_color), state.tintedGlass, model::setTintedGlass, "tinted-glass-switch")
@@ -255,12 +243,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         SettingsSwitch(stringResource(R.string.big_clock_in_notification_center), state.notificationClock, model::setNotificationClock, "notification-clock-switch")
                         SettingsSwitch(stringResource(R.string.stack_notifications_by_app), state.groupNotifications, model::setGroupNotifications, "notification-group-switch")
                         SettingsSwitch(stringResource(R.string.unfolded_clock_beside_notifications), state.ncSplit, model::setNcSplit, "notification-split-switch")
-                        Text(stringResource(R.string.control_center_size), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PanelSize.entries.forEach { size ->
-                                IosChip(selected = state.ccSize == size, onClick = { model.setCcSize(size) }, label = { Text(size.label) })
-                            }
-                        }
+                        IosMenuRow(stringResource(R.string.control_center_size), PanelSize.entries.map { it to it.label }, state.ccSize, model::setCcSize, tag = "cc-size")
                         SettingsSwitch(stringResource(R.string.unfolded_control_center_in_the_middle), state.ccCentered, model::setCcCentered, "cc-centered-switch")
                         Text(stringResource(R.string.tip_tap_at_the_top_of_control_center_to),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -278,12 +261,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         }
                     }
                     if (page == CustomizationPage.SEARCH) SettingsCard(stringResource(R.string.spotlight)) {
-                        Text(stringResource(R.string.search_with_enter), style = MaterialTheme.typography.labelLarge)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(WebSearchTarget.GOOGLE to "Google (no AI)", WebSearchTarget.DUCKDUCKGO to "DuckDuckGo").forEach { (target, label) ->
-                                IosChip(selected = state.searchEngine == target.name, onClick = { model.setSearchEngine(target.name) }, label = { Text(label) })
-                            }
-                        }
+                        IosMenuRow(stringResource(R.string.search_with_enter), listOf(WebSearchTarget.GOOGLE.name to "Google (no AI)", WebSearchTarget.DUCKDUCKGO.name to "DuckDuckGo"),
+                            state.searchEngine, model::setSearchEngine, tag = "search-engine")
                         SpotlightSection.entries.forEach { section ->
                             SettingsSwitch(section.title, section.name !in state.spotlightHidden,
                                 { model.setSpotlightSection(section.name, it) }, "spotlight-${section.name.lowercase()}")
@@ -291,57 +270,28 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         val messageContext = androidx.compose.ui.platform.LocalContext.current
                         val iMessageApps = remember { Messaging.iMessageApps.filter { Messaging.installed(messageContext, it.first) } }
                         if (iMessageApps.isNotEmpty()) {
-                            Text(stringResource(R.string.message_contacts_with), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IosChip(selected = state.messagesApp == null, onClick = { model.setMessagesApp(null) }, label = { Text(stringResource(R.string.texting_app)) })
-                                iMessageApps.forEach { (pkg, label) ->
-                                    IosChip(selected = state.messagesApp == pkg, onClick = { model.setMessagesApp(pkg) }, label = { Text(label) })
-                                }
-                            }
+                            IosMenuRow(stringResource(R.string.message_contacts_with), listOf<Pair<String?, String>>(null to stringResource(R.string.texting_app)) + iMessageApps.map { it.first to it.second },
+                                state.messagesApp, model::setMessagesApp, tag = "messages-app")
                         }
                     }
                     if (page == CustomizationPage.GESTURES) SettingsCard(stringResource(R.string.actions)) {
                         Text(stringResource(R.string.pick_what_gestures_and_events_do_activat),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        var openTrigger by remember { mutableStateOf<FolioTrigger?>(null) }
                         FolioTrigger.entries.forEach { trigger ->
                             val current = FolioAction.entries.firstOrNull { it.name == state.triggerActions[trigger.name] } ?: FolioAction.NONE
-                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { openTrigger = if (openTrigger == trigger) null else trigger },
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text(trigger.label, Modifier.weight(1f))
-                                Text(current.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if (openTrigger == trigger) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FolioAction.entries.forEach { action ->
-                                    IosChip(selected = current == action, onClick = { model.setTriggerAction(trigger, action); openTrigger = null },
-                                        label = { Text(action.label) })
-                                }
-                            }
+                            IosMenuRow(trigger.label, FolioAction.entries.map { it to it.label }, current, { model.setTriggerAction(trigger, it) }, tag = "trigger-${trigger.name.lowercase()}")
                         }
                     }
                     if (page == CustomizationPage.TODAY) SettingsCard(stringResource(R.string.left_of_home)) {
                         val leftContext = androidx.compose.ui.platform.LocalContext.current
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover").forEach { (value, label) ->
-                                IosChip(selected = state.leftPage == value, onClick = {
-                                    if (state.leftPage != value) {
-                                        model.setLeftPage(value)
-                                        // The Home pager's page count changes; rebuild the screen once.
-                                        (leftContext as? android.app.Activity)?.recreate()
-                                    }
-                                }, label = { Text(label) })
-                            }
-                        }
+                        // The Home pager's page count changes with this; rebuild the screen once.
+                        IosSegmented(listOf("TODAY" to "Today View", "DISCOVER" to "Google Discover"), state.leftPage,
+                            { model.setLeftPage(it); (leftContext as? android.app.Activity)?.recreate() }, Modifier.padding(vertical = 6.dp), tag = "left-page")
                         Text(stringResource(R.string.today_view_is_iphone_s_widget_page_searc),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (state.leftPage == "TODAY") {
-                            Text(stringResource(R.string.when_unfolded), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("PAGE" to "Swipe to it", "BESIDE" to "Beside Home", "OFF" to "Off").forEach { (value, label) ->
-                                    IosChip(selected = state.todayUnfolded == value, onClick = { model.setTodayUnfolded(value) }, label = { Text(label) })
-                                }
-                            }
+                            IosMenuRow(stringResource(R.string.when_unfolded), listOf("PAGE" to "Swipe to It", "BESIDE" to "Beside Home", "OFF" to "Off"),
+                                state.todayUnfolded, model::setTodayUnfolded, tag = "today-unfolded")
                             Text(when (state.todayUnfolded) {
                                 "BESIDE" -> "Like iPad: Today View stays on the left of the open screen, next to your first Home page. It takes the place of the unfolded-only page."
                                 "OFF" -> "No Today View while unfolded; it's still there on the cover screen."
@@ -371,42 +321,17 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.app_icons)) {
                         val iconContext = androidx.compose.ui.platform.LocalContext.current
                         val packs = remember { IconPacks.installed(iconContext) }
-                        Text(stringResource(R.string.icon_pack), style = MaterialTheme.typography.labelLarge)
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = state.iconPack == null, onClick = { model.setIconPack(null) }, label = { Text(stringResource(R.string.app_icons)) })
-                            packs.forEach { pack ->
-                                IosChip(selected = state.iconPack == pack.packageName, onClick = { IconPacks.clear(); model.setIconPack(pack.packageName) },
-                                    label = { Text(pack.label) })
-                            }
-                        }
+                        IosMenuRow(stringResource(R.string.icon_pack), listOf<Pair<String?, String>>(null to stringResource(R.string.app_icons)) + packs.map { it.packageName to it.label },
+                            state.iconPack, { IconPacks.clear(); model.setIconPack(it) }, tag = "icon-pack")
                         if (packs.isEmpty()) Text(stringResource(R.string.install_any_icon_pack_made_for_nova_styl),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         SettingsSwitch(stringResource(R.string.live_clock_and_calendar_icons), state.liveIcons, model::setLiveIcons, "live-icons-switch")
-                        Text(stringResource(R.string.shape), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconShape.entries.forEach { shape ->
-                                IosChip(selected = state.iconShape == shape, onClick = { model.setIconShape(shape) }, label = { Text(shape.label) })
-                            }
-                        }
-                        Text(stringResource(R.string.notification_badges), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BadgeStyle.entries.forEach { style ->
-                                IosChip(selected = state.badgeStyle == style, onClick = { model.setBadgeStyle(style) }, label = { Text(style.label) })
-                            }
-                        }
-                        if (state.badgeStyle != BadgeStyle.OFF) Text(stringResource(R.string.badge_color), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                        if (state.badgeStyle != BadgeStyle.OFF) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            BadgeColor.entries.forEach { color ->
-                                IosChip(selected = state.badgeColor == color, onClick = { model.setBadgeColor(color) }, label = { Text(color.label) })
-                            }
-                        }
-                        Text(stringResource(R.string.style), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconStyle.entries.forEach { style ->
-                                IosChip(selected = state.iconStyle == style, onClick = { model.setIconStyle(style, state.iconTint) },
-                                    label = { Text(style.label) }, modifier = Modifier.testTag("icon-style-${style.name.lowercase()}"))
-                            }
-                        }
+                        IosMenuRow(stringResource(R.string.shape), IconShape.entries.map { it to it.label }, state.iconShape, model::setIconShape, tag = "icon-shape")
+                        IosMenuRow(stringResource(R.string.notification_badges), BadgeStyle.entries.map { it to it.label }, state.badgeStyle, model::setBadgeStyle, tag = "badge-style")
+                        if (state.badgeStyle != BadgeStyle.OFF) IosMenuRow(stringResource(R.string.badge_color), BadgeColor.entries.map { it to it.label }, state.badgeColor, model::setBadgeColor, tag = "badge-color")
+                        // iOS Home Screen customization: Default, Dark and Tinted side by side.
+                        Text(stringResource(R.string.style), color = androidx.compose.ui.graphics.Color.White.copy(alpha = .6f), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                        IosSegmented(IconStyle.entries.map { it to it.label }, state.iconStyle, { model.setIconStyle(it, state.iconTint) }, Modifier.padding(vertical = 4.dp), tag = "icon-style")
                         if (state.iconStyle == IconStyle.TINTED) Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             // Wallpaper color (follows the wallpaper when it changes)
                             val tone = LocalWallpaperTone.current
@@ -436,13 +361,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.status)) {
                         SettingsSwitch(stringResource(R.string.show_status_in_the_rail), state.verticalStatus, model::setVerticalStatus, "status-switch")
                         if (state.verticalStatus) {
-                            Text(stringResource(R.string.icon_style), style = MaterialTheme.typography.labelLarge)
-                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                StatusGlyph.entries.forEach { g ->
-                                    IosChip(selected = st.glyph == g, onClick = { model.setStatusStyle(st.copy(glyph = g)) }, label = { Text(g.label) },
-                                        modifier = Modifier.testTag("status-glyph-${g.name.lowercase()}"))
-                                }
-                            }
+                            IosMenuRow(stringResource(R.string.icon_style), StatusGlyph.entries.map { it to it.label }, st.glyph, { model.setStatusStyle(st.copy(glyph = it)) }, tag = "status-glyph")
                             SettingsSwitch(stringResource(R.string.time), st.showTime, { model.setStatusStyle(st.copy(showTime = it)) }, "status-time")
                             SettingsSwitch(stringResource(R.string.date), st.showDate, { model.setStatusStyle(st.copy(showDate = it)) }, "status-date")
                             SettingsSwitch(stringResource(R.string.battery_percentage), st.showBatteryPercent, { model.setStatusStyle(st.copy(showBatteryPercent = it)) }, "status-percent")
@@ -500,10 +419,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     SettingsCard(stringResource(R.string.fold_animation)) {
                         SettingsSwitch(stringResource(R.string.fold_animation), state.foldEffect, model::setFoldEffect, "fold-effect-switch")
-                        if (state.foldEffect) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text(stringResource(R.string.iphone_duo_fade)) })
-                            IosChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text(stringResource(R.string.screenshot_morph)) })
-                        }
+                        if (state.foldEffect) IosSegmented(listOf(false to stringResource(R.string.iphone_duo_fade), true to stringResource(R.string.screenshot_morph)),
+                            state.foldSnapshot, model::setFoldSnapshot, Modifier.padding(vertical = 6.dp), tag = "fold-style")
                         if (state.foldEffect && state.foldSnapshot) Text(stringResource(R.string.takes_a_quick_in_memory_snapshot_of_foli),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (state.foldEffect) CustomizationSlider("Intensity", "${(state.foldIntensity * 100).toInt()}%",
@@ -913,13 +830,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         Column(Modifier.alpha(if (on) 1f else .4f)) {
             FolioScreen.entries.forEach { screen ->
                 val value = FeatureScopes.value(state.featureScopes, tweak.id, screen)
-                Text(screen.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ScopeValue.entries.forEach { option ->
-                        IosChip(selected = value == option, onClick = { if (on) model.setFeatureScope(tweak.id, screen, option) },
-                            label = { Text(option.label) }, modifier = Modifier.weight(1f))
-                    }
-                }
+                IosMenuRow(screen.label, ScopeValue.entries.map { it to it.label }, value, { model.setFeatureScope(tweak.id, screen, it) }, enabled = on, tag = "scope-${tweak.id}-${screen.name.lowercase()}")
             }
         }
         Text("Default follows Enabled. On or Off applies only to that screen.",
@@ -1077,13 +988,8 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         }
         Text("Only these pages show while ${mode.name} is on. Editing Home is paused until it ends, so nothing moves on the hidden pages.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Open On", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 10.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IosChip(mode.homePage == null, { model.updateFocusMode(mode.copy(homePage = null)) }, label = { Text("Any Page") })
-            repeat(pages) { page ->
-                if (mode.pages == null || page in mode.pages) IosChip(mode.homePage == page, { model.updateFocusMode(mode.copy(homePage = page)) }, label = { Text("Page ${page + 1}") })
-            }
-        }
+        IosMenuRow("Open On", listOf<Pair<Int?, String>>(null to "Any Page") + (0 until pages).filter { mode.pages == null || it in mode.pages }.map { it to "Page ${it + 1}" },
+            mode.homePage, { model.updateFocusMode(mode.copy(homePage = it)) }, tag = "focus-open-on")
         Text("Home opens on this page while ${mode.name} is on.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -1239,10 +1145,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
     model: LauncherModel, homePage: Int, onEditPins: () -> Unit, onWidget: (Int) -> Unit,
     onAddWidget: (Int) -> Unit, onRemoveWidget: (Int) -> Unit) {
     val p = if (wide) state.expanded else state.compact
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IosChip(!wide, { onWide(false) }, label = { Text(stringResource(R.string.cover)) })
-        IosChip(wide, { onWide(true) }, label = { Text(stringResource(R.string.inner)) })
-    }
+    IosSegmented(listOf(false to stringResource(R.string.cover), true to stringResource(R.string.inner)), wide, onWide, Modifier.padding(vertical = 4.dp), tag = "layout-screen")
     var confirmIPhone by remember { mutableStateOf(false) }
     SheetGroup {
         IosActionRow(stringResource(R.string.choose_home_apps), onClick = onEditPins)
@@ -1274,17 +1177,9 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
                     Text("Page ${page + 1}", color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
                     if (page == homePage) Text("Showing", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f), fontSize = 13.sp)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PageStyle.SIZES.forEach { (name, scale) ->
-                        IosChip(style.iconScale == scale, { model.setPageStyle(page, style.copy(iconScale = scale)) }, label = { Text(name) }, modifier = Modifier.weight(1f))
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Labels", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .6f), fontSize = 15.sp, modifier = Modifier.width(58.dp))
-                    listOf("As Home" to null, "Show" to true, "Hide" to false).forEach { (name, value) ->
-                        IosChip(style.labels == value, { model.setPageStyle(page, style.copy(labels = value)) }, label = { Text(name) }, modifier = Modifier.weight(1f))
-                    }
-                }
+                IosSegmented(PageStyle.SIZES.map { it.second to it.first }, style.iconScale, { model.setPageStyle(page, style.copy(iconScale = it)) }, tag = "page-size-$page")
+                IosMenuRow("Labels", listOf<Pair<Boolean?, String>>(null to "Same as Home", true to "Show", false to "Hide"), style.labels,
+                    { model.setPageStyle(page, style.copy(labels = it)) }, tag = "page-labels-$page")
             }
         }
     }

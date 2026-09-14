@@ -19,6 +19,8 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - What's New after an update.
 
 ### Changed
+- Settings choices use iOS controls: a menu row with the current value that opens a checkmark menu, and segmented controls for two or three options.
+- The Status Bar picks its text color from its frosted background, and uses stronger colors on light wallpapers.
 - The side column is now called the Side Bar (status bar, Dynamic Island and dock), as on iPhone Duo.
 - Edit while icons wiggle opens a short iOS 18-style menu under the button.
 - Smart Rotate moves a stack to the widget that matters now.
@@ -26,6 +28,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - The status bar shows cellular bars, an airplane, or a searching fan when there's no Wi-Fi, instead of a line.
 
 ### Fixed
+- Apps and shortcuts added while a Focus hides pages go to a page that's showing.
 - Selected rows in the Settings sidebar use a rounded, inset highlight; the widget resize hint is rounded.
 - Long app menus no longer push Edit Home Screen and More out of view.
 - Settings pages that could miss updates while a Focus hides Home pages.

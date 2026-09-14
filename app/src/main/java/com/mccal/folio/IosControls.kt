@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -15,6 +16,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.rounded.Cancel
@@ -123,3 +128,84 @@ internal val LocalReduceMotion = androidx.compose.runtime.staticCompositionLocal
 internal fun reduceMotionEnabled(context: android.content.Context): Boolean =
     runCatching { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }
         .getOrDefault(1f) == 0f
+
+/**
+ * iOS pop-up button row (Settings' "Menu" style): the title on the left, the current choice on the right with ⌃⌄, and a
+ * tap opens a compact menu of choices under it with a checkmark on the current one. Use for three or more choices.
+ */
+@Composable
+internal fun <T> IosMenuRow(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier, tag: String? = null, enabled: Boolean = true) {
+    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val current = options.firstOrNull { it.first == selected }?.second ?: ""
+    Row(modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
+        .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Choose $title") { open = true }
+        .then(if (tag != null) Modifier.testTag(tag) else Modifier)
+        .androidxAlpha(if (enabled) 1f else .4f), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.Text(title, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+        Box {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Text(current, color = Color.White.copy(alpha = .55f), fontSize = 17.sp, maxLines = 1)
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.UnfoldMore, null, tint = Color.White.copy(alpha = .4f),
+                    modifier = Modifier.padding(start = 2.dp).size(18.dp))
+            }
+            val drop = with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }
+            if (open) androidx.compose.ui.window.Popup(alignment = Alignment.TopEnd, offset = androidx.compose.ui.unit.IntOffset(0, drop),
+                onDismissRequest = { open = false }, properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+                val reduce = LocalReduceMotion.current
+                val appear = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(if (reduce) 1f else 0f) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = .82f, stiffness = 800f)) }
+                Column(Modifier.widthIn(min = 200.dp, max = 280.dp)
+                    .graphicsLayer {
+                        val g = appear.value; alpha = g.coerceIn(0f, 1f); scaleX = .6f + .4f * g; scaleY = scaleX
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)
+                    }
+                    .shadow(24.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(Color(0xFF3A3A3C))
+                    .border(.5.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(14.dp))
+                    .then(if (tag != null) Modifier.testTag("$tag-menu") else Modifier)) {
+                    options.forEachIndexed { index, (value, label) ->
+                        if (index > 0) androidx.compose.material3.HorizontalDivider(color = Color.White.copy(alpha = .1f), thickness = .5.dp)
+                        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick); open = false; if (value != selected) onSelect(value)
+                        }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            // iOS menus mark the choice with a leading checkmark and keep the labels lined up.
+                            Box(Modifier.size(24.dp), contentAlignment = Alignment.CenterStart) {
+                                if (value == selected) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Check, null,
+                                    tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            androidx.compose.material3.Text(label, color = Color.White, fontSize = 17.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** iOS segmented control: one rounded track with a sliding thumb behind the chosen option. Use for two or three short choices. */
+@Composable
+internal fun <T> IosSegmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, tag: String? = null) {
+    val haptic = LocalHapticFeedback.current
+    val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().height(36.dp).clip(RoundedCornerShape(9.dp))
+        .background(Color.White.copy(alpha = .12f)).padding(2.dp).then(if (tag != null) Modifier.testTag(tag) else Modifier)) {
+        val segment = maxWidth / options.size
+        val x by animateDpAsState(segment * index, spring(dampingRatio = .85f, stiffness = Spring.StiffnessMedium), label = "segment")
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }.width(segment).fillMaxHeight()
+            .shadow(2.dp, RoundedCornerShape(7.dp)).clip(RoundedCornerShape(7.dp)).background(Color(0xFF636366)))
+        Row(Modifier.fillMaxSize()) {
+            options.forEach { (value, label) ->
+                Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(7.dp))
+                    .selectable(value == selected, role = Role.RadioButton) {
+                        if (value != selected) { haptic.performHapticFeedback(HapticFeedbackType.SegmentTick); onSelect(value) }
+                    }, contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Text(label, color = Color.White, fontSize = 13.sp, maxLines = 1,
+                        fontWeight = if (value == selected) FontWeight.SemiBold else FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+private fun Modifier.androidxAlpha(alpha: Float) = graphicsLayer { this.alpha = alpha }
