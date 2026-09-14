@@ -161,6 +161,8 @@ data class LauncherState(
     val liveIcons: Boolean = true,
     /** Optional tint per folder id (ARGB). */
     val folderColors: Map<String, Long> = emptyMap(),
+    /** Icon Stacks: anchor app id → the apps that fan out when you swipe down on it. */
+    val iconStacks: Map<String, List<String>> = emptyMap(),
     val islandEverywhere: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
@@ -368,7 +370,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     val availableIds = entries.mapTo(mutableSetOf(), AppEntry::id)
                     val authoritative = apps.authoritativeProfiles
                     val removedIds = removedAppIds(old.homeSlots.filterNotNull() + old.leadingSlots.filterNotNull() +
-                        old.dock.filterNotNull() + old.folders.flatMap { it.appIds }, availableIds,
+                        old.dock.filterNotNull() + old.folders.flatMap { it.appIds } + old.iconStacks.keys + old.iconStacks.values.flatten(), availableIds,
                         authoritative, temporarilyUnavailable, removed, userManager.getSerialNumberForUser(Process.myUserHandle()),
                         apps.removedProfiles)
                     // iOS "Add to Home Screen": a newly downloaded app also goes to the first free spot on Home.
@@ -388,6 +390,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                         old.widgetRestores, old.leadingSlots, old.minPages), removedIds)
                     old.copy(apps = entries, profiles = profiles, homeSlots = reconciled.slots, leadingSlots = reconciled.leadingSlots,
                         dock = reconciled.dock, folders = reconciled.folders,
+                        iconStacks = IconStacks.prune(old.iconStacks, old.iconStacks.keys + old.iconStacks.values.flatten() - removedIds),
                         canUndoEdit = old.canUndoEdit && old.layout == reconciled, loading = false,
                         error = if (statePayloadInvalid) old.error else null)
                 }
@@ -595,6 +598,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
     fun setRailActivities(value: Boolean) = updateSettings(soon = false) { it.copy(railActivities = value) }
+    fun toggleStackApp(anchor: String, app: String) = updateSettings(soon = false) { it.copy(iconStacks = IconStacks.toggle(it.iconStacks, anchor, app)) }
     fun setAddNewAppsToHome(value: Boolean) = updateSettings(soon = false) { it.copy(addNewAppsToHome = value) }
     /** Turns a Focus on (or all off with null) and applies it to Android. */
     fun setFocus(id: String?) {
@@ -839,6 +843,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("triggerActions", JSONObject().apply { s.triggerActions.forEach { (k, v) -> put(k, v) } })
             .put("todayWidgets", JSONArray().apply { s.todayWidgets.forEach { put(JSONObject().put("id", it.id).put("size", it.size.name)) } })
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
+            .put("iconStacks", JSONObject().apply { s.iconStacks.forEach { (id, apps) -> put(id, JSONArray(apps)) } })
             .put(SettingKeys.DOCK_EVERYWHERE, s.dockEverywhere).put(SettingKeys.ISLAND_EVERYWHERE, s.islandEverywhere)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
         val editor = prefs.edit()
@@ -1033,6 +1038,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 a.optJSONObject(i)?.let { o -> runCatching { TodayWidget(o.getInt("id"), TodaySize.valueOf(o.getString("size"))) }.getOrNull() }
             } } ?: DEFAULT_TODAY_WIDGETS,
             folderColors = j.optJSONObject("folderColors")?.let { o -> o.keys().asSequence().associateWith { o.getLong(it) } } ?: emptyMap(),
+            iconStacks = j.optJSONObject("iconStacks")?.let { o -> o.keys().asSequence().associateWith { key ->
+                o.optJSONArray(key)?.let { a -> (0 until a.length()).mapNotNull { a.optString(it).takeIf(String::isNotBlank) } }.orEmpty()
+            }.filterValues { it.isNotEmpty() } } ?: emptyMap(),
             dockEverywhere = j.optBoolean("dockEverywhere", false), islandEverywhere = j.optBoolean("islandEverywhere", false))
     }.getOrElse {
         statePayloadInvalid = legacyRaw != null

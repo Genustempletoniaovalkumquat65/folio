@@ -81,6 +81,8 @@ internal fun AppContextMenu(
     lockedBy: String? = null,
     onDismiss: () -> Unit, onMove: () -> Unit, onAddOrRemove: () -> Unit, onCreateFolder: () -> Unit,
     onWidgets: (() -> Unit)?, onToggleHidden: () -> Unit, onInfo: () -> Unit,
+    /** Choose the apps tucked behind this icon (Icon Stacks); null where stacks don't apply. */
+    onStack: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -130,6 +132,10 @@ internal fun AppContextMenu(
             // Prefer below (like iOS) when it fits; otherwise whichever side has more room, scrolling if needed.
             val below = estimatedH <= spaceBelow || spaceBelow >= spaceAbove
             val maxMenuH = with(density) { (if (below) spaceBelow else spaceAbove).coerceAtLeast(120f).toDp() }
+            // Keep Folio's own rows (Edit, Remove, More) visible without scrolling: drop app quick actions that don't fit.
+            val rowPx = with(density) { 49.dp.toPx() }
+            // Opening More swaps the app's quick actions for Folio's extra rows, so the menu doesn't need to scroll.
+            val shownActions = if (more) emptyList() else actions.take((((if (below) spaceBelow else spaceAbove) - with(density) { 8.dp.toPx() }) / rowPx - 3).toInt().coerceAtLeast(0))
             val menuLeft = (iconLeft + iconSize / 2 - menuW / 2).coerceIn(gap, screenW - menuW - gap)
             val origX = ((iconLeft + iconSize / 2 - menuLeft) / menuW).coerceIn(0f, 1f)
             // Positioned from the measured menu height: the dialog can be shorter than the screen (navigation bar),
@@ -151,12 +157,12 @@ internal fun AppContextMenu(
                 .border(FolioGlass.edge, RoundedCornerShape(18.dp))
                 .clickable(remember { MutableInteractionSource() }, null) {}
                 .verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                actions.forEachIndexed { i, action ->
+                shownActions.forEachIndexed { i, action ->
                     MenuRow(action.label, bitmap = action.icon) {
                         onDismiss()
                         runCatching { context.getSystemService(LauncherApps::class.java).startShortcut(action.info, null, null) }
                     }
-                    if (i == actions.lastIndex) Box(Modifier.fillMaxWidth().height(8.dp).background(Color.Black.copy(alpha = .25f)))
+                    if (i == shownActions.lastIndex) Box(Modifier.fillMaxWidth().height(8.dp).background(Color.Black.copy(alpha = .25f)))
                     else MenuDivider()
                 }
                 if (lockedBy != null) {
@@ -177,6 +183,7 @@ internal fun AppContextMenu(
                 else {
                     if (lockedBy == null) MenuRow("Create Folder", Icons.Rounded.CreateNewFolder) { onCreateFolder() }
                     onWidgets?.let { MenuDivider(); MenuRow("Widgets", Icons.Rounded.Widgets) { it() } }
+                    onStack?.let { MenuDivider(); MenuRow("Stack Apps…", Icons.Rounded.Layers) { it() } }
                     MenuDivider()
                     MenuRow(if (hidden) "Show in App Library" else "Hide from App Library", if (hidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff) { onToggleHidden() }
                     MenuDivider()

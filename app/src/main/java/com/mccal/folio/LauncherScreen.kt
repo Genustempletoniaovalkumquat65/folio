@@ -156,6 +156,8 @@ fun LauncherScreen(
     var resizeAppPitch by remember { mutableFloatStateOf(1f) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var panelAppId by rememberSaveable { mutableStateOf<String?>(null) }
+    var stackAppId by rememberSaveable { mutableStateOf<String?>(null) }
+    var stackEditId by rememberSaveable { mutableStateOf<String?>(null) }
     var customizationPage by rememberSaveable { mutableStateOf(CustomizationPage.OVERVIEW) }
     LaunchedEffect(sheet) {
         if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW
@@ -494,6 +496,10 @@ fun LauncherScreen(
         CompositionLocalProvider(LocalWidgetStacks provides state.widgetStacks, LocalStackRotate provides state.stackRotate, LocalHomeApps provides homeApps,
             LocalHomeInk provides homeInk, LocalDuoPalette provides palette,
             // Remembered so every icon isn't recomposed each time Home recomposes (a new lambda changes the local).
+            LocalStackedApps provides state.iconStacks.keys,
+            LocalIconStack provides remember(homeEdit.active, haptic) {
+                if (homeEdit.active) null else { app: AppEntry -> haptic.performHapticFeedback(HapticFeedbackType.ContextClick); stackAppId = app.id }
+            },
             LocalAppPanel provides remember(state.appPanels, state.featureScopes, homeEdit.active, haptic, panelWide) {
                 val panelsOn = FeatureScopes.on(state.featureScopes, "appPanels", state.appPanels, screenFor(panelWide))
                 if (panelsOn && !homeEdit.active) { app: AppEntry -> haptic.performHapticFeedback(HapticFeedbackType.ContextClick); panelAppId = app.id } else null
@@ -596,6 +602,8 @@ fun LauncherScreen(
                             Offset(rootOnScreen[0].toFloat(), rootOnScreen[1].toFloat())
                         !(region?.target is DropTarget.Dock && dockScroll.value > 0) &&
                             !((region?.target as? DropTarget.Widget)?.index?.let { state.widgetStacks[it]?.isNotEmpty() } == true) &&
+                            // A swipe down on a stacked icon opens its stack, not Spotlight.
+                            region?.appId?.let { it in state.iconStacks } != true &&
                             !nativeWidgetConsumesVerticalGesture(launcherRootView, screenPoint)
                     }
                 },
@@ -1279,6 +1287,17 @@ fun LauncherScreen(
                 }
             }
         }
+        appsById[stackAppId]?.let { anchor ->
+            val stacked = state.iconStacks[anchor.id].orEmpty().mapNotNull(appsById::get)
+            if (stacked.isEmpty()) LaunchedEffect(anchor.id) { stackAppId = null }
+            else IconStackFan(anchor, stacked, onDismiss = { stackAppId = null }) { stackAppId = null; onLaunchFrom(it, IconBounds.of(anchor.id)) }
+        }
+        appsById[stackEditId]?.let { anchor ->
+            ModalBottomSheet(onDismissRequest = { stackEditId = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+                IconStackEditor(anchor, state.apps.filter { it.id !in state.hiddenApps }, state.iconStacks[anchor.id].orEmpty(),
+                    onToggle = { model.toggleStackApp(anchor.id, it) }, onDone = { stackEditId = null })
+            }
+        }
         appsById[panelAppId]?.let { app ->
             AppPanel(app, onDismiss = { panelAppId = null }, onOpen = { panelAppId = null; onLaunchFrom(app, IconBounds.of(app.id)) })
         }
@@ -1302,7 +1321,8 @@ fun LauncherScreen(
                 onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
                 onWidgets = openWidgetsFor,
                 onToggleHidden = { model.setHidden(app.id, app.id !in state.hiddenApps); selectedId = null },
-                onInfo = { onAppInfo(app); selectedId = null })
+                onInfo = { onAppInfo(app); selectedId = null },
+                onStack = if (pinned) {{ stackEditId = app.id; selectedId = null }} else null)
         }
         emptyCellIndex?.let { index ->
             HomeEditMenu(anchor = editPillBounds.takeIf { homeEdit.active }, onDismiss = { emptyCellIndex = null },

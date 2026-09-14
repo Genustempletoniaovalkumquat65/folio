@@ -261,7 +261,7 @@ internal fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modi
     val bounds = remember { android.graphics.Rect() }
     val openPanel = LocalAppPanel.current
     Column(modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = app.label }
-        .swipeUpForPanel(openPanel?.let { { it(app) } })
+        .iconSwipes(openPanel?.let { { it(app) } }, if (app.id in LocalStackedApps.current) LocalIconStack.current?.let { { it(app) } } else null)
         .clickable(interactionSource = interaction, indication = null,
             role = Role.Button, onClick = { onClick(bounds) })
         .semantics { onLongClick("App options") { onLongClick(); true } }.padding(horizontal = 2.dp),
@@ -269,6 +269,7 @@ internal fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modi
         // Bounds are read outside the wiggle layer so jiggling doesn't report a new position every frame.
         Box(Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(app.id, bounds) }
             .jiggle(app.id)) {
+            if (app.id in LocalStackedApps.current) StackPeek(iconSize)
             AppIcon(app, null, Modifier.fillMaxSize()
                 .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (pressed) .82f else 1f }, shape = RoundedCornerShape((size * .24f).dp))
             if (onRemove != null) JiggleRemoveButton("Remove ${app.label} from Home", onRemove)
