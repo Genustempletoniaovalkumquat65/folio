@@ -1285,7 +1285,7 @@ fun LauncherScreen(
                         }) { Text(stringResource(R.string.apply)) }
                     }
                     if (!feasible) Text(stringResource(R.string.move_this_widget_into_the_six_row_grid_b),
-                        color = Color.White, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .65f)).padding(8.dp))
+                        color = Color.White, modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = .65f)).padding(horizontal = 14.dp, vertical = 10.dp))
                 }
             }
         }

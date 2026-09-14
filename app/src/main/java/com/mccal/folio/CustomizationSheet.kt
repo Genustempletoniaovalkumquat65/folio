@@ -671,7 +671,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
 @Composable private fun SidebarAppRow(selected: Boolean, setupLeft: Int, onClick: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val icon = remember { folioIconBitmap(context) }
-    Row(Modifier.fillMaxWidth().background(if (selected) IosBlue else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick)
+    // iPad Settings: the selection is a rounded highlight inset from the group's edges, not a square band.
+    Row(Modifier.fillMaxWidth().padding(4.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) IosBlue else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 10.dp).testTag("settings-sidebar-folio"), verticalAlignment = Alignment.CenterVertically) {
         icon?.let { Image(it, null, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) }
         Spacer(Modifier.width(12.dp))
@@ -744,8 +745,10 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
 /** iOS Settings row: colored rounded icon square, title, optional value, chevron. */
 @Composable private fun TweakRow(icon: ImageVector, color: Long, title: String, tag: String, value: String? = null,
     selected: Boolean = false, chevron: Boolean = true, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(if (selected) IosBlue else androidx.compose.ui.graphics.Color.Transparent)
-        .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag).semantics { this.selected = selected },
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        .then(if (selected) Modifier.padding(horizontal = 5.dp, vertical = 2.dp).clip(RoundedCornerShape(10.dp)).background(IosBlue) else Modifier)
+        // The inset is taken back from the content padding, so the icon and title don't shift when selected.
+        .clickable(onClick = onClick).padding(horizontal = if (selected) 9.dp else 14.dp, vertical = if (selected) 6.dp else 8.dp).testTag(tag).semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(androidx.compose.ui.graphics.Color(color)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(19.dp))
