@@ -178,7 +178,7 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
     }
     var frecency by remember { mutableStateOf(emptyMap<String, Double>()) }
     LaunchedEffect(active) { if (active) frecency = withContext(Dispatchers.IO) { RecentApps.frecency(context) } }
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val wide = LocalConfiguration.current.let { isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) }
 
     val apps = remember(state.apps, state.hiddenApps) { state.apps.filter { it.id !in state.hiddenApps } }
     val recent = remember(apps, frecency) {

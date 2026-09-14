@@ -479,7 +479,7 @@ fun LauncherScreen(
         onFinish = { cancelled -> finishDrag(cancelled) }, immediate = homeEdit.active)
         .twoFingerSwipeDown(FolioAction.entries.firstOrNull { it.name == state.triggerActions[FolioTrigger.TWO_FINGER_DOWN.name] }
             ?.takeIf { it != FolioAction.NONE && sheet.isEmpty() && !homeEdit.active }) { FolioActions.run(launcherActivity, it) }) { ProvideJiggle(homeEdit) {
-        val panelWide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+        val panelWide = androidx.compose.ui.platform.LocalConfiguration.current.let { isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) }
         val tone = LocalWallpaperTone.current
         val homeInk = homeInkFor(state.homeInk, tone.prefersDarkText)
         val basePalette = LocalDuoPalette.current
@@ -499,7 +499,7 @@ fun LauncherScreen(
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
         BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets()))) {
-            val wide = maxWidth.value >= 650f
+            val wide = maxWidth.value >= 650f && maxHeight.value >= REGULAR_MIN_HEIGHT_DP
             val preset = if (wide) state.expanded else state.compact
             val density = LocalDensity.current
             val inLibrary = pager.currentPage == visibleHomePages
@@ -1277,7 +1277,7 @@ fun LauncherScreen(
                 onInfo = { onAppInfo(app); selectedId = null })
         }
         emptyCellIndex?.let { index ->
-            ModalBottomSheet(onDismissRequest = { emptyCellIndex = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            ModalBottomSheet(onDismissRequest = { emptyCellIndex = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), formWidth = 400.dp) {
                 EmptySpaceActionSheet(onWidgets = {
                         widgetTargetIndex = index; widgetExactTarget = true; widgetSlot = model.nextWidgetSlot(); widgetPackage = null; widgetProfileSerial = null
                         emptyCellIndex = null; sheet = "widgets"
@@ -1358,7 +1358,7 @@ fun LauncherScreen(
         if (widgets.pendingPlacement != null && widgets.setupStatus != null) {
             AlertDialog(onDismissRequest = {}, title = { Text(stringResource(R.string.finish_widget_setup)) },
                 text = { Text(stringResource(R.string.the_widget_is_waiting_at_its_chosen_spot)) },
-                confirmButton = { Button(onClick = widgets::finishPendingSetup,
+                confirmButton = { TextButton(onClick = widgets::finishPendingSetup,
                     modifier = Modifier.semantics { contentDescription = "Continue widget setup" }) { Text(stringResource(R.string.finish_setup)) } },
                 dismissButton = { TextButton(onClick = { leaveTemporaryWidgetPage(); widgets.cancelPendingSetup() },
                     modifier = Modifier.semantics { contentDescription = "Cancel widget setup" }) { Text(stringResource(R.string.cancel)) } })
@@ -1366,7 +1366,7 @@ fun LauncherScreen(
         widgets.reconfigureWidgetId?.let {
             AlertDialog(onDismissRequest = {}, title = { Text(stringResource(R.string.widget_settings)) },
                 text = { Text(stringResource(R.string.widget_settings_were_interrupted_resume)) },
-                confirmButton = { Button(onClick = widgets::finishPendingReconfigure,
+                confirmButton = { TextButton(onClick = widgets::finishPendingReconfigure,
                     modifier = Modifier.testTag("widget-reconfigure-resume")) { Text(stringResource(R.string.resume)) } },
                 dismissButton = { TextButton(onClick = widgets::cancelPendingReconfigure,
                     modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text(stringResource(R.string.cancel)) } })
@@ -1562,11 +1562,15 @@ private fun HomePagePane(
     val doubleTapAction = FolioAction.entries.firstOrNull { it.name == state.triggerActions[FolioTrigger.DOUBLE_TAP.name] } ?: FolioAction.NONE
     Box(modifier.testTag("home-page-$page")
         // Jiggle mode: a tap on empty space (not on an icon, which handles its own taps) finishes editing.
-        .pointerInput(edit.active, doubleTapAction) {
+        .pointerInput(edit.active, doubleTapAction, backgroundTarget, drag.active) {
+            // Like iPhone, a long-press anywhere on empty Home (below the grid too) starts jiggle mode,
+            // and a second one opens the Home options.
+            val longPress: (Offset) -> Unit = { if (!drag.active) onEmptyWidget(backgroundTarget) }
             when {
-                edit.active -> detectTapGestures(onTap = { edit.stop() })
+                edit.active -> detectTapGestures(onTap = { edit.stop() }, onLongPress = longPress)
                 // Activator-style double-tap on empty Home.
-                doubleTapAction != FolioAction.NONE -> detectTapGestures(onDoubleTap = { FolioActions.run(context, doubleTapAction) })
+                doubleTapAction != FolioAction.NONE -> detectTapGestures(onDoubleTap = { FolioActions.run(context, doubleTapAction) }, onLongPress = longPress)
+                else -> detectTapGestures(onLongPress = longPress)
             }
         }
         .semantics {
@@ -1941,7 +1945,15 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
 private fun GlassCard(modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Surface(modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
         color = Glass.copy(alpha = .26f), shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, RailBorder)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween, content = content)
+        // Like iOS widgets, the whole card scales with its size, so a narrower column (the Today View beside
+        // Home in portrait) shrinks the text instead of clipping it.
+        BoxWithConstraints {
+            val scale = (minOf(maxWidth, maxHeight) / 150.dp).coerceIn(.6f, 1f)
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides androidx.compose.ui.unit.Density(density.density * scale, density.fontScale)) {
+                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween, content = content)
+            }
+        }
     }
 }
 

@@ -266,7 +266,7 @@ internal class EverywhereOverlay(private val service: AccessibilityService) {
         val metrics = wm.currentWindowMetrics
         val cutout: Rect? = metrics.windowInsets.displayCutout?.boundingRects?.filter { !it.isEmpty }?.minByOrNull { it.top }
             ?: CameraArea.hiddenCamera(wm.defaultDisplay)
-        val wide = metrics.bounds.width() / density >= 600f
+        val wide = isRegularSize(metrics.bounds.width() / density, metrics.bounds.height() / density)
         val g = (IslandPosition.load(service, wide)?.let { islandGeometryAt(it.xFraction * metrics.bounds.width(), it.topDp, metrics.bounds.width(), density) }
             ?: islandGeometry(cutout, metrics.bounds.width(), density)).also { geometry = it }
         val view = ComposeView(service).apply {

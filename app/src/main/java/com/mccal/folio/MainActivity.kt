@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
             val state = if (safeMode.value) SafeMode.effective(savedState) else savedState
             androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(31_000); SafeMode.markStable(this@MainActivity) }
             val safeAcknowledged = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-            if (safeMode.value && !safeAcknowledged.value) androidx.compose.material3.AlertDialog(onDismissRequest = {},
+            if (safeMode.value && !safeAcknowledged.value) AlertDialog(onDismissRequest = {},
                 title = { androidx.compose.material3.Text("Folio Started in Safe Mode") },
                 text = { androidx.compose.material3.Text("Folio closed unexpectedly twice, so optional features are paused: app panels, Actions, the fold animation, Lock Cover, the island and dock over other apps, and tinting. Your settings haven’t changed.") },
                 confirmButton = { androidx.compose.material3.TextButton(onClick = { SafeMode.exit(this@MainActivity); safeMode.value = false }) {
@@ -153,8 +153,9 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperTone provides wallpaperTone,
                 LocalReduceMotion provides reduceMotion,
-                LocalTintOptions provides androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.let { w ->
-                    val screen = screenFor(w >= 600)
+                LocalHalfOpenHinge provides rememberHalfOpenHinge(this@MainActivity),
+                LocalTintOptions provides androidx.compose.ui.platform.LocalConfiguration.current.let { config ->
+                    val screen = screenFor(isRegularSize(config.screenWidthDp.toFloat(), config.screenHeightDp.toFloat()))
                     TintOptions(FeatureScopes.on(state.featureScopes, "tintNotifications", state.tintNotifications, screen),
                         FeatureScopes.on(state.featureScopes, "tintMedia", state.tintMedia, screen),
                         FeatureScopes.on(state.featureScopes, "notificationAppRow", state.notificationAppRow, screen))

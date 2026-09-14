@@ -38,6 +38,6 @@ internal fun LayoutRestorePreview(preview: LayoutImportPreview, onRestore: () ->
                 if (reconnect > 0) Text("$reconnect widget${if (reconnect == 1) "" else "s"} will keep their saved space and ask to reconnect after restore.")
                 Text(stringResource(R.string.nothing_changes_until_you_choose_restore), style = MaterialTheme.typography.bodySmall)
             }
-        }, confirmButton = { Button(onClick = onRestore, modifier = Modifier.testTag("layout-restore-apply")) { Text(stringResource(R.string.restore)) } },
+        }, confirmButton = { TextButton(onClick = onRestore, modifier = Modifier.testTag("layout-restore-apply")) { Text(stringResource(R.string.restore)) } },
         dismissButton = { TextButton(onClick = onCancel, modifier = Modifier.testTag("layout-restore-cancel")) { Text(stringResource(R.string.cancel)) } })
 }

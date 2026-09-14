@@ -68,6 +68,18 @@ class LayoutModelTest {
             }
         }
     }
+    @Test fun `short and landscape windows stay compact and fit a page without scrolling`() {
+        // Cover in landscape, a small phone in landscape, and a split-screen half: compact size, whole page visible.
+        for ((width, height) in listOf(751f to 475f, 751f to 431f, 640f to 360f, 460f to 700f)) {
+            val g = homeGeometry(width, height, LayoutPreset(), true, labelHeight = 21f)
+            assertFalse("$width x $height", g.expanded)
+            if (height >= 430f) assertTrue("page overflows at $width x $height", g.widgetHeight + 18f + 4f * g.rowHeight <= height - 16f - 44f + .01f)
+            assertTrue(g.rowHeight >= 48f)
+        }
+        assertTrue(isRegularSize(704f, 930f))
+        assertTrue(isRegularSize(932f, 680f))
+        assertFalse(isRegularSize(751f, 475f))
+    }
     @Test fun `expanded pane appears from actual window width`() {
         assertFalse(homeGeometry(475f, 700f, LayoutPreset(), true).expanded)
         assertTrue(homeGeometry(933f, 650f, LayoutPreset(), true).expanded)

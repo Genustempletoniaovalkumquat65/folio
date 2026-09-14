@@ -74,91 +74,95 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
     }
     val bodyScroll = rememberScrollState()
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        // iOS navigation bar: "‹ Folio" back on sub-pages, Done on the right, large title below.
-        Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
-            if (page != CustomizationPage.OVERVIEW) Row(Modifier.align(Alignment.CenterStart).clip(RoundedCornerShape(10.dp))
-                .clickable { onPage(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else CustomizationPage.OVERVIEW) }.padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(28.dp))
-                Text(if (page == CustomizationPage.TWEAK) "Tweaks" else stringResource(R.string.folio), color = IosBlue, fontSize = 17.sp)
-            }
-            Text(stringResource(R.string.done), color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
-                    .padding(horizontal = 8.dp, vertical = 8.dp).semantics { contentDescription = "Close customization" })
-        }
-        if (page != CustomizationPage.OVERVIEW) Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 32.sp,
-            fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            when (page) {
-                CustomizationPage.OVERVIEW -> {
-                    // Like iOS Settings: the header gets out of the way while searching.
-                    if (settingsQuery.isBlank()) TweakBanner()
-                    SettingsSearchField(settingsQuery) { settingsQuery = it }
-                    if (settingsQuery.isNotBlank()) {
-                        SettingsSearchResults(settingsQuery, onOpen = { settingsQuery = ""; if (it == CustomizationPage.TWEAKS) onPage(it) else onPage(it) })
-                        return@Column
+    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
+    val setupLeft = setupSteps.count { it.required && !it.done }
+    val onBack = { onPage(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else CustomizationPage.OVERVIEW) }
+
+    // The settings list. On the phone it's the first page; in the split view it's the sidebar, with the open page highlighted.
+    val overviewRows: @Composable ColumnScope.(selected: CustomizationPage?, sidebar: Boolean) -> Unit = { selected, sidebar ->
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Wallpaper, 0xFF32ADE6, "Wallpaper & Appearance", "customization-wallpaper",
+                            if (backgrounds.previewPending) "Photo ready" else null, selected = selected == CustomizationPage.WALLPAPER, chevron = !sidebar) { onPage(CustomizationPage.WALLPAPER) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.GridView, 0xFF0A84FF, "Home Screen & Dock", "customization-home", selected = selected == CustomizationPage.HOME, chevron = !sidebar) { onPage(CustomizationPage.HOME) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Today, 0xFFFF9F0A, "Today View", "customization-today", selected = selected == CustomizationPage.TODAY, chevron = !sidebar) { onPage(CustomizationPage.TODAY) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Rail", "customization-status", selected = selected == CustomizationPage.STATUS, chevron = !sidebar) { onPage(CustomizationPage.STATUS) }
                     }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "customization-island", selected = selected == CustomizationPage.ISLAND, chevron = !sidebar) { onPage(CustomizationPage.ISLAND) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Notifications, 0xFFFF3B30, "Notifications & Control Center", "customization-notifications", selected = selected == CustomizationPage.NOTIFICATIONS, chevron = !sidebar) { onPage(CustomizationPage.NOTIFICATIONS) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Search & App Library", "customization-search", selected = selected == CustomizationPage.SEARCH, chevron = !sidebar) { onPage(CustomizationPage.SEARCH) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Gesture, 0xFF30B0C7, "Gestures & Actions", "customization-gestures", selected = selected == CustomizationPage.GESTURES, chevron = !sidebar) { onPage(CustomizationPage.GESTURES) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key", "customization-side-key", selected = selected == CustomizationPage.SIDE_KEY, chevron = !sidebar) { onPage(CustomizationPage.SIDE_KEY) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Lock, 0xFF30D158, "Lock Cover", "customization-lock",
+                            if (state.lockCover) "On" else "Off", selected = selected == CustomizationPage.LOCK, chevron = !sidebar) { onPage(CustomizationPage.LOCK) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold & Displays", "customization-fold", selected = selected == CustomizationPage.FOLD, chevron = !sidebar) { onPage(CustomizationPage.FOLD) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.AutoAwesome, 0xFFBF5AF2, "Tweaks", "customization-tweaks",
+                            "${TweakFeatures.count { it.get(state) }} on", selected = selected == CustomizationPage.TWEAKS, chevron = !sidebar) { onPage(CustomizationPage.TWEAKS) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.Checklist, 0xFF30D158, "Setup Checklist", if (setupLeft == 0) "customization-setup-all" else "customization-setup",
+                            if (setupLeft > 0) "$setupLeft left" else null, selected = selected == CustomizationPage.SETUP, chevron = !sidebar) { onPage(CustomizationPage.SETUP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup", selected = selected == CustomizationPage.BACKUP, chevron = !sidebar) { onPage(CustomizationPage.BACKUP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.PanTool, 0xFF0A84FF, "Privacy & Permissions", "customization-permissions", selected = selected == CustomizationPage.PERMISSIONS, chevron = !sidebar) { onPage(CustomizationPage.PERMISSIONS) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Settings, 0xFF8E8E93, "Advanced", "customization-advanced", selected = selected == CustomizationPage.ADVANCED, chevron = !sidebar) { onPage(CustomizationPage.ADVANCED) }
+                    }
+                    SheetGroup {
+                        TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help", selected = selected == CustomizationPage.HELP, chevron = !sidebar) { onPage(CustomizationPage.HELP) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding", chevron = !sidebar) { onClose(); onShowWelcome() }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits", selected = selected == CustomizationPage.CREDITS, chevron = !sidebar) { onPage(CustomizationPage.CREDITS) }
+                    }
+    }
+    // Home-app actions and the setup reminder: above the list on the phone, on Folio's own page in the split view.
+    val overviewActions: @Composable ColumnScope.() -> Unit = {
                     if (!isDefaultHome || state.canUndoEdit) SheetGroup {
                         if (!isDefaultHome) IosActionRow(stringResource(R.string.set_as_home_app), "default-home-settings", onClick = onMakeDefault)
                         if (!isDefaultHome && state.canUndoEdit) MenuDivider()
                         if (state.canUndoEdit) IosActionRow(stringResource(R.string.undo_last_layout_change), onClick = { model.undoEdit(); onClose() })
                     }
-                    val setupSteps = rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper)
-                    val setupLeft = setupSteps.count { it.required && !it.done }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
                         "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.SETUP) }
-                    MiniHomePreview(backgrounds.previewBitmap, state, 176.dp)
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.Wallpaper, 0xFF32ADE6, "Wallpaper & Appearance", "customization-wallpaper",
-                            if (backgrounds.previewPending) "Photo ready" else null) { onPage(CustomizationPage.WALLPAPER) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.GridView, 0xFF0A84FF, "Home Screen & Dock", "customization-home") { onPage(CustomizationPage.HOME) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Today, 0xFFFF9F0A, "Today View", "customization-today") { onPage(CustomizationPage.TODAY) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Rail", "customization-status") { onPage(CustomizationPage.STATUS) }
-                    }
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.Circle, 0xFF1C1C1E, "Dynamic Island", "customization-island") { onPage(CustomizationPage.ISLAND) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Notifications, 0xFFFF3B30, "Notifications & Control Center", "customization-notifications") { onPage(CustomizationPage.NOTIFICATIONS) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Search, 0xFF8E8E93, "Search & App Library", "customization-search") { onPage(CustomizationPage.SEARCH) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Gesture, 0xFF30B0C7, "Gestures & Actions", "customization-gestures") { onPage(CustomizationPage.GESTURES) }
-                    }
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key", "customization-side-key") { onPage(CustomizationPage.SIDE_KEY) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Lock, 0xFF30D158, "Lock Cover", "customization-lock",
-                            if (state.lockCover) "On" else "Off") { onPage(CustomizationPage.LOCK) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Devices, 0xFFFF375F, "Fold & Displays", "customization-fold") { onPage(CustomizationPage.FOLD) }
-                    }
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.AutoAwesome, 0xFFBF5AF2, "Tweaks", "customization-tweaks",
-                            "${TweakFeatures.count { it.get(state) }} on") { onPage(CustomizationPage.TWEAKS) }
-                    }
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.Checklist, 0xFF30D158, "Setup Checklist", if (setupLeft == 0) "customization-setup-all" else "customization-setup",
-                            if (setupLeft > 0) "$setupLeft left" else null) { onPage(CustomizationPage.SETUP) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup") { onPage(CustomizationPage.BACKUP) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.PanTool, 0xFF0A84FF, "Privacy & Permissions", "customization-permissions") { onPage(CustomizationPage.PERMISSIONS) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Settings, 0xFF8E8E93, "Advanced", "customization-advanced") { onPage(CustomizationPage.ADVANCED) }
-                    }
-                    SheetGroup {
-                        TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help") { onPage(CustomizationPage.HELP) }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding") { onClose(); onShowWelcome() }
-                        MenuDivider()
-                        TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits") { onPage(CustomizationPage.CREDITS) }
-                    }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // iPad Settings / One UI on the unfolded screen: sidebar and page side by side, in either orientation.
+    // Regular size class (both dimensions roomy), not a device check: the inner screen in either orientation.
+    val fullWidth = maxWidth
+    val split = maxWidth >= 600.dp && maxHeight >= 560.dp
+    val pageContent: @Composable ColumnScope.() -> Unit = {
+            when (page) {
+                CustomizationPage.OVERVIEW -> if (split) {
+                    TweakBanner()
+                    overviewActions()
+                    MiniHomePreview(backgrounds.previewBitmap, state, 260.dp)
                     if (isDefaultHome) SheetGroup { IosActionRow(stringResource(R.string.change_home_app), "default-home-settings", onClick = onMakeDefault) }
+                } else {
+                    // Like iOS Settings: the header gets out of the way while searching.
+                    if (settingsQuery.isBlank()) TweakBanner()
+                    SettingsSearchField(settingsQuery) { settingsQuery = it }
+                    if (settingsQuery.isNotBlank()) SettingsSearchResults(settingsQuery, onOpen = { settingsQuery = ""; onPage(it) })
+                    else {
+                        overviewActions()
+                        MiniHomePreview(backgrounds.previewBitmap, state, 176.dp)
+                        overviewRows(null, false)
+                        if (isDefaultHome) SheetGroup { IosActionRow(stringResource(R.string.change_home_app), "default-home-settings", onClick = onMakeDefault) }
+                    }
                 }
                 CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper))
                 CustomizationPage.WALLPAPER -> {
@@ -549,6 +553,72 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.let { tweak -> TweakPage(tweak, state, model) }
                     ?: LaunchedEffect(Unit) { onPage(CustomizationPage.TWEAKS) }
             }
+    }
+    if (!split) Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        SettingsNavBar(if (page == CustomizationPage.OVERVIEW) null else if (page == CustomizationPage.TWEAK) "Tweaks" else stringResource(R.string.folio), onBack, onClose)
+        if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
+        Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp), content = pageContent)
+    } else Row(Modifier.fillMaxSize()) {
+        val sidebarScroll = rememberScrollState()
+        Column(Modifier.width(if (fullWidth < 800.dp) 300.dp else 340.dp).fillMaxHeight().verticalScroll(sidebarScroll)
+            .padding(horizontal = 16.dp).padding(top = 44.dp, bottom = 20.dp).testTag("settings-sidebar"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsLargeTitle(stringResource(R.string.folio))
+            SettingsSearchField(settingsQuery) { settingsQuery = it }
+            if (settingsQuery.isNotBlank()) SettingsSearchResults(settingsQuery, onOpen = { onPage(it) })
+            else {
+                // Like the account card at the top of iPad Settings: Folio's own page.
+                SheetGroup { SidebarAppRow(selected = page == CustomizationPage.OVERVIEW, setupLeft) { onPage(CustomizationPage.OVERVIEW) } }
+                overviewRows(if (page == CustomizationPage.TWEAK) CustomizationPage.TWEAKS else page, true)
+            }
+        }
+        Box(Modifier.fillMaxHeight().width(.5.dp).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .14f)))
+        Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 20.dp)) {
+            SettingsNavBar(if (page == CustomizationPage.TWEAK) "Tweaks" else null, onBack, onClose)
+            if (page != CustomizationPage.OVERVIEW) SettingsLargeTitle(title)
+            Column(Modifier.weight(1f).verticalScroll(bodyScroll).padding(bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // The space beside the list shows what the page changes, drawn from your real Home.
+                    if (page == CustomizationPage.HOME || page == CustomizationPage.STATUS)
+                        MiniHomePreview(backgrounds.previewBitmap, state, 240.dp, iconScale = (if (wide) state.expanded else state.compact).iconSize / 66f)
+                    pageContent()
+                }
+            }
+        }
+    }
+    }
+}
+
+@Composable private fun SettingsNavBar(backLabel: String?, onBack: () -> Unit, onClose: () -> Unit) {
+    // iOS navigation bar: "‹ Back" on sub-pages, Done on the right.
+    Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+        if (backLabel != null) Row(Modifier.align(Alignment.CenterStart).clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onBack).padding(vertical = 8.dp, horizontal = 2.dp).testTag("customization-back"),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.ChevronLeft, null, tint = IosBlue, modifier = Modifier.size(28.dp))
+            Text(backLabel, color = IosBlue, fontSize = 17.sp)
+        }
+        Text(stringResource(R.string.done), color = IosBlue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.CenterEnd).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
+                .padding(horizontal = 8.dp, vertical = 8.dp).semantics { contentDescription = "Close customization" })
+    }
+}
+
+@Composable private fun SettingsLargeTitle(title: String) = Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 32.sp,
+    fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+
+/** Sidebar header row: Folio's icon, name and setup state, like the account card in iPad Settings. */
+@Composable private fun SidebarAppRow(selected: Boolean, setupLeft: Int, onClick: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val icon = remember { folioIconBitmap(context) }
+    Row(Modifier.fillMaxWidth().background(if (selected) IosBlue else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 10.dp).testTag("settings-sidebar-folio"), verticalAlignment = Alignment.CenterVertically) {
+        icon?.let { Image(it, null, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.folio), color = androidx.compose.ui.graphics.Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (setupLeft > 0) "$setupLeft setup step${if (setupLeft > 1) "s" else ""} left" else "Home, panels and tweaks",
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (selected) .85f else .55f), fontSize = 14.sp)
         }
     }
 }
@@ -604,17 +674,7 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         // Folio's own launcher icon, like a tweak's preference banner.
-        // Drawn from the adaptive icon's layers so it gets an iOS rounded square, not the device's icon mask.
-        val icon = remember { runCatching {
-            val adaptive = context.getDrawable(R.mipmap.ic_launcher) as android.graphics.drawable.AdaptiveIconDrawable
-            val size = 216
-            android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888).also { bitmap ->
-                val canvas = android.graphics.Canvas(bitmap)
-                listOfNotNull(adaptive.background, adaptive.foreground).forEach { layer ->
-                    layer.setBounds(-size / 4, -size / 4, size * 5 / 4, size * 5 / 4); layer.draw(canvas)
-                }
-            }.asImageBitmap()
-        }.getOrNull() }
+        val icon = remember { folioIconBitmap(context) }
         if (icon != null) androidx.compose.foundation.Image(icon, null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
         Text(stringResource(R.string.folio), color = androidx.compose.ui.graphics.Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
         Text("iPhone Duo for your Fold · v$version", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 14.sp)
@@ -622,16 +682,18 @@ private val IosBlue = androidx.compose.ui.graphics.Color(0xFF0A84FF)
 }
 
 /** iOS Settings row: colored rounded icon square, title, optional value, chevron. */
-@Composable private fun TweakRow(icon: ImageVector, color: Long, title: String, tag: String, value: String? = null, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag),
+@Composable private fun TweakRow(icon: ImageVector, color: Long, title: String, tag: String, value: String? = null,
+    selected: Boolean = false, chevron: Boolean = true, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(if (selected) IosBlue else androidx.compose.ui.graphics.Color.Transparent)
+        .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag).semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(androidx.compose.ui.graphics.Color(color)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(19.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
-        value?.let { Text(it, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f), fontSize = 17.sp) }
-        Icon(Icons.Rounded.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .3f))
+        value?.let { Text(it, color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (selected) .85f else .5f), fontSize = 17.sp) }
+        if (chevron) Icon(Icons.Rounded.ChevronRight, null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .3f))
     }
 }
 
@@ -864,7 +926,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
  * image can't be read by apps, so in that mode the preview uses the wallpaper's own reported colors and says so.
  */
 @Composable private fun MiniHomePreview(stagedBitmap: android.graphics.Bitmap?, state: LauncherState,
-    previewHeight: androidx.compose.ui.unit.Dp) {
+    previewHeight: androidx.compose.ui.unit.Dp, iconScale: Float = 1f) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val backgroundRevision = LauncherBackgroundCache.revision.intValue
     val committedBitmap = remember(backgroundRevision) { cachedLauncherBackground(context) }
@@ -901,7 +963,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
                     homeIcons.chunked(4).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         row.forEach { app ->
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                AppIcon(app, null, Modifier.size(unit(24f)), shape = RoundedCornerShape(unit(6f)))
+                                AppIcon(app, null, Modifier.size(unit(24f * iconScale)), shape = RoundedCornerShape(unit(6f * iconScale)))
                                 if (state.labels) Text(app.label, color = ink.primary, fontSize = (5.5f * scale).sp, maxLines = 1,
                                     modifier = Modifier.width(unit(28f)), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             }
@@ -1003,3 +1065,14 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             .padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp), content = content)
     }
 }
+
+/** Folio's icon from its adaptive layers, so it gets an iOS rounded square rather than the device's icon mask. */
+internal fun folioIconBitmap(context: android.content.Context, size: Int = 216): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
+    val adaptive = context.getDrawable(R.mipmap.ic_launcher) as android.graphics.drawable.AdaptiveIconDrawable
+    android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888).also { bitmap ->
+        val canvas = android.graphics.Canvas(bitmap)
+        listOfNotNull(adaptive.background, adaptive.foreground).forEach { layer ->
+            layer.setBounds(-size / 4, -size / 4, size * 5 / 4, size * 5 / 4); layer.draw(canvas)
+        }
+    }.asImageBitmap()
+}.getOrNull()

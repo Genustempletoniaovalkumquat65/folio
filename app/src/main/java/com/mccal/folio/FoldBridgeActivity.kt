@@ -45,7 +45,7 @@ class FoldBridgeActivity : Activity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (newConfig.screenWidthDp < 600) {
+        if (!isRegularSize(newConfig.screenWidthDp.toFloat(), newConfig.screenHeightDp.toFloat())) {
             // On the cover now: hand back to Home after the switch settles.
             handler.removeCallbacks(giveUp)
             handler.postDelayed({ finishQuietly("cover") }, HANDOFF_MS)

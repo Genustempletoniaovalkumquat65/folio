@@ -100,13 +100,15 @@ internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: Device
             } else Modifier)
         .testTag("top-panel-scrim"))
 
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val wide = LocalConfiguration.current.let { isRegularSize(it.screenWidthDp.toFloat(), it.screenHeightDp.toFloat()) }
     // Unfolded, Notification Center can be iPad-style: big clock on the left, notifications on the right.
-    val split = wide && ncSplit && current == ShadePanel.NOTIFICATIONS
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
+    // Only when there's room for both side by side (inner screen in landscape); in portrait the clock sits above the list.
+    val split = wide && ncSplit && current == ShadePanel.NOTIFICATIONS && LocalConfiguration.current.screenWidthDp >= 760
+    // Half folded, the panel moves off the hinge like iPhone Duo's sheets and menus.
+    FoldAvoidingBox(Modifier.windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
         contentAlignment = when {
             split -> Alignment.TopEnd
-            current == ShadePanel.NOTIFICATIONS -> Alignment.TopStart
+            current == ShadePanel.NOTIFICATIONS -> if (wide) Alignment.TopCenter else Alignment.TopStart
             wide && ccCentered -> Alignment.TopCenter
             else -> Alignment.TopEnd
         }) {

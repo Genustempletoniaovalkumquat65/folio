@@ -52,7 +52,8 @@ import androidx.lifecycle.repeatOnLifecycle
 @Composable
 fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake: Boolean = true,
     snapshotMorph: Boolean = false, content: @Composable () -> Unit) {
-    val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
+    // Which screen we're on, by size in both dimensions, so rotating the cover to landscape never looks like an unfold.
+    val expanded = LocalConfiguration.current.let { it.screenWidthDp >= EXPANDED_WIDTH_DP && it.screenHeightDp >= REGULAR_MIN_HEIGHT_DP }
     val view = LocalView.current
     val context = LocalContext.current
     val shader = remember { if (Build.VERSION.SDK_INT >= 33) DuoShader() else null }

@@ -42,22 +42,40 @@ fun upgradePreset(preset: LayoutPreset, schema: Int, expanded: Boolean): LayoutP
     else -> preset
 }
 
+/** Shortest height that still counts as regular size (the unfolded screen in either rotation; the cover's landscape is ~475dp). */
+const val REGULAR_MIN_HEIGHT_DP = 560f
+
+/** Regular size class in both dimensions, like iOS size classes: never a device, display or orientation check. */
+fun isRegularSize(widthDp: Float, heightDp: Float) = widthDp >= 600f && heightDp >= REGULAR_MIN_HEIGHT_DP
+
 fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Boolean, statusHeight: Float = 0f, labelHeight: Float = 20f, inLibrary: Boolean = false, homeBottomSpace: Float = 44f): HomeGeometry {
     val p = preset.sanitized()
-    val expanded = width >= 650f
+    // Unfolded Duo layout only with regular size both ways; the cover in landscape is still compact.
+    val expanded = width >= 650f && height >= REGULAR_MIN_HEIGHT_DP
     val homeWidth = if (expanded) minOf(460f, width * 0.56f) else width
     val gridWidth = (homeWidth - p.dockWidth - 44f).coerceAtLeast(192f)
-    val icon = minOf(p.iconSize, (gridWidth / 4f - 10f).coerceAtLeast(32f))
     // Keep the same icon rhythm when labels are hidden; allow larger system text to fit.
-    val row = maxOf(48f, icon + if (labels) maxOf(20f, labelHeight) else 20f) + p.rowGap
-    val widget = minOf(176f, gridWidth / 2f - 5f).coerceAtLeast(88f)
+    val labelSpace = if (labels) maxOf(20f, labelHeight) else 20f
+    fun rowFor(iconSize: Float, gap: Float) = maxOf(48f, iconSize + labelSpace) + gap
+    var icon = minOf(p.iconSize, (gridWidth / 4f - 10f).coerceAtLeast(32f))
+    var gap = p.rowGap
+    var widget = minOf(176f, gridWidth / 2f - 5f).coerceAtLeast(88f)
+    // Short windows (the cover turned to landscape): tighten row spacing, then icons, then the widget row,
+    // so a page fits the height instead of running under the controls. Rows stay at least 48dp tall.
+    val fitHeight = height - 16f - homeBottomSpace
+    fun needed() = widget + 18f + 4f * rowFor(icon, gap)
+    if (needed() > fitHeight) gap = 0f
+    if (needed() > fitHeight) icon = minOf(icon, ((fitHeight - widget - 18f) / 4f - labelSpace).coerceAtLeast(40f))
+    if (needed() > fitHeight) widget = minOf(widget, (fitHeight - 18f - 4f * rowFor(icon, gap)).coerceAtLeast(88f))
+    val row = rowFor(icon, gap)
     val contentTop = ((height - widget - 18f - 4f * row - homeBottomSpace) / 2f).coerceIn(16f, 72f)
     // Search reclaims the redundant bottom controls' space for all four dock apps.
     // Extremely short windows still scroll rather than reduce touch targets below 48dp.
     val topLimit = maxOf(8f, statusHeight)
     val bottomReserve = if (inLibrary) 12f else 124f
     // Outer dock edges span the first through third icon images, excluding the last label.
-    val desiredHeight = if (p.dockAlignToGrid) 2f * row + icon else 256f
+    // Never shorter than four 48dp dock targets, even when a short window has shrunk the rows.
+    val desiredHeight = maxOf(4f * 48f + 16f, if (p.dockAlignToGrid) 2f * row + icon else 256f)
     val dockHeight = minOf(desiredHeight, (height - topLimit - bottomReserve).coerceAtLeast(76f))
     val dockRowHeight = ((dockHeight - 16f) / 4f).coerceAtLeast(48f)
     // Use the home position as the anchor, so removing library buttons does not
