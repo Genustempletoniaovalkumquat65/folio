@@ -15,6 +15,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Icon Stacks: swipe down on a Home icon to fan out the apps stacked behind it.
 - Per-page icon size and labels.
 - Themes: Classic, Dark, Tinted and Clear, plus saving and importing theme files.
+- Half folded with the phone upright, Home rows that would sit in the fold move below it.
 - What's New after an update.
 
 ### Changed

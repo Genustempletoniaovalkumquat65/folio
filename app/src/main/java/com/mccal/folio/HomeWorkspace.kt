@@ -385,9 +385,18 @@ internal fun SharedHomeGrid(
     val renderedRows = maxOf(GRID_ROWS, pageWidgets.maxOfOrNull { it.row + it.spanY } ?: GRID_ROWS)
     // Stacked, or two columns side by side in a short, wide window (see HomeCellLayout).
     val cells = remember(geometry, pageWidgets.map { it.row to it.spanY }) { HomeCellLayout.forPage(geometry, pageWidgets.map { it.row to it.spanY }) }
-    fun rowTop(row: Int) = cells.y(row)
-    Box(Modifier.fillMaxWidth().height(cells.height(renderedRows).dp)) {
-        val density = LocalDensity.current
+    // Half folded like a laptop (phone upright): rows that would sit in the fold spring down past it, like iPhone Duo.
+    val hinge = LocalHinge.current?.takeIf { it.active && !it.vertical }
+    val density = LocalDensity.current
+    var gridTopDp by remember { mutableFloatStateOf(0f) }
+    val fold = hinge?.let { h -> with(density) {
+        foldDisplacement(cells, renderedRows, gridTopDp, h.startPx.toDp().value, h.endPx.toDp().value, pageWidgets.map { it.row to it.spanY })
+    } }
+    val foldShift by animateFloatAsState(fold?.second ?: 0f, androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f), label = "fold shift")
+    val foldRow = fold?.first ?: Int.MAX_VALUE
+    fun rowTop(row: Int) = cells.y(row) + if (row >= foldRow) foldShift else 0f
+    Box(Modifier.fillMaxWidth().height((cells.height(renderedRows) + foldShift).dp)
+        .onGloballyPositioned { gridTopDp = with(density) { it.boundsInWindow().top.toDp().value } }) {
         val cellWidth = cells.cellWidth.dp
         fun cellX(column: Int, row: Int) = cells.x(column, row).dp
 

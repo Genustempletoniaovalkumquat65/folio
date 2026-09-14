@@ -205,3 +205,22 @@ data class PageStyle(val iconScale: Float = 1f, val labels: Boolean? = null) {
         val SIZES = listOf("Small" to .82f, "Default" to 1f, "Large" to 1.14f)
     }
 }
+
+/**
+ * iPhone Duo-style displacement around a horizontal fold (a half-open phone held upright): instead of leaving a row of
+ * icons in the curve, that row and every row after it move down past the fold. A widget is never split: if one spans
+ * the fold, the move starts at its first row. All values in dp; [gridTop] and the hinge are in window coordinates.
+ * Returns the first moved row and how far rows move, or null when nothing is in the fold (or the page is two columns).
+ */
+fun foldDisplacement(cells: HomeCellLayout, rows: Int, gridTop: Float, hingeTop: Float, hingeBottom: Float,
+    widgets: List<Pair<Int, Int>>, margin: Float = 12f): Pair<Int, Float>? {
+    if (cells.splitRow != null || hingeBottom <= hingeTop - 1f) return null
+    val hit = (0 until rows).firstOrNull { row ->
+        val top = gridTop + cells.y(row)
+        val bottom = top + cells.spanHeight(row, 1)
+        bottom > hingeTop - margin && top < hingeBottom + margin
+    } ?: return null
+    val start = widgets.filter { (row, span) -> row < hit && row + span > hit }.minOfOrNull { it.first } ?: hit
+    val shift = hingeBottom + margin - (gridTop + cells.y(start))
+    return if (shift > 0f) start to shift else null
+}
