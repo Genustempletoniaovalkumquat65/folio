@@ -50,7 +50,7 @@ class ManagedProfileIntegrationTest {
         ready()
         val launcherApps = compose.activity.getSystemService(LauncherApps::class.java)
         val userManager = compose.activity.getSystemService(UserManager::class.java)
-        assertTrue("Duo must be the default Home before requesting quiet mode",
+        assertTrue("Folio must be the default Home before requesting quiet mode",
             compose.activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME))
         val personal = Process.myUserHandle()
         val work = requireNotNull(userManager.getUserForSerialNumber(workSerial!!))

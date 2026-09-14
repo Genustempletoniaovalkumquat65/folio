@@ -203,7 +203,7 @@ class NativeWidgetLifecycleIntegrationTest {
             await { find("Ready to place")?.isVisibleToUser == true }
             click("Place")
             await { automation.rootInActiveWindow?.packageName == "com.android.settings" }
-            click("Always allow Duo Launcher to create widgets and access their data")
+            click("Always allow Folio to create widgets and access their data")
             click("Create")
             SystemClock.sleep(1_000)
             java.io.File(context.filesDir, "native-widget-after-place.txt").writeText(buildString {

@@ -118,7 +118,7 @@ class LiveDiscoverIntegrationTest {
             click("Discover")
             await(20000) { progress() >= .99f && LiveDiscover.nativePosition >= .99f && !LiveDiscover.pagerOwnsMotion && LiveDiscover.message.value == null }
             val host = LiveDiscover.host.get()
-            // The fixed dock and rail remain in Duo's window while Google's inset feed owns
+            // The fixed dock and rail remain in Folio's window while Google's inset feed owns
             // its content. A short, paused swipe starting there must still page back Home.
             instrumentation.runOnMainSync {
                 width = LiveDiscover.fullSize.width
@@ -235,7 +235,7 @@ class LiveDiscoverIntegrationTest {
     }
 }
 
-/** Deterministic ownership handoff: a late native update must not move a new Duo drag. */
+/** Deterministic ownership handoff: a late native update must not move a new Folio drag. */
 class NativeCallbackHandoffIntegrationTest {
     private val compose = createAndroidComposeRule<MainActivity>()
     @get:org.junit.Rule val rules = org.junit.rules.RuleChain.outerRule(WithoutNativeFeed()).around(compose)
@@ -265,7 +265,7 @@ class NativeCallbackHandoffIntegrationTest {
             compose.runOnUiThread { LiveDiscover.onNativeProgress?.invoke(.55f) }
             compose.mainClock.advanceTimeByFrame()
             val afterLateNative = cell.fetchSemanticsNode().boundsInRoot.left
-            assertEquals("A late native callback must not move the active Duo gesture",
+            assertEquals("A late native callback must not move the active Folio gesture",
                 heldLeft, afterLateNative, 1f)
         } finally {
             runCatching { root.performTouchInput { cancel() } }

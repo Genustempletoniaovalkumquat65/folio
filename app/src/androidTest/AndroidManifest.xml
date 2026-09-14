@@ -17,7 +17,7 @@
             <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
         </receiver>
         <activity android:name="com.mccal.folio.test.ProfileFixtureActivity"
-            android:exported="true" android:label="Duo Profile Fixture">
+            android:exported="true" android:label="Folio Profile Fixture">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

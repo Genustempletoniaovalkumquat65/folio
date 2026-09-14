@@ -32,7 +32,7 @@ public final class BackupDocumentsProvider extends DocumentsProvider {
         MatrixCursor.RowBuilder row = result.newRow();
         add(row, DocumentsContract.Root.COLUMN_ROOT_ID, ROOT);
         add(row, DocumentsContract.Root.COLUMN_DOCUMENT_ID, ROOT);
-        add(row, DocumentsContract.Root.COLUMN_TITLE, "Duo Backup Fixture");
+        add(row, DocumentsContract.Root.COLUMN_TITLE, "Folio Backup Fixture");
         add(row, DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_SUPPORTS_CREATE | DocumentsContract.Root.FLAG_LOCAL_ONLY);
         add(row, DocumentsContract.Root.COLUMN_MIME_TYPES, "application/json\ntext/plain");
         add(row, DocumentsContract.Root.COLUMN_AVAILABLE_BYTES, 2L * 1024 * 1024);
@@ -76,12 +76,12 @@ public final class BackupDocumentsProvider extends DocumentsProvider {
         MatrixCursor.RowBuilder row = cursor.newRow();
         if (ROOT.equals(id)) {
             add(row, DocumentsContract.Document.COLUMN_DOCUMENT_ID, ROOT);
-            add(row, DocumentsContract.Document.COLUMN_DISPLAY_NAME, "Duo Backup Fixture");
+            add(row, DocumentsContract.Document.COLUMN_DISPLAY_NAME, "Folio Backup Fixture");
             add(row, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.MIME_TYPE_DIR);
             add(row, DocumentsContract.Document.COLUMN_FLAGS, DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE);
         } else if (DOCUMENT.equals(id) && file().isFile()) {
             add(row, DocumentsContract.Document.COLUMN_DOCUMENT_ID, DOCUMENT);
-            add(row, DocumentsContract.Document.COLUMN_DISPLAY_NAME, "duo-launcher-layout.json");
+            add(row, DocumentsContract.Document.COLUMN_DISPLAY_NAME, "folio-layout.json");
             add(row, DocumentsContract.Document.COLUMN_MIME_TYPE, "application/json");
             add(row, DocumentsContract.Document.COLUMN_FLAGS, DocumentsContract.Document.FLAG_SUPPORTS_WRITE | DocumentsContract.Document.FLAG_SUPPORTS_DELETE);
             add(row, DocumentsContract.Document.COLUMN_SIZE, file().length());

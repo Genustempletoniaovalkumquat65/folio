@@ -1,67 +1,62 @@
-# Duo Launcher user guide
+# Using Folio
 
-Duo Launcher is an experimental Android launcher designed around a foldable phone, a four-column Home grid, and a four-position dock on the right. The cover shows one Home page at a time. Unfolding adds an editable workspace on the left: the first view pairs that workspace with Home 1, followed by Home 1 + Home 2, Home 2 + Home 3, and so on.
+Folio's Home works like an iPhone, laid out the way Apple designed the iPhone Duo: status, the Dynamic Island and the
+dock sit in the Side Bar on the right, and your pages and widgets fill the rest. Folded or unfolded, it's the same Home.
 
-## Start and switch launchers
+## Make Folio your Home
 
-On a fresh install, **Welcome to Duo** offers **Choose Home app**, **Add a widget**, **Explore Home**, and **Not now**. Choosing or skipping setup does not prevent later changes.
+The first time you open Folio, the welcome screens walk you through it: **Choose Home App**, then the optional stuff
+(notifications, Control Center, the Side Key, contacts in Spotlight). Skip anything you don't want. It's all in
+Settings later.
 
-To make Duo the launcher, choose **Set as home app** in customization, or open **Help & setup** and choose **Set Duo as Home**. Android owns the final Home-app chooser. To switch away later, choose **Change home app**, or use Android **Settings → Apps → Default apps → Home app**. The exact Android path may vary by device.
+To switch back to another launcher, open **Folio Settings › Change home app**, or use Android's
+**Settings › Apps › Default apps › Home app**.
 
-## Move around Home
+## Getting around
 
-- Swipe horizontally across Home, the dock, or the right rail to move one page per gesture.
-- Swipe right from Home 1 for Discover. Swipe left, press Back, or use its right-pointing arrow to return.
-- Swipe past the last Home page for **All apps**. Its **Search apps** field always searches installed apps locally.
-- The dock and its search control stay on the right. The page controls also open Discover or All apps.
-- Pressing the system Home control from an app returns to the Home page or unfolded pair you last had visible. From All apps, search, or Discover it returns to the last Home view.
+- **Swipe left or right** to change pages. It works over widgets, the dock and the Side Bar.
+- **Swipe right from your first page** for the Today View (or Google Discover, if you picked that in Settings).
+- **Swipe past your last page** for the App Library. Every app you have is there, even ones not on Home.
+- **Pull down from the top left** for Notification Center, **top right** for Control Center.
+- **Swipe down anywhere lower on Home**, or tap **Search**, for Spotlight.
+- **Unfold the phone** and you get two pages side by side. Portrait unfolded shows one page with the dock along the bottom.
 
-## Customize Home
+## Editing Home
 
-Long press an empty Home cell to open **Add to Home**, then choose **Widgets**, **Wallpaper**, or **Customize launcher**. If every cell is occupied, long press the slim wallpaper margin at the left edge of the grid. In **Make it yours** you can open:
-
-- **Wallpaper & appearance** for launcher photos, Android wallpaper, and color mode.
-- **Home layout** for icon size, row spacing, dock geometry, Home apps, and widgets on the visible page.
-- **Gestures & search** for app names, the upper-right status display, and Google search behavior.
-- **Backup** to save or restore the layout.
-- **Help & setup** for Home selection, widgets, shade gestures, and Discover.
-
-After a layout edit, **Undo last layout change** appears in customization. It covers the latest supported layout change, so use it before making another edit.
-
-## Apps, folders, and the dock
-
-Hold an app, then drag it to an empty cell, another page, or a vacant dock position. Neighboring Home icons move aside when possible. Pause at the left or right screen edge while holding to turn a page; dragging at the end can create another Home page.
-
-Dragging between Home and the dock moves the shortcut instead of duplicating it. The dock holds four apps. When it is full, Duo shows **Dock full • Move an app out first** and rejects a new arrival; it never evicts an app automatically. Existing dock apps can still be reordered. Drag a Home or dock shortcut to **Remove** to remove the shortcut without uninstalling the app.
-
-Long press and release an app for options such as **Move on Home**, **Create folder**, **App info**, or **Remove from Home**. **All apps** remains the complete installed-app catalog even when a shortcut is removed.
-
-If Android exposes a managed profile, **All apps** shows **Personal** and **Work** filters. A paused profile shows **Work apps are paused** and **Turn on work apps**. Availability and cross-profile widget access remain controlled by the profile administrator.
+- **Long press an app** for its menu, then **Edit Home Screen** to make the icons wiggle.
+- While they wiggle, drag apps around, onto another app to make a folder, or to the screen edge to change pages.
+  Tap **+** to add widgets and **Done** when you're finished. **Edit** has Add Widget, Wallpaper & Appearance, Add Page and Folio Settings.
+- **Long press an empty spot** for **Add Widget**, **Wallpaper & Appearance**, **Add Page** and **Folio Settings**.
+- **Swipe down on an icon** to fan out its Icon Stack, if you made one.
+- Want iPhone's order? **Arrange Like iPhone…** in Settings sorts Home the way an iPhone does. Per-page icon size and labels are in Settings too.
 
 ## Widgets
 
-Open **Widgets** from an empty-space menu, **Add widget to this page** in customization, or **Add a widget** during setup. Search the catalog, select **Personal** or **Work** when those choices exist, then tap a preview to place it or hold it to drag. Android may ask you to allow the binding, and some providers open their own setup screen.
+Folio hosts regular Android widgets plus its own iOS-style ones (Smart Stacks, Suggestions, Up Next and more).
+Long press a widget to move, resize or change it. Android asks the first time you add a widget from another app.
+Some apps also want their own setup. If a widget says **Finish setup** or **Reconnect**, tap it to pick up where it left off.
 
-Hold an existing widget to pick it up, then drag it across cells or pages. A small amount of held finger jitter is allowed. Move into the lower-right **Remove** target to delete it from Home. Long press and release without dragging to open **Widget options**, which can include **Widget settings**, **Resize on Home**, page moves, **Replace**, and **Remove**.
+## Focus
 
-For **Resize on Home**, drag the resize handle and choose **Apply**, or choose **Cancel**. The alternate size controls end with **Apply size**. Duo rejects sizes or moves that overlap another item, exceed the four-column by six-row grid, or violate the provider's allowed sizes.
+**Folio Settings › Focus** has Do Not Disturb, Sleep, Personal and Work. Each one can run on a schedule, silence
+notifications, and show only the Home pages you pick. While a Focus is hiding pages, editing those pages is locked
+so nothing gets lost.
 
-Scrollable Android widgets keep their native vertical scrolling when the touch begins on scrollable provider content. A horizontal swipe can still change Home pages. Hold still before moving when you intend to pick up the widget.
+## Settings
 
-## Background and appearance
+Long press an empty spot and tap **Folio Settings**. Unfolded, it's a split view like iPad Settings. There's a search
+bar at the top if you can't find something.
 
-In **Wallpaper & appearance**, **Choose a photo** creates a private preview. It does not replace the current launcher background until you choose **Apply**; **Cancel** keeps the committed background. If selection is interrupted, choose **Resume** or **Cancel**. Recovery has been checked for activity recreation and a completed private preview file, but an interruption during the earlier decode step may require selecting the photo again.
+- **Wallpaper & Appearance**, **Themes**: wallpaper, text color on Home, glass, and themes you can save or import.
+- **Home Screen & Dock**, **Icons & Side Bar**: grid, dock, icon style, badges and the status bar.
+- **Notifications & Control Center**, **Dynamic Island**, **Search & App Library**, **Today View**.
+- **Gestures & Actions**, **Side Key**, **Fold & Displays**, **Lock Cover**.
+- **Tweaks**: extras inspired by jailbreak tweaks, all off until you turn them on. Most can be on for just one screen.
+- **Privacy & Permissions**: every permission Folio can use, what it's for, and a switch to turn it off.
+- **Backup**: **Save Backup…** and **Restore from Backup…** for your layout. Photos aren't included.
+- **Help**: What's New, the setup checklist, and Safe Mode & crash reports.
 
-**Preview Android wallpaper** opens Android's separate wallpaper preview. It does not change Duo's **Launcher background**. **Reset to Duo dunes** removes the selected launcher background.
+## If something breaks
 
-Appearance choices are **Light**, **Dark**, **Follow system**, and **Sunrise / sunset**. Sunrise/sunset accepts coordinates through **Use this place**, or requests approximate location only when you choose **Use device location**. If location is unavailable, Duo visibly falls back to the system theme. **Clear location** removes saved coordinates; Duo does not request location in the background.
-
-## Optional shade gestures
-
-On Home, swipe down from the left 70% to open Notifications or from the right 30% to open Quick Settings. The first attempt offers **Turn on shade gestures** because Android requires you to enable Duo Launcher in Accessibility settings. This is optional and must be enabled by you; **Not now** leaves it off. The service only requests the system panel actions.
-
-## Layout backup
-
-Open **Backup**, choose **Save**, and select a document destination. Choose **Restore** to select a backup, inspect **Review restored layout**, then choose **Restore** again. **Cancel** leaves Home unchanged.
-
-Backups contain Home and dock positions, folders, widget descriptions and spaces, layout presets, labels, search behavior, and status settings. They include the unfolded-only workspace. They do not include the selected background photo or live Android widget bindings. After restore, provider widgets keep their saved space but require **Reconnect**; unavailable apps leave empty positions, and work-profile entries may need manual placement. Review a backup before sharing because it can expose app names, folder names, and profile metadata.
+If Folio crashes a few times in a row, it opens in **Safe Mode** with tweaks off so you can still use your phone.
+Crash reports stay on the phone unless you share one. More help: [troubleshooting](troubleshooting.md).

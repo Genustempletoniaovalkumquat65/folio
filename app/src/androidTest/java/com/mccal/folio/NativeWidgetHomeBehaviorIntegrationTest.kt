@@ -171,7 +171,7 @@ class NativeWidgetHomeBehaviorIntegrationTest {
                 appendLine("--- before HOME ---"); appendLine(beforeHome)
                 appendLine("--- after HOME ---"); appendLine(afterHome)
             })
-            assertTrue("HOME did not visibly return to Duo; see native-widget-home-$variant.txt", reachedHome)
+            assertTrue("HOME did not visibly return to Folio; see native-widget-home-$variant.txt", reachedHome)
             assertTrue("MainActivity was not resumed after HOME; see native-widget-home-$variant.txt",
                 afterHome.lineSequence().any { line ->
                     (line.contains("mResumedActivity") || line.contains("topResumedActivity")) &&

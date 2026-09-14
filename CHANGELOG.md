@@ -20,6 +20,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Big screens: on tablets, Chromebooks and desktop windows Folio scales up like iPad instead of looking like a phone layout in a big window. Phones and foldables are unchanged.
 
 ### Changed
+- Everything says Folio now: the README, user guide, troubleshooting, privacy notes, backup file name (folio-layout.json) and release files.
 - Settings choices use iOS controls: a menu row with the current value that opens a checkmark menu, and segmented controls for two or three options.
 - The Status Bar picks its text color from its frosted background, and uses stronger colors on light wallpapers.
 - The side column is now called the Side Bar (status bar, Dynamic Island and dock), as on iPhone Duo.
@@ -53,6 +54,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Tweaks with per-screen overrides, Safe Mode after repeated crashes, local crash reports, and the Folio app icon.
 
 ### Changed
+- Everything says Folio now: the README, user guide, troubleshooting, privacy notes, backup file name (folio-layout.json) and release files.
 - Accessibility labels, text moved to string resources, and iOS styling across settings and pickers.
 
 ## [0.1.0] - 2026-09-13

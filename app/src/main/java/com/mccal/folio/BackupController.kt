@@ -72,7 +72,7 @@ class BackupController(
         } else onExternalResultChanged(false)
     }
 
-    fun startExport(fileName: String = "duo-launcher-layout.json") {
+    fun startExport(fileName: String = "folio-layout.json") {
         val state = model.state.value
         val raw = runCatching { encodeLayoutBackup(state, widgetDescriptors(state), scope) }.getOrElse {
             errorMessage = it.message ?: "Layout backup could not be prepared."; return
@@ -111,7 +111,7 @@ class BackupController(
     fun clearMessage() { errorMessage = null; successMessage = null }
 
     fun resumePendingPicker(): Boolean = when (operation) {
-        OP_EXPORT -> runCatching { createDocument.launch("duo-launcher-layout.json") }.isSuccess
+        OP_EXPORT -> runCatching { createDocument.launch("folio-layout.json") }.isSuccess
         OP_IMPORT -> runCatching { openDocument.launch(arrayOf("application/json", "text/json", "text/plain")) }.isSuccess
         else -> false
     }

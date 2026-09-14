@@ -3,7 +3,7 @@ set -euo pipefail
 
 repository_root=$(cd "$(dirname "$0")/.." && pwd -P)
 version=0.15.0-beta01
-output_dir=${1:-"$repository_root/dist/DuoLauncher-$version"}
+output_dir=${1:-"$repository_root/dist/Folio-$version"}
 
 for variable_name in DUO_RELEASE_STORE_FILE DUO_RELEASE_STORE_PASSWORD DUO_RELEASE_KEY_ALIAS DUO_RELEASE_KEY_PASSWORD; do
     if [[ -z "${!variable_name:-}" ]]; then
@@ -40,15 +40,15 @@ fi
 
 output_parent=$(dirname "$output_dir")
 mkdir -p "$output_parent"
-staging_dir=$(mktemp -d "$output_parent/.duo-release.XXXXXX")
+staging_dir=$(mktemp -d "$output_parent/.folio-release.XXXXXX")
 cleanup() { rm -rf "$staging_dir"; }
 trap cleanup EXIT
 
 release_name=$(basename "$output_dir")
 package_dir="$staging_dir/$release_name"
 mkdir -p "$package_dir"
-apk_name="DuoLauncher-$version-release.apk"
-source_name="DuoLauncher-$version-source"
+apk_name="Folio-$version-release.apk"
+source_name="Folio-$version-source"
 cp -p "$apk_source" "$package_dir/$apk_name"
 "$repository_root/scripts/export-public-source.sh" "$staging_dir/$source_name"
 (cd "$staging_dir" && COPYFILE_DISABLE=1 tar -czf "$package_dir/$source_name.tar.gz" "$source_name")

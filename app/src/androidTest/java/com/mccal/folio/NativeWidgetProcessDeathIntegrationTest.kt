@@ -33,7 +33,7 @@ class NativeWidgetProcessDeathIntegrationTest {
         assumeTrue("Run only through the explicit process-death harness",
             InstrumentationRegistry.getArguments().getString("duoWidgetProcessDeath") == "true")
         check(android.os.Build.HARDWARE in listOf("ranchu", "goldfish"))
-        assertTrue("Harness must make Duo the default Home",
+        assertTrue("Harness must make Folio the default Home",
             instrumentation.targetContext.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME))
     }
     private fun click(value: String) {

@@ -122,7 +122,7 @@ class NativeLayoutBackupIntegrationTest {
         // ACTION_OPEN_DOCUMENT commonly reopens the last visited root. In that case
         // the fixture name is only a non-actionable breadcrumb and the saved file is
         // already available; trying to click the breadcrumb waits forever.
-        if (activeMatches("duo-launcher-layout.json").any { it.isVisibleToUser }) return
+        if (activeMatches("folio-layout.json").any { it.isVisibleToUser }) return
         // Always open the roots drawer when it is closed. A clickable breadcrumb can
         // otherwise masquerade as a selectable root. When the drawer is already open,
         // its Show roots action is absent and the last active fixture match is its row.
@@ -130,7 +130,7 @@ class NativeLayoutBackupIntegrationTest {
             assertTrue(it.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             SystemClock.sleep(300)
         }
-        clickLastActive("Duo Backup Fixture")
+        clickLastActive("Folio Backup Fixture")
     }
 
     @Test fun realSafSaveRestoreCancelApplyAndUndoPreserveLayoutAndBindings() {
@@ -164,7 +164,7 @@ class NativeLayoutBackupIntegrationTest {
             instrumentation.runOnMainSync {
                 before = model.state.value
                 idsBefore = widgets.host.appWidgetIds.toSet()
-                backups.startExport("duo-launcher-layout.json")
+                backups.startExport("folio-layout.json")
             }
             await { automation.rootInActiveWindow?.packageName == "com.google.android.documentsui" }
             assertNull("Discover host must yield to DocumentsUI", LiveDiscover.host.get())
@@ -187,7 +187,7 @@ class NativeLayoutBackupIntegrationTest {
                 backups.startImport()
             }
             openFixtureRoot()
-            click("duo-launcher-layout.json")
+            click("folio-layout.json")
             await { backups.preview != null || find("Open")?.isVisibleToUser == true }
             if (backups.preview == null) click("Open")
             await { backups.preview != null }
@@ -199,7 +199,7 @@ class NativeLayoutBackupIntegrationTest {
 
             instrumentation.runOnMainSync { backups.startImport() }
             openFixtureRoot()
-            click("duo-launcher-layout.json")
+            click("folio-layout.json")
             await { backups.preview != null || find("Open")?.isVisibleToUser == true }
             if (backups.preview == null) click("Open")
             await { backups.preview != null }

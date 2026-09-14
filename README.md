@@ -1,72 +1,76 @@
 # Folio
 
-**An iOS-style Home Screen for Android, built around Apple's "iPhone Duo" design for foldables.**
+I wanted the iPhone Duo on my Galaxy Z Fold, so I'm building it.
 
-Folio puts status, the Dynamic Island and the dock in a Side Bar along the right edge. It shows one continuous
-interface on a foldable's cover and inner screens, in portrait or landscape, and it scales up for tablets and
-desktop windows. It's a normal Android launcher with no root.
+Folio is an Android launcher that takes Apple's foldable iPhone design and makes it work on Android. The status bar,
+Dynamic Island and dock live in a Side Bar on the right edge. Home stays the same whether the phone's folded or open;
+unfolding just gives you more room. It works on the cover screen, the inner screen, either rotation, half folded,
+split-screen, and it scales up on tablets and bigger screens too. No root needed.
 
 <p align="center">
-  <img src="docs/images/folio-cover-home.png" width="300" alt="Folio Home on a Galaxy Z Fold cover screen: widgets, a four-column app grid, and the Side Bar with the clock, battery and dock on the right">
+  <img src="docs/images/folio-cover-home.png" width="300" alt="Folio on a Galaxy Z Fold cover screen: widgets, a four-column app grid, and the Side Bar with the time, battery and dock on the right">
 </p>
 
-> Status: in development (0.x). Built and tested daily on a Galaxy Z Fold8; layouts are unit-tested on 20 window sizes,
-> from a 320 dp phone to a 2560 dp desktop window. See [CHANGELOG.md](CHANGELOG.md).
+> Still in development (0.x). I use it every day on my Fold8, and the layout is tested on 20 screen sizes, from small
+> phones to desktop windows. What changed: [CHANGELOG.md](CHANGELOG.md).
 
-## Features
+## What it does
 
-**Home that adapts, not stretches**
-- Layouts follow size classes, never device checks: phones, flip covers, foldables, split-screen, tablets and desktop windows.
-- Unfolded, you get two Home pages side by side. Unfolded portrait gets one centered page with a dock bar. Landscape covers get two columns.
-- Hinge-aware: when the phone is half folded, sheets, alerts, menus and Home rows move off the fold.
-- On big screens everything scales up in proportion, like iPad.
+**Adapts to the screen, doesn't just stretch**
+- Lays out by how much room there is, not what device it is: phones, flips, foldables, split-screen, tablets.
+- Open the Fold and you get two Home pages side by side. Portrait unfolded gets one centered page with a dock bar. The cover in landscape gets two columns.
+- Knows where the fold is: when the phone is half folded, sheets, menus and Home rows move off the crease.
+- Bigger screens draw everything bigger, like iPad, instead of a tiny phone layout in the middle.
 
-**iOS-inspired pieces**
-- Side Bar: status capsule, a Dynamic Island that wraps a side camera, and the dock.
-- Notification Center, Control Center, Spotlight with suggestions, the Today View, Smart Stacks and the widget gallery.
-- Jiggle-mode editing, folders, Icon Stacks, per-page icon size and labels, and App Library-style search.
-- Focus modes with schedules, Home pages to show, and Do Not Disturb rules.
-- App download progress rings, blue dots on new apps, and Add to Home Screen for shortcuts and widgets.
-- Settings built from iOS controls: menu rows, segmented controls, switches, form sheets and alerts. What's New appears after updates.
+**The iOS stuff**
+- Side Bar with the status bar, a Dynamic Island that wraps the camera, and the dock.
+- Notification Center, Control Center, Spotlight, Today View, Smart Stacks and the widget gallery.
+- Jiggle mode, folders, Icon Stacks, per-page icon size and labels, and App Library search.
+- Focus modes with schedules and the Home pages you want to see.
+- Download rings on updating apps, blue dots on new ones, and Add to Home Screen for shortcuts and websites.
+- Settings built like iOS: menus with checkmarks, segmented controls, switches, sheets and alerts. What's New shows up after updates.
 
-**Tweaks, off by default**
-- Ideas from classic jailbreak tweaks (Velox panels, Activator gestures, tinted notifications and more), re-created from scratch.
-- Per-screen overrides, themes you can save and share, Safe Mode after repeated crashes, and local-only crash reports.
+**Tweaks (all off until you turn them on)**
+- Ideas from jailbreak tweaks I liked (Velox, Activator, Velvet, Axon, ColorFlow, Harbor), rebuilt from scratch.
+- Turn a tweak on for just the cover or just the inner screen, save and share themes, and Safe Mode if something crashes.
 
-**Private by design**
-- No accounts, no analytics. Every permission is optional and explained where it's used. See [PRIVACY.md](PRIVACY.md).
+**Private**
+- No accounts, no ads, no analytics. Nothing leaves your phone unless you share a crash report yourself.
+  Every permission is optional and explained where it's used. More in [PRIVACY.md](PRIVACY.md).
 
-## Requirements
+## What you need
 
-- Android 12 (API 31) or newer. Target SDK 36.
-- Best on foldables (Galaxy Z Fold / Flip, Pixel Fold), and designed to work on any phone, tablet or Chromebook. Tablets are unit-tested but not yet checked on a device or emulator.
+- Android 12 or newer.
+- Made on a Galaxy Z Fold, but it's meant to work on any Android phone, flip, tablet or Chromebook. I haven't tried a
+  real tablet yet, so let me know how it goes.
 
-## Build and install
+## Build it
 
 ```bash
-JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :app:assembleFast
+adb install -r app/build/outputs/apk/fast/app-fast.apk
 ```
 
-For a fast, optimized build to use day to day, use `:app:assembleFast` (the APK is in `app/build/outputs/apk/fast/`).
-Then press Home and pick Folio, or choose **Set as home app** in Folio's settings.
+`assembleFast` is the optimized build I use day to day. `:app:assembleDebug` works too (APK in
+`app/build/outputs/apk/debug/`). After installing, press Home and pick Folio, or open Folio Settings and tap
+**Set as home app**.
 
-Run the tests with `./gradlew :app:testFastUnitTest`.
+Tests: `./gradlew :app:testFastUnitTest`
 
-## Project layout
+## Where things are
 
-- `app/src/main/java/com/mccal/folio/`: the launcher (Kotlin + Jetpack Compose + Jetpack WindowManager).
-  - `LayoutModel.kt`: size classes, Home geometry and big-screen scaling.
-  - `LauncherScreen.kt`, `HomeWorkspace.kt`: Home, pages and editing.
-  - `StatusRail.kt`, `CutoutIsland.kt`: the Side Bar status capsule and Dynamic Island.
-  - `CustomizationSheet.kt`, `IosControls.kt`, `FolioSheet.kt`: Settings and iOS-style controls.
-- `app/src/test/`: unit tests, including the screen-size matrix.
-- `docs/`: [plan and roadmap](docs/plan.md), [architecture](docs/architecture.md), [user guide](docs/user-guide.md),
-  [troubleshooting](docs/troubleshooting.md), and [research notes](docs/research-notes.md).
+- `app/src/main/java/com/mccal/folio/`: the launcher (Kotlin, Jetpack Compose, Jetpack WindowManager)
+  - `LayoutModel.kt`: screen sizes, Home layout and big-screen scaling
+  - `LauncherScreen.kt`, `HomeWorkspace.kt`: Home, pages and editing
+  - `StatusRail.kt`, `CutoutIsland.kt`: the Side Bar status bar and Dynamic Island
+  - `CustomizationSheet.kt`, `IosControls.kt`, `FolioSheet.kt`: Settings and the iOS controls
+- `app/src/test/`: unit tests, including the screen size tests
+- `docs/`: [user guide](docs/user-guide.md), [troubleshooting](docs/troubleshooting.md), [roadmap](docs/plan.md),
+  [architecture](docs/architecture.md), [research notes](docs/research-notes.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Avoid GPL code and root-only features.
+Ideas and fixes are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. No GPL code and nothing that needs root.
 
 ## Credits
 - **[DuoLauncher](https://github.com/jakesgoodapps/DuoLauncher)** by [jakesgoodapps](https://github.com/jakesgoodapps) and the Duo Launcher contributors (MIT): Folio's starting codebase — the iPhone Duo-style right-side dock and layouts for both Fold screens, paired Home pages and the unfolded workspace, Android widgets, folders, work profiles, wallpapers with sunrise/sunset switching, and Google search/Discover.
