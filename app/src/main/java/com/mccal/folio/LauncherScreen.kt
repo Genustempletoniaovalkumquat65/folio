@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntOffset
@@ -192,6 +193,8 @@ fun LauncherScreen(
     val pendingNewPage = widgets.pendingPlacement?.page == homePages
     val visibleHomePages = homePages + if (drag.active || widgetSession != null || pendingNewPage) 1 else 0
     var expandedWorkspace by remember { mutableStateOf(false) }
+    /** Where the jiggle bar's Edit button is, so its menu opens right under it. */
+    var editPillBounds by remember { mutableStateOf<androidx.compose.ui.unit.IntRect?>(null) }
     // The page left of Home is Folio's Today View, or Google Discover when chosen and available.
     val todayMode = state.leftPage == "TODAY"
     val currentTodayMode by rememberUpdatedState(todayMode)
@@ -772,7 +775,7 @@ fun LauncherScreen(
                         widgetSlot = model.nextWidgetSlot(); widgetTargetIndex = homeCellIndex(editPage, 0); widgetExactTarget = false
                         widgetPackage = null; widgetProfileSerial = null; sheet = "widgets"
                     }
-                    JigglePill(stringResource(R.string.edit)) {
+                    JigglePill(stringResource(R.string.edit), modifier = Modifier.onGloballyPositioned { editPillBounds = it.boundsInWindow().roundToIntRect() }) {
                         emptyCellIndex = homeEdit.lastEmptyIndex?.takeIf { homeCellPage(it) == editPage } ?: homeCellIndex(editPage, 0)
                     }
                     // Unfolded, keep all three together at the top right instead of spread across two pages.
@@ -1291,17 +1294,16 @@ fun LauncherScreen(
                 onInfo = { onAppInfo(app); selectedId = null })
         }
         emptyCellIndex?.let { index ->
-            ModalBottomSheet(onDismissRequest = { emptyCellIndex = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), formWidth = 400.dp) {
-                EmptySpaceActionSheet(onWidgets = {
-                        widgetTargetIndex = index; widgetExactTarget = true; widgetSlot = model.nextWidgetSlot(); widgetPackage = null; widgetProfileSerial = null
-                        emptyCellIndex = null; sheet = "widgets"
-                    }, onWallpaper = { emptyCellIndex = null; sheet = "settings:wallpaper" },
-                    onCustomize = { emptyCellIndex = null; sheet = "settings" }, onClose = { emptyCellIndex = null },
-                    onAddPage = { emptyCellIndex = null; val page = model.addPage(); if (page >= 0) scope.launch { pager.animateScrollToPage(page) } },
-                    onRemovePage = if (homeCellPage(index) == homePages - 1 && homePages > 1 && state.layout.contentPageCount < homePages) {{
-                        emptyCellIndex = null; if (model.removeLastEmptyPage()) scope.launch { pager.animateScrollToPage(homePages - 2) }
-                    }} else null)
-            }
+            HomeEditMenu(anchor = editPillBounds.takeIf { homeEdit.active }, onDismiss = { emptyCellIndex = null },
+                onWidgets = {
+                    widgetTargetIndex = index; widgetExactTarget = true; widgetSlot = model.nextWidgetSlot(); widgetPackage = null; widgetProfileSerial = null
+                    sheet = "widgets"
+                }, onWallpaper = { sheet = "settings:wallpaper" },
+                onCustomize = { sheet = "settings" },
+                onAddPage = { val page = model.addPage(); if (page >= 0) scope.launch { pager.animateScrollToPage(page) } },
+                onRemovePage = if (homeCellPage(index) == homePages - 1 && homePages > 1 && state.layout.contentPageCount < homePages) {{
+                    if (model.removeLastEmptyPage()) scope.launch { pager.animateScrollToPage(homePages - 2) }
+                }} else null)
         }
         createFolderFirstId?.let { firstId ->
             val first = appsById[firstId]

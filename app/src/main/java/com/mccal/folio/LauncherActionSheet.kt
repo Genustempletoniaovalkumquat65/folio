@@ -6,6 +6,10 @@ import androidx.activity.findViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -52,43 +56,53 @@ internal fun ModalDialogBackHandler(onBack: () -> Unit) {
     }
 }
 
+/**
+ * iOS 18's Home "Edit" menu: tapping Edit while icons wiggle opens a short menu right under the button, the same
+ * on the cover, unfolded and turned sideways (it's a popover, not a sheet, so it never covers the page you're editing).
+ */
 @Composable
-internal fun EmptySpaceActionSheet(onWidgets: () -> Unit, onWallpaper: () -> Unit,
-    onCustomize: () -> Unit, onClose: () -> Unit, onAddPage: (() -> Unit)? = null, onRemovePage: (() -> Unit)? = null) {
-    val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .75f).toDp() }
-    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-        // iOS action sheet: a small centered title, grouped rows, then a separate Cancel.
-        Column(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(R.string.add_to_home), color = Color.White.copy(alpha = .6f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.choose_what_belongs_in_this_space), color = Color.White.copy(alpha = .5f), fontSize = 13.sp)
-        }
-        SheetGroup {
-            Box(Modifier.testTag("empty-space-widgets")) { MenuRow("Add Widget", Icons.Rounded.Widgets, onClick = onWidgets) }
-            MenuDivider()
-            onAddPage?.let { Box(Modifier.testTag("empty-space-add-page")) { MenuRow("Add Page", Icons.Rounded.AddToPhotos, onClick = it) }; MenuDivider() }
-            Box(Modifier.testTag("empty-space-wallpaper")) { MenuRow("Wallpaper", Icons.Rounded.Wallpaper, onClick = onWallpaper) }
-            MenuDivider()
-            Box(Modifier.testTag("empty-space-customize")) { MenuRow("Customize Folio", Icons.Rounded.Tune, onClick = onCustomize) }
-            onRemovePage?.let { MenuDivider(); Box(Modifier.testTag("empty-space-remove-page")) { MenuRow("Remove This Empty Page", Icons.Rounded.DeleteOutline, destructive = true, onClick = it) } }
-        }
-        Spacer(Modifier.height(10.dp))
-        SheetGroup { Text(stringResource(R.string.cancel), color = Color(0xFF0A84FF), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Close empty space options", onClick = onClose).padding(vertical = 14.dp)) }
-    }
-}
-
-@Composable
-internal fun ActionRow(icon: ImageVector, label: String, onClick: () -> Unit,
-    modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
-    Surface(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 52.dp), color = androidx.compose.ui.graphics.Color.Transparent,
-        shape = RoundedCornerShape(16.dp)) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(34.dp).background(tint.copy(alpha = .12f), RoundedCornerShape(11.dp)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, Modifier.size(20.dp), tint = tint)
+internal fun HomeEditMenu(anchor: androidx.compose.ui.unit.IntRect?, onDismiss: () -> Unit, onWidgets: () -> Unit, onWallpaper: () -> Unit,
+    onCustomize: () -> Unit, onAddPage: (() -> Unit)?, onRemovePage: (() -> Unit)?) {
+    val density = LocalDensity.current
+    val margin = with(density) { 12.dp.roundToPx() }
+    val reduceMotion = LocalReduceMotion.current
+    val appear = remember { androidx.compose.animation.core.Animatable(if (reduceMotion) 1f else 0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .8f, stiffness = 700f)) }
+    var alignEnd by remember { mutableStateOf(false) }
+    val position = remember(anchor, margin) {
+        object : androidx.compose.ui.window.PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize): IntOffset {
+                val a = anchor ?: androidx.compose.ui.unit.IntRect(windowSize.width / 2, margin * 4, windowSize.width / 2, margin * 4)
+                // Line the menu up with the Edit button's leading edge, or its trailing edge when that keeps it on screen.
+                val fromStart = a.left
+                val fromEnd = a.right - popupContentSize.width
+                val x = (if (fromStart + popupContentSize.width + margin <= windowSize.width) fromStart else fromEnd)
+                    .coerceIn(margin, maxOf(margin, windowSize.width - popupContentSize.width - margin))
+                alignEnd = x != fromStart
+                val y = (a.bottom + margin / 2).coerceAtMost(maxOf(margin, windowSize.height - popupContentSize.height - margin))
+                return IntOffset(x, y)
             }
-            Spacer(Modifier.width(14.dp)); Text(label, style = MaterialTheme.typography.bodyLarge, color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface)
+        }
+    }
+    androidx.compose.ui.window.Popup(popupPositionProvider = position, onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+        Column(Modifier.width(250.dp)
+            .graphicsLayer {
+                val g = appear.value; alpha = g.coerceIn(0f, 1f); scaleX = .7f + .3f * g; scaleY = scaleX
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (alignEnd) 1f else 0f, 0f)
+            }
+            .shadow(18.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(Color(0xFF2A2A2E).copy(alpha = .97f))
+            .border(FolioGlass.edge, RoundedCornerShape(18.dp)).testTag("home-edit-menu")) {
+            fun act(action: () -> Unit) = { onDismiss(); action() }
+            Box(Modifier.testTag("empty-space-widgets")) { MenuRow("Add Widget", Icons.Rounded.Widgets, onClick = act(onWidgets)) }
+            MenuDivider()
+            Box(Modifier.testTag("empty-space-wallpaper")) { MenuRow("Wallpaper & Appearance", Icons.Rounded.Wallpaper, onClick = act(onWallpaper)) }
+            // A thicker gap between groups, like iOS menus.
+            Box(Modifier.fillMaxWidth().height(8.dp).background(Color.Black.copy(alpha = .25f)))
+            onAddPage?.let { Box(Modifier.testTag("empty-space-add-page")) { MenuRow("Add Page", Icons.Rounded.AddToPhotos, onClick = act(it)) }; MenuDivider() }
+            onRemovePage?.let { Box(Modifier.testTag("empty-space-remove-page")) { MenuRow("Remove This Empty Page", Icons.Rounded.DeleteOutline, destructive = true, onClick = act(it)) }; MenuDivider() }
+            Box(Modifier.testTag("empty-space-customize")) { MenuRow("Folio Settings", Icons.Rounded.Tune, onClick = act(onCustomize)) }
         }
     }
 }

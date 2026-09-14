@@ -103,8 +103,9 @@ internal fun BoxScope.JiggleRemoveButton(label: String, onRemove: () -> Unit) {
 
 /** Glass capsule button for the jiggle-mode bar ("+", "Edit", "Done"). */
 @Composable
-internal fun JigglePill(label: String, icon: ImageVector? = null, description: String = label, emphasized: Boolean = false, onClick: () -> Unit) {
-    Box(Modifier.minimumInteractiveComponentSize(), contentAlignment = Alignment.Center) {
+internal fun JigglePill(label: String, icon: ImageVector? = null, description: String = label, emphasized: Boolean = false,
+    modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(modifier.minimumInteractiveComponentSize(), contentAlignment = Alignment.Center) {
         Row(Modifier.heightIn(min = 34.dp).clip(CircleShape)
             .background(if (emphasized) Color.White.copy(alpha = .92f) else Color.White.copy(alpha = .22f))
             .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }
