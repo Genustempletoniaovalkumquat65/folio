@@ -382,9 +382,14 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     pendingShortcuts.removeAll { p -> newShortcuts.any { it.packageName == p.first && it.shortcutId == p.second } }
                     addedPackages.removeAll(arrivals.map { it.packageName }.toSet())
                     val homeArrivals = (if (old.addNewAppsToHome) arrivals else emptyList()) + newShortcuts
+                    // While a Focus hides Home pages, new arrivals go to a page that's showing, not one you can't see.
+                    val hiddenCells = FocusPages.lockingFocus(old)?.pages?.let { shown ->
+                        (0 until old.layout.pageCount).filter { it !in shown }.flatMap { page -> (0 until HOME_CELLS).map { homeCellIndex(page, it) } }
+                    }.orEmpty()
+                    val blockedForArrivals = (old.widgetPlacements.filter { it.page >= 0 }.flatMap { it.coveredIndices() } + hiddenCells).toSet()
                     val withArrivals = homeArrivals.fold(pins) { slots, app ->
                         if (app.id in old.dock || app.id in old.leadingSlots || old.folders.any { app.id in it.appIds }) slots
-                        else pinHomeApp(slots, app.id, true, old.widgetPlacements.filter { it.page >= 0 }.flatMap { it.coveredIndices() }.toSet())
+                        else pinHomeApp(slots, app.id, true, blockedForArrivals)
                     }
                     val validPins = withArrivals.map { it?.takeUnless(removedIds::contains) }
                     val validDock = dock.map { it?.takeUnless(removedIds::contains) }

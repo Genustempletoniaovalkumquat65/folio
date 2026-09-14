@@ -30,4 +30,11 @@ class FocusPagesTest {
         // Pages that don't exist are ignored; an empty choice still shows the first page.
         assertEquals(1, FocusPages.filter(layout(), setOf(9)).pageCount)
     }
+
+    @Test fun `new items skip hidden pages`() {
+        // Page 0 hidden, page 1 showing: the first free cell on page 1 is chosen.
+        val hidden = (0 until HOME_CELLS).map { homeCellIndex(0, it) }.toSet()
+        val slots = pinHomeApp(List(2 * HOME_CELLS) { null }, "new", true, hidden)
+        assertEquals(homeCellIndex(1, 0), slots.indexOf("new"))
+    }
 }

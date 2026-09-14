@@ -78,7 +78,13 @@ fun StatusRail(
     /** The Focus that's on: its icon sits above the time, as iPhone shows it beside the clock. */
     focus: FocusMode? = null,
 ) {
-    val ink = LocalHomeInk.current.primary
+    val homeInk = LocalHomeInk.current
+    val ink = homeInk.primary
+    // Over light wallpapers (dark text) the frosted capsule is light too, so dim parts and colors need more weight to read.
+    val onLight = homeInk.dark
+    fun faint(alpha: Float) = if (onLight) (alpha * 1.6f).coerceAtMost(.6f) else alpha
+    val charging = if (onLight) BatteryChargingOnLight else BatteryCharging
+    val low = if (onLight) BatteryLowOnLight else BatteryLow
     val now by produceState(LocalDateTime.now()) {
         while (true) {
             value = LocalDateTime.now()
@@ -102,8 +108,8 @@ fun StatusRail(
     val activeDots = (cellularVisual as? CellularSignalVisual.Available)?.activeDots ?: 0
     val batteryColor = when {
         !style.colorfulBattery -> ink
-        status.charging -> BatteryCharging
-        (status.battery ?: 100) <= 20 -> BatteryLow
+        status.charging -> charging
+        (status.battery ?: 100) <= 20 -> low
         else -> ink
     }
     val capsule = RoundedCornerShape(30.dp)
@@ -132,7 +138,7 @@ fun StatusRail(
                     modifier = Modifier.size(if (compact) 14.dp else 16.dp).testTag("status-focus")) }
                 if (style.showTime) Text(now.format(timeFormatter), color = ink, fontSize = timeSize, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
-                if (!compact && style.showDate) Text(now.format(dateFormatter), color = ink.copy(alpha = .7f), fontSize = detailSize,
+                if (!compact && style.showDate) Text(now.format(dateFormatter), color = ink.copy(alpha = if (onLight) .85f else .7f), fontSize = detailSize,
                     fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
                 when (style.glyph) {
                     StatusGlyph.RING, StatusGlyph.MINIMAL -> Box(Modifier.padding(top = 2.dp).size(visualSize), contentAlignment = Alignment.Center) {
@@ -147,21 +153,21 @@ fun StatusRail(
                             val center = Offset(w / 2, w / 2)
                             // Battery: one thin full ring, filled clockwise from the top.
                             val radius = w * .44f
-                            drawCircle(ink.copy(alpha = .22f), radius, center, style = Stroke(w * .06f))
+                            drawCircle(ink.copy(alpha = faint(.22f)), radius, center, style = Stroke(w * .06f))
                             status.battery?.let { level ->
                                 drawArc(batteryColor, -90f, 360f * level / 100, false, Offset(center.x - radius, center.y - radius),
                                     Size(radius * 2, radius * 2), style = Stroke(width = w * .06f, cap = StrokeCap.Round))
                             }
                             if (style.glyph == StatusGlyph.RING) when {
                                 wifiVisual is WifiSignalVisual.Connected -> {
-                                    drawWifiFan(w, wifiVisual, ink = ink)
+                                    drawWifiFan(w, wifiVisual, ink = ink, onLight = onLight)
                                     // Cellular: a short row of dots under the fan.
-                                    for (i in 0..4) drawCircle(ink.copy(alpha = if (i < activeDots) 1f else .28f), w * .026f,
+                                    for (i in 0..4) drawCircle(ink.copy(alpha = if (i < activeDots) 1f else faint(.28f)), w * .026f,
                                         Offset(center.x + (i - 2) * w * .085f, w * .74f))
                                 }
-                                cellularVisual is CellularSignalVisual.Available -> drawCellBars(w, activeDots, ink)
+                                cellularVisual is CellularSignalVisual.Available -> drawCellBars(w, activeDots, ink, onLight)
                                 status.airplane -> Unit // the airplane icon draws on top
-                                else -> drawSearchingFan(w, sweep, ink)
+                                else -> drawSearchingFan(w, sweep, ink, onLight)
                             } else status.battery?.let { level ->
                                 // Minimal: nothing inside the ring but a small charge dot when charging.
                                 if (status.charging) drawCircle(batteryColor, w * .06f, center)
@@ -174,22 +180,22 @@ fun StatusRail(
                         modifier = Modifier.padding(top = 2.dp)) {
                         // Wi-Fi when joined (in Home's text color, so it reads on light wallpapers), an airplane in Airplane Mode;
                         // otherwise nothing, and the cellular bars below say how you're connected.
-                        if (wifiVisual is WifiSignalVisual.Connected) Canvas(Modifier.size(width = 22.dp, height = 16.dp)) { drawWifiFan(size.width, wifiVisual, centered = true, ink = ink) }
+                        if (wifiVisual is WifiSignalVisual.Connected) Canvas(Modifier.size(width = 22.dp, height = 16.dp)) { drawWifiFan(size.width, wifiVisual, centered = true, ink = ink, onLight = onLight) }
                         else if (status.airplane) Icon(Icons.Rounded.AirplanemodeActive, "Airplane Mode", tint = ink, modifier = Modifier.size(16.dp))
                         Canvas(Modifier.size(width = 22.dp, height = 14.dp)) {
                             val bar = size.width / 7
                             for (i in 0 until 5) {
                                 val h = size.height * (.3f + .7f * i / 4)
-                                drawRoundRect(ink.copy(alpha = if (i < activeDots) 1f else .28f),
+                                drawRoundRect(ink.copy(alpha = if (i < activeDots) 1f else faint(.28f)),
                                     Offset(i * bar * 1.5f, size.height - h), Size(bar, h),
                                     androidx.compose.ui.geometry.CornerRadius(bar / 2))
                             }
                         }
                         Canvas(Modifier.size(width = 26.dp, height = 12.dp)) {
                             val body = Size(size.width * .86f, size.height)
-                            drawRoundRect(ink.copy(alpha = .55f), Offset.Zero, body, androidx.compose.ui.geometry.CornerRadius(size.height * .3f),
+                            drawRoundRect(ink.copy(alpha = if (onLight) .75f else .55f), Offset.Zero, body, androidx.compose.ui.geometry.CornerRadius(size.height * .3f),
                                 style = Stroke(size.height * .1f))
-                            drawRoundRect(ink.copy(alpha = .55f), Offset(body.width + size.width * .03f, size.height * .3f),
+                            drawRoundRect(ink.copy(alpha = if (onLight) .75f else .55f), Offset(body.width + size.width * .03f, size.height * .3f),
                                 Size(size.width * .08f, size.height * .4f), androidx.compose.ui.geometry.CornerRadius(size.height * .1f))
                             status.battery?.let { level ->
                                 val inset = size.height * .18f
@@ -201,7 +207,7 @@ fun StatusRail(
                     StatusGlyph.NONE -> Unit
                 }
                 if (!compact && style.showBatteryPercent) Text(if (status.airplane) "Airplane" else status.battery?.let { "$it%" } ?: "—",
-                    color = if (status.charging && style.colorfulBattery) BatteryCharging else ink.copy(alpha = .85f),
+                    color = if (status.charging && style.colorfulBattery) charging else ink,
                     fontSize = detailSize, fontWeight = FontWeight.Medium,
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
             }
@@ -210,17 +216,17 @@ fun StatusRail(
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Float, wifiVisual: WifiSignalVisual, centered: Boolean = false, ink: Color = Color.White) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Float, wifiVisual: WifiSignalVisual, centered: Boolean = false, ink: Color = Color.White, onLight: Boolean = false) {
     val cx = size.width / 2
     val fanY = if (centered) size.height * .95f else w * .56f
     val scale = if (centered) size.height / (w * .325f + w * .04f) * .9f else 1f
     if (wifiVisual is WifiSignalVisual.Connected) {
         for (i in 1..3) {
             val r = w * (.07f + i * .075f) * scale
-            drawArc(ink.copy(alpha = signalAlpha(wifiVisual.elements[i])), 225f, 90f, false,
+            drawArc(ink.copy(alpha = signalAlpha(wifiVisual.elements[i], onLight)), 225f, 90f, false,
                 Offset(cx - r, fanY - r), Size(r * 2, r * 2), style = Stroke(w * .05f * scale, cap = StrokeCap.Round))
         }
-        drawCircle(ink.copy(alpha = signalAlpha(wifiVisual.elements[0])), w * .04f * scale, Offset(cx, fanY))
+        drawCircle(ink.copy(alpha = signalAlpha(wifiVisual.elements[0], onLight)), w * .04f * scale, Offset(cx, fanY))
     } else {
         drawLine(ink.copy(alpha = .7f), Offset(cx - w * .1f, fanY - w * .2f), Offset(cx + w * .1f, fanY), w * .05f, StrokeCap.Round)
     }
@@ -228,36 +234,39 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWifiFan(w: Floa
 
 private val BatteryCharging = Color(0xFF6EE39A)
 private val BatteryLow = Color(0xFFFFB35C)
+/** iOS's darker system green and orange, which keep their contrast on light backgrounds. */
+private val BatteryChargingOnLight = Color(0xFF248A3D)
+private val BatteryLowOnLight = Color(0xFFC93400)
 
 /** Four rising cellular bars centered in the ring, lit up to [activeDots] of 5. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCellBars(w: Float, activeDots: Int, ink: Color) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCellBars(w: Float, activeDots: Int, ink: Color, onLight: Boolean = false) {
     val bar = w * .075f
     val gap = w * .045f
     val left = w / 2 - (4 * bar + 3 * gap) / 2
     val bottom = w * .66f
     for (i in 0 until 4) {
         val h = w * (.12f + i * .07f)
-        drawRoundRect(ink.copy(alpha = if (i < (activeDots * 4 + 4) / 5) 1f else .28f), Offset(left + i * (bar + gap), bottom - h), Size(bar, h),
+        drawRoundRect(ink.copy(alpha = if (i < (activeDots * 4 + 4) / 5) 1f else if (onLight) .45f else .28f), Offset(left + i * (bar + gap), bottom - h), Size(bar, h),
             androidx.compose.ui.geometry.CornerRadius(bar / 2))
     }
 }
 
 /** No connection: a dim Wi-Fi fan whose arcs light one after another, like it's looking; with a slash when still ([phase] < 0). */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchingFan(w: Float, phase: Float, ink: Color) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchingFan(w: Float, phase: Float, ink: Color, onLight: Boolean = false) {
     val cx = size.width / 2
     val fanY = w * .6f
     for (i in 1..3) {
         val r = w * (.07f + i * .075f)
         val lit = if (phase < 0f) 0f else (1f - kotlin.math.abs(phase * 4f - i)).coerceIn(0f, 1f)
-        drawArc(ink.copy(alpha = .22f + .5f * lit), 225f, 90f, false, Offset(cx - r, fanY - r), Size(r * 2, r * 2),
+        drawArc(ink.copy(alpha = (if (onLight) .36f else .22f) + .5f * lit), 225f, 90f, false, Offset(cx - r, fanY - r), Size(r * 2, r * 2),
             style = Stroke(w * .05f, cap = StrokeCap.Round))
     }
     drawCircle(ink.copy(alpha = .3f), w * .04f, Offset(cx, fanY))
     if (phase < 0f) drawLine(ink.copy(alpha = .7f), Offset(cx - w * .16f, fanY - w * .26f), Offset(cx + w * .16f, fanY + w * .02f), w * .045f, StrokeCap.Round)
 }
 
-private fun signalAlpha(emphasis: SignalElementEmphasis): Float = when (emphasis) {
-    SignalElementEmphasis.DIM -> .3f
-    SignalElementEmphasis.NEUTRAL -> .62f
+private fun signalAlpha(emphasis: SignalElementEmphasis, onLight: Boolean = false): Float = when (emphasis) {
+    SignalElementEmphasis.DIM -> if (onLight) .45f else .3f
+    SignalElementEmphasis.NEUTRAL -> if (onLight) .75f else .62f
     SignalElementEmphasis.LIT -> 1f
 }
