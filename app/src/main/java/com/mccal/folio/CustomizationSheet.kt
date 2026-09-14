@@ -32,8 +32,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS, FOCUS, FOCUS_MODE }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS, FOCUS, FOCUS_MODE, THEMES }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -66,6 +67,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.CREDITS -> "Credits"
         CustomizationPage.TWEAKS -> "Tweaks"
         CustomizationPage.FOCUS -> "Focus"
+        CustomizationPage.THEMES -> "Themes"
         CustomizationPage.FOCUS_MODE -> state.focusModes.firstOrNull { it.id == focusId }?.name ?: "Focus"
         CustomizationPage.TWEAK -> TweakFeatures.firstOrNull { it.id == tweakId }?.name ?: "Tweak"
         CustomizationPage.ADVANCED -> "Advanced"
@@ -90,6 +92,9 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.GridView, 0xFF0A84FF, "Home Screen & Dock", "customization-home", selected = selected == CustomizationPage.HOME, chevron = !sidebar) { onPage(CustomizationPage.HOME) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Today, 0xFFFF9F0A, "Today View", "customization-today", selected = selected == CustomizationPage.TODAY, chevron = !sidebar) { onPage(CustomizationPage.TODAY) }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Palette, 0xFFFF375F, "Themes", "customization-themes",
+                            FolioTheme.PRESETS.firstOrNull { state.looksLike(it) }?.name ?: "Custom", selected = selected == CustomizationPage.THEMES, chevron = !sidebar) { onPage(CustomizationPage.THEMES) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Apps, 0xFF5E5CE6, "Icons & Side Rail", "customization-status", selected = selected == CustomizationPage.STATUS, chevron = !sidebar) { onPage(CustomizationPage.STATUS) }
                     }
@@ -560,6 +565,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                 }
                 CustomizationPage.PERMISSIONS -> PermissionsPage(isDefaultHome, onMakeDefault, onShadeSetup)
+                CustomizationPage.THEMES -> ThemesPage(state, model, backgrounds.previewBitmap)
                 CustomizationPage.FOCUS -> FocusListPage(state, model) { focusId = it; onPage(CustomizationPage.FOCUS_MODE) }
                 CustomizationPage.FOCUS_MODE -> state.focusModes.firstOrNull { it.id == focusId }?.let { FocusModePage(it, state, model) }
                     ?: LaunchedEffect(Unit) { onPage(CustomizationPage.FOCUS) }
@@ -812,6 +818,7 @@ private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = lis
     Triple("Lock Cover", "lock screen unlock cover clock", CustomizationPage.LOCK),
     Triple("Fold animation", "fold unfold animation blur fade duo timing", CustomizationPage.FOLD),
     Triple("StandBy", "standby tent half open clock", CustomizationPage.FOLD),
+    Triple("Themes", "theme look snowboard icon style tint shape badges glass import export", CustomizationPage.THEMES),
     Triple("Focus", "focus do not disturb dnd sleep work personal silence quiet grayscale", CustomizationPage.FOCUS),
     Triple("Tweaks", "tweak jailbreak velox harbor axon velvet colorflow panels magnification tint album", CustomizationPage.TWEAKS),
     Triple("Privacy & Permissions", "privacy permissions notification access accessibility contacts bluetooth", CustomizationPage.PERMISSIONS),
@@ -916,6 +923,52 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = { model.resetTweak(tweak) }) { Text("Reset ${tweak.name}") }
     }
+}
+
+/** Themes (after SnowBoard): built-in looks with a live preview, plus saving and importing theme files. */
+@Composable private fun ThemesPage(state: LauncherState, model: LauncherModel, stagedBitmap: android.graphics.Bitmap?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    var undo by remember { mutableStateOf(model.themeUndo != null) }
+    val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching {
+                context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(FolioTheme.of(state, "My Folio Theme").toJson().toString(2).toByteArray()) }
+            }.isSuccess }
+            message = if (ok) "Theme saved." else "The theme couldn't be saved."
+        }
+    }
+    val open = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            val theme = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().take(64_000).toByteArray().decodeToString() } }.getOrNull()?.let(FolioTheme::fromJson)
+            }
+            if (theme == null) message = "That file isn't a Folio theme."
+            else { model.applyTheme(theme); undo = true; message = "Applied ${theme.name}." }
+        }
+    }
+    MiniHomePreview(stagedBitmap, state, 220.dp)
+    SheetGroup {
+        FolioTheme.PRESETS.forEachIndexed { index, theme ->
+            if (index > 0) MenuDivider()
+            val current = state.looksLike(theme)
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable { model.applyTheme(theme); undo = true; message = null }
+                .padding(horizontal = 16.dp).testTag("theme-${theme.name.lowercase()}"), verticalAlignment = Alignment.CenterVertically) {
+                Text(theme.name, color = androidx.compose.ui.graphics.Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                if (current) Icon(Icons.Rounded.Check, null, tint = IosBlue, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+    Text("A theme changes icons, badges, glass, text on Home and the status rail. Your apps, pages and widgets stay as they are.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    SheetGroup {
+        IosActionRow("Save Current Look as Theme…", "theme-save") { save.launch("folio-theme.json") }
+        MenuDivider()
+        IosActionRow("Import Theme…", "theme-import") { open.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+        if (undo) { MenuDivider(); IosActionRow("Undo Theme Change", "theme-undo") { model.undoTheme(); undo = false; message = null } }
+    }
+    message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp)) }
 }
 
 /** iOS Settings › Focus: the list of Focuses, with the one that's on. */

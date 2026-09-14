@@ -600,6 +600,16 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun setStackRotate(value: Boolean) = updateSettings(soon = false) { it.copy(stackRotate = value) }
     fun setRailActivities(value: Boolean) = updateSettings(soon = false) { it.copy(railActivities = value) }
+    /** The look before the last theme was applied, so Undo can put it back. */
+    var themeUndo: FolioTheme? = null
+        private set
+    fun applyTheme(theme: FolioTheme) {
+        themeUndo = FolioTheme.of(mutable.value, "Previous")
+        val packs = IconPacks.installed(getApplication()).mapTo(mutableSetOf()) { it.packageName }
+        updateSettings(soon = false) { it.withTheme(theme, packs) }
+    }
+    fun undoTheme() { themeUndo?.let { previous -> themeUndo = null; val packs = IconPacks.installed(getApplication()).mapTo(mutableSetOf()) { it.packageName }
+        updateSettings(soon = false) { it.withTheme(previous, packs) } } }
     fun setPageStyle(page: Int, style: PageStyle) = updateSettings(soon = false) {
         it.copy(pageStyles = if (style.isDefault) it.pageStyles - page else it.pageStyles + (page to style))
     }
