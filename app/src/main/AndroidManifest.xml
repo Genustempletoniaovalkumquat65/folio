@@ -92,6 +92,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <!-- "Add to Home Screen" for widgets an app asks to pin (only delivered to the default Home app). -->
+        <activity android:name=".PinWidgetActivity" android:exported="true" android:excludeFromRecents="true"
+            android:theme="@style/Theme.Folio.FoldBridge" android:taskAffinity="com.mccal.folio.pin" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_APPWIDGET" />
+            </intent-filter>
+        </activity>
         <!-- Opens Folio's settings from Android's screens (Accessibility gear, tile long-press, wallpaper settings). -->
         <activity android:name=".FolioSettingsActivity" android:exported="true" android:excludeFromRecents="true"
             android:noHistory="true" android:theme="@style/Theme.Folio.FoldBridge" android:label="Folio settings">

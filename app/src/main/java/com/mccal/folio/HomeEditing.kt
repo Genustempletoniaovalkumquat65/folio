@@ -310,3 +310,18 @@ fun migrateSchema5Widgets(widgets: List<Int>): List<WidgetPlacement> = buildList
         }
     }
 }
+
+/**
+ * The first spot a [spanX]×[spanY] widget fits on Home without moving anything: page by page from [startPage],
+ * top-left first, then on a new page after the last. Returns the page and the cell index of the widget's corner.
+ */
+fun firstFreeWidgetSpot(layout: HomeLayout, spanX: Int, spanY: Int, startPage: Int = 0): Pair<Int, Int>? {
+    if (spanX !in 1..GRID_COLUMNS || spanY !in 1..GRID_ROWS) return null
+    val widgetCells = layout.widgetPlacements.flatMapTo(mutableSetOf()) { it.coveredIndices() }
+    val pages = (startPage.coerceIn(0, layout.pageCount) until layout.pageCount) + (0 until startPage.coerceIn(0, layout.pageCount)) + layout.pageCount
+    for (page in pages) for (row in 0..GRID_ROWS - spanY) for (column in 0..GRID_COLUMNS - spanX) {
+        val cells = buildList { repeat(spanY) { y -> repeat(spanX) { x -> add(homeCellIndex(page, (row + y) * GRID_COLUMNS + column + x)) } } }
+        if (cells.none { it in widgetCells || layout.slotAt(it) != null }) return page to cells.first()
+    }
+    return null
+}
