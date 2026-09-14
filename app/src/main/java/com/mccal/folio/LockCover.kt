@@ -82,11 +82,18 @@ internal fun LockCover(visible: Boolean, onDismiss: () -> Unit) {
             ) { change, amount -> change.consume(); scope.launch { offset.snapTo((offset.value + amount).coerceAtMost(0f)) } }
         }
         .windowInsetsPadding(WindowInsets.folioSafeTop).navigationBarsPadding()) {
-        Column(Modifier.align(Alignment.TopCenter).widthIn(max = 520.dp).fillMaxWidth().padding(horizontal = 16.dp).padding(top = 28.dp),
+      BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Wider than tall (the cover turned sideways, as on iPhone Duo's Lock Screen): a short date, the clock sized to
+        // the height, fewer notifications, and flashlight and camera stacked on the side edge instead of the bottom corners.
+        val wide = maxWidth > maxHeight
+        val clockSize = minOf(if (wide) maxHeight.value * .3f else maxWidth.value * .26f, 120f)
+        val room = ((maxHeight.value - clockSize * 1.6f - 150f) / 76f).toInt().coerceIn(0, 4)
+        Column(Modifier.align(Alignment.TopCenter).widthIn(max = 520.dp).fillMaxWidth().padding(horizontal = if (wide) 84.dp else 16.dp).padding(top = if (wide) 8.dp else 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(now.format(DateTimeFormatter.ofPattern(if (wide) "EEE MMM d" else "EEEE, MMMM d")), color = Color.White,
+                fontSize = if (wide) 17.sp else 20.sp, fontWeight = FontWeight.SemiBold)
             Text(now.format(DateTimeFormatter.ofPattern(if (is24) "HH:mm" else "h:mm")), color = Color.White,
-                fontSize = 96.sp, fontWeight = FontWeight.Bold, lineHeight = 100.sp)
+                fontSize = clockSize.sp, fontWeight = FontWeight.Bold, lineHeight = (clockSize * 1.04f).sp)
             alarm?.let {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Alarm, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(16.dp))
@@ -95,7 +102,7 @@ internal fun LockCover(visible: Boolean, onDismiss: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(24.dp))
-            notifications.forEach { item ->
+            notifications.take(room).forEach { item ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF2A2A2E).copy(alpha = .8f))
                     .clickable { onDismiss(); IslandListenerService.openNotification(context, item) }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -108,18 +115,20 @@ internal fun LockCover(visible: Boolean, onDismiss: () -> Unit) {
                 }
             }
         }
-        // Flashlight and camera, bottom corners as on iPhone.
-        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 44.dp, vertical = 36.dp),
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            CoverButton(Icons.Rounded.FlashlightOn, "Flashlight") { FolioActions.run(context, FolioAction.TORCH) }
-            CoverButton(Icons.Rounded.PhotoCamera, "Camera") {
-                onDismiss(); runCatching { context.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            }
-        }
+        val flashlight: @Composable () -> Unit = { CoverButton(Icons.Rounded.FlashlightOn, "Flashlight") { FolioActions.run(context, FolioAction.TORCH) } }
+        val camera: @Composable () -> Unit = { CoverButton(Icons.Rounded.PhotoCamera, "Camera") {
+            onDismiss(); runCatching { context.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        } }
+        // Flashlight and camera: bottom corners as on iPhone, or stacked on the side edge when wide, as on iPhone Duo.
+        if (wide) Column(Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            flashlight(); camera()
+        } else Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 44.dp, vertical = 36.dp),
+            horizontalArrangement = Arrangement.SpaceBetween) { flashlight(); camera() }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(R.string.swipe_up_to_open), color = Color.White.copy(alpha = .6f), fontSize = 13.sp)
             Box(Modifier.padding(top = 6.dp).size(width = 134.dp, height = 5.dp).clip(CircleShape).background(Color.White))
         }
+      }
     }
 }
 
