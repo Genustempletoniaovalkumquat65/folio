@@ -564,7 +564,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         // the page gets the width and the sidebar opens over it from the sidebar button (iPhone Duo split views).
         val tiled = maxWidth > maxHeight
         // Tiled it shares the width; as an overlay it can be a little wider so rows don't wrap.
-        val sidebarWidth = if (tiled) (fullWidth * .36f).coerceIn(280.dp, 340.dp) else minOf(360.dp, fullWidth * .6f)
+        val sidebarWidth = if (tiled) (fullWidth * .4f).coerceIn(280.dp, 380.dp) else minOf(360.dp, fullWidth * .6f)
         var sidebarOpen by rememberSaveable { mutableStateOf(true) }
         var shownPage by remember { mutableStateOf(page) }
         SideEffect { if (page != shownPage) { shownPage = page; if (!tiled) sidebarOpen = false } }
