@@ -13,6 +13,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
@@ -132,12 +140,14 @@ internal fun RailNowPlaying(media: IslandActivity.Media, accent: Color, width: a
         val elapsed = if (p.state == android.media.session.PlaybackState.STATE_PLAYING) ((now - p.lastPositionUpdateTime) * p.playbackSpeed).toLong() else 0L
         (p.position + elapsed).coerceIn(0L, duration ?: Long.MAX_VALUE)
     }
-    Column(Modifier.width(width), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.width(width), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Too narrow for a full title: it scrolls, like a marquee on the island.
-        Text(media.title, color = Color.White, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900))
-        media.subtitle?.let { Text(it, color = Color.White.copy(alpha = .6f), fontSize = 10.sp, maxLines = 1,
-            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1400)) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(media.title, color = Color.White, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900))
+            media.subtitle?.let { Text(it, color = Color.White.copy(alpha = .6f), fontSize = 10.sp, maxLines = 1,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1400)) }
+        }
         if (duration != null && position != null) Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = .22f))
             .semantics { contentDescription = "${formatClock(position)} of ${formatClock(duration)}" }) {
             Box(Modifier.fillMaxHeight().fillMaxWidth((position.toFloat() / duration).coerceIn(0f, 1f)).background(accent))
@@ -153,7 +163,7 @@ internal fun RailNowPlaying(media: IslandActivity.Media, accent: Color, width: a
 
 @Composable
 private fun RailControl(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(width = 48.dp, height = 40.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = Color.White, modifier = Modifier.size(size))
     }
 }
@@ -164,10 +174,13 @@ private fun formatClock(millis: Long): String {
 }
 
 /** The edge the camera is nearest when that's a side edge (-1 left, +1 right); null when it's the top or bottom. */
-internal fun cameraSideEdge(camera: android.graphics.Rect?, windowWidth: Int, windowHeight: Int): Int? {
-    if (camera == null || windowWidth <= 0 || windowHeight <= 0) return null
-    val toLeft = camera.left; val toRight = windowWidth - camera.right
-    val toTop = camera.top; val toBottom = windowHeight - camera.bottom
+internal fun cameraSideEdge(camera: android.graphics.Rect?, windowWidth: Int, windowHeight: Int): Int? =
+    camera?.let { cameraSideEdge(it.left, it.top, it.right, it.bottom, windowWidth, windowHeight) }
+
+internal fun cameraSideEdge(left: Int, top: Int, right: Int, bottom: Int, windowWidth: Int, windowHeight: Int): Int? {
+    if (windowWidth <= 0 || windowHeight <= 0) return null
+    val toLeft = left; val toRight = windowWidth - right
+    val toTop = top; val toBottom = windowHeight - bottom
     val nearest = minOf(toLeft, toRight, toTop, toBottom)
     return when {
         toTop == nearest || toBottom == nearest -> null
@@ -189,36 +202,55 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
     val density = androidx.compose.ui.platform.LocalDensity.current
     val live = (content as? IslandContent.Live)?.activity
     val media = live as? IslandActivity.Media
-    var expanded by remember(media?.packageName) { mutableStateOf(false) }
+    val call = live as? IslandActivity.Call
+    val callControls = call != null && (call.canAnswer || call.canDecline || call.canHangUp || call.canMute || call.canSpeaker)
+    // A ringing call opens straight into its answer and decline buttons, like the island's incoming-call card.
+    var expanded by remember(media?.packageName, call?.key, call?.incoming) { mutableStateOf(call?.incoming == true && callControls) }
     androidx.activity.compose.BackHandler(expanded) { expanded = false }
     val reduceMotion = LocalReduceMotion.current
     val bouncy = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntSize>(dampingRatio = .72f, stiffness = 420f)
     with(density) {
         val hole = minOf(camera.width(), camera.height()).toDp()
-        val edge = 6.dp
-        val thickness = maxOf(hole + 14.dp, 40.dp)
+        val edge = SIDE_ISLAND_EDGE
+        val thickness = sideIslandThickness(hole)
         val width by androidx.compose.animation.core.animateDpAsState(if (expanded) 76.dp else thickness,
             androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "vertical island width")
         val glyph = thickness - 14.dp
         val gapHalf = hole / 2 + 4.dp
-        val pad = 7.dp
         val growUp = camera.centerY() > windowHeight / 2
+        // Collapsed: the same inset as around the camera. Expanded: the growing end clears its rounded corner.
+        val padFar = if (expanded) 22.dp else 7.dp
+        val padTop = if (growUp) padFar else 7.dp
+        val padBottom = if (growUp) 7.dp else padFar
         val accent = media?.let { rememberAccent(it.art)?.let { a -> mixColor(a, Color.White, .25f) } } ?: IslandGreen
         val pressed = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
         val isPressed by pressed.collectIsPressedAsState()
         val scale by androidx.compose.animation.core.animateFloatAsState(if (isPressed) .95f else 1f,
             androidx.compose.animation.core.spring(dampingRatio = .6f, stiffness = 700f), label = "vertical island press")
-        val expandedStack: @Composable () -> Unit = { if (expanded && media != null) RailNowPlaying(media, accent, 76.dp - 16.dp) }
+        val expandedStack: @Composable () -> Unit = {
+            if (expanded && media != null) RailNowPlaying(media, accent, 76.dp - 20.dp)
+            if (expanded && call != null && callControls) RailCallButtons(call)
+        }
         val leading: @Composable () -> Unit = {
             Column(Modifier.animateContentSize(if (reduceMotion) androidx.compose.animation.core.snap() else bouncy),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (growUp) expandedStack()
                 when {
                     media != null -> (media.art ?: media.icon)?.let {
-                        androidx.compose.foundation.Image(it.asImageBitmap(), media.title, Modifier.size(glyph).clip(RoundedCornerShape(glyph * .3f)),
+                        val art by androidx.compose.animation.core.animateDpAsState(if (expanded) 76.dp - 20.dp else glyph,
+                            androidx.compose.animation.core.spring(dampingRatio = .74f, stiffness = 420f), label = "vertical island art")
+                        androidx.compose.foundation.Image(it.asImageBitmap(), media.title, Modifier.size(art).clip(RoundedCornerShape(art * .24f)),
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                     }
                     live is IslandActivity.Call && !live.incoming -> CircleGlyph(Icons.Rounded.Call, IslandGreen, glyph)
+                    // Events carry a word beside their icon on the wide pill; standing upright there's only room for the icon.
+                    content is IslandContent.Event && content.event !is IslandEvent.Message -> when (val e = content.event) {
+                        is IslandEvent.Charging -> CircleGlyph(Icons.Rounded.Bolt, IslandGreen, glyph)
+                        is IslandEvent.Silent -> CircleGlyph(if (e.on) Icons.Rounded.NotificationsOff else Icons.Rounded.NotificationsActive,
+                            if (e.on) Color(0xFFFF453A) else Color.White, glyph)
+                        is IslandEvent.Focus -> CircleGlyph(Icons.Rounded.DarkMode, Color(0xFF5E5CE6), glyph)
+                        else -> CircleGlyph(Icons.Rounded.Headphones, IslandBlue, glyph)
+                    }
                     else -> LeadingGlyph(content, glyph)
                 }
             }
@@ -244,14 +276,14 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
         }
         val onTap = {
             when {
-                media != null -> expanded = !expanded
+                media != null || callControls -> expanded = !expanded
                 live != null -> onOpen(live)
                 else -> ((content as? IslandContent.Event)?.event as? IslandEvent.Message)?.let(onMessage)
             }
         }
         androidx.compose.ui.layout.Layout(content = {
             Box(Modifier.shadow(8.dp, RoundedCornerShape(width / 2)).clip(RoundedCornerShape(width / 2)).background(Color.Black)
-                .clickable(pressed, null, onClickLabel = if (media != null) "Now playing" else describe(content)) { onTap() }
+                .clickable(pressed, null, onClickLabel = if (media != null || callControls) (if (expanded) "Collapse" else "Expand") else describe(content)) { onTap() }
                 .semantics { contentDescription = describe(content) }.testTag("vertical-island"))
             leading()
             trailing()
@@ -261,8 +293,8 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
             val above = measurables[1].measure(loose)
             val below = measurables[2].measure(loose)
             val cy = camera.centerY()
-            val top = cy - gapHalf.roundToPx() - above.height - pad.roundToPx()
-            val bottom = cy + gapHalf.roundToPx() + below.height + pad.roundToPx()
+            val top = cy - gapHalf.roundToPx() - above.height - padTop.roundToPx()
+            val bottom = cy + gapHalf.roundToPx() + below.height + padBottom.roundToPx()
             val bg = measurables[0].measure(androidx.compose.ui.unit.Constraints.fixed(w, (bottom - top).coerceAtLeast(w)))
             // Hug the camera's edge with a margin, never past the screen edge.
             val left = if (side > 0) windowWidth - edge.roundToPx() - w else edge.roundToPx()
@@ -271,6 +303,66 @@ internal fun VerticalIsland(content: IslandContent, camera: android.graphics.Rec
                 above.place(left + (w - above.width) / 2, cy - gapHalf.roundToPx() - above.height)
                 below.place(left + (w - below.width) / 2, cy + gapHalf.roundToPx())
             }
+        }
+    }
+}
+
+/** Call controls stacked down the rail: decline and answer while ringing; mute, end and speaker during the call. */
+@Composable
+private fun RailCallButtons(call: IslandActivity.Call) {
+    val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    fun act(kind: CallControls.Kind) { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm); IslandListenerService.callAction(context, call.key, kind) }
+    val red = Color(0xFFFF453A)
+    val grey = Color.White.copy(alpha = .22f)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (call.incoming) {
+            if (call.canAnswer) RailCallButton(Icons.Rounded.Call, "Accept", IslandGreen) { act(CallControls.Kind.ANSWER) }
+            if (call.canDecline) RailCallButton(Icons.Rounded.CallEnd, "Decline", red) { act(CallControls.Kind.DECLINE) }
+        } else {
+            if (call.canMute) RailCallButton(Icons.Rounded.MicOff, "Mute", grey) { act(CallControls.Kind.MUTE) }
+            if (call.canSpeaker) RailCallButton(Icons.AutoMirrored.Rounded.VolumeUp, "Speaker", grey) { act(CallControls.Kind.SPEAKER) }
+            if (call.canHangUp) RailCallButton(Icons.Rounded.CallEnd, "End", red) { act(CallControls.Kind.HANG_UP) }
+        }
+    }
+}
+
+@Composable
+private fun RailCallButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(CircleShape).background(color).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(24.dp))
+    }
+}
+
+private val SIDE_ISLAND_EDGE = 6.dp
+private fun sideIslandThickness(hole: androidx.compose.ui.unit.Dp) = maxOf(hole + 14.dp, 40.dp)
+
+/**
+ * Room Home keeps on the camera's side edge for the upright island, so the rail and grid never sit under it.
+ * Always reserved while the island is on (not only while something plays), so Home doesn't shift when music starts.
+ */
+@Composable
+internal fun rememberSideIslandInsets(enabled: Boolean): androidx.compose.foundation.layout.WindowInsets {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var layoutTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(view) {
+        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { layoutTick++ }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    }
+    val camera = remember(layoutTick, config.orientation, config.screenWidthDp) {
+        view.rootWindowInsets?.displayCutout?.boundingRects?.filter { !it.isEmpty }?.minByOrNull { it.top }
+            ?: CameraArea.hiddenCamera(view.display)
+    }
+    val w = view.rootView.width; val h = view.rootView.height
+    val side = if (enabled) cameraSideEdge(camera, w, h) else null
+    return remember(side, camera, w, h) {
+        if (side == null || camera == null) androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
+        else with(density) {
+            val reach = (SIDE_ISLAND_EDGE + sideIslandThickness(minOf(camera.width(), camera.height()).toDp()) + 4.dp).roundToPx()
+            if (side > 0) androidx.compose.foundation.layout.WindowInsets(right = reach) else androidx.compose.foundation.layout.WindowInsets(left = reach)
         }
     }
 }

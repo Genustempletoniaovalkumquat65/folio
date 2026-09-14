@@ -498,7 +498,8 @@ fun LauncherScreen(
         if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         // Home never moves for the keyboard: including IME insets here re-measured the whole grid on every
         // frame of the keyboard animation (Spotlight/search jank). Sheets that need it use imePadding themselves.
-        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets()))) {
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime).union(rememberHiddenCameraInsets())
+            .union(rememberSideIslandInsets(state.island)))) {
             val wide = maxWidth.value >= 650f && maxHeight.value >= REGULAR_MIN_HEIGHT_DP
             val preset = if (wide) state.expanded else state.compact
             val density = LocalDensity.current
