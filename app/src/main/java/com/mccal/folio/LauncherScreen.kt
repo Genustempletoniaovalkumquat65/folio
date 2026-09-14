@@ -549,10 +549,10 @@ fun LauncherScreen(
             }
             val contentHeight = maxHeight
             val panelWidth = maxWidth - geometry.homeWidth.dp
-            val pagerWidth = maxWidth - preset.dockWidth.dp - 28.dp
+            val pagerWidth = if (geometry.horizontalDock) maxWidth else maxWidth - preset.dockWidth.dp - 28.dp
             val leftColumnOrigin = (maxWidth / 2f - geometry.gridWidth.dp) / 2f - 16.dp
             val homeStride = panelWidth - leftColumnOrigin
-            val bottomSpace = if (isDefaultHome) 44.dp else 88.dp
+            val bottomSpace = (if (isDefaultHome) 44.dp else 88.dp) + if (geometry.horizontalDock) (geometry.dockBarHeight + 16f).dp else 0.dp
             val workspaceMotion = if (geometry.expanded) remember(firstHome, visibleHomePages, pagerWidth, homeStride, density) {
                 WorkspacePageMotion(firstHome, visibleHomePages, with(density) { pagerWidth.toPx() }, with(density) { homeStride.toPx() })
             } else null
@@ -683,19 +683,23 @@ fun LauncherScreen(
                 compact = contentHeight < 500.dp, iconSize = dockIconSize(geometry.iconSize).dp, style = state.statusStyle,
                 island = null)
             // Background and border without clipping, so Harbor-style magnified icons can grow past the rail.
-            Box(Modifier.align(railTop(state.leftHanded)).railEdge(state.leftHanded, 12.dp).offset(y = geometry.dockTop.dp)
-                .width(preset.dockWidth.dp).height(geometry.dockHeight.dp).graphicsLayer {
+            // Portrait unfolded (iPhone Duo): a horizontal dock bar centered along the bottom, above the page controls.
+            val dockPitch = dockIconSize(geometry.iconSize) + 22f
+            Box((if (geometry.horizontalDock) Modifier.align(Alignment.BottomCenter).padding(bottom = (if (isDefaultHome) 44 else 88).dp + 8.dp)
+                    .width((dockPitch * state.dock.size + 16f).dp).height(geometry.dockBarHeight.dp)
+                else Modifier.align(railTop(state.leftHanded)).railEdge(state.leftHanded, 12.dp).offset(y = geometry.dockTop.dp)
+                    .width(preset.dockWidth.dp).height(geometry.dockHeight.dp)).graphicsLayer {
                     // Composite the stationary dock independently of the shared pager layer (not while magnifying: it would clip).
                     compositingStrategy = if (state.dockMagnify) androidx.compose.ui.graphics.CompositingStrategy.Auto
                         else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 }.background(Glass.copy(alpha = state.statusStyle.railGlass), RoundedCornerShape(30.dp))
                 .border(1.dp, RailBorder, RoundedCornerShape(30.dp)).testTag("dock")) {
-                Column(Modifier.padding(vertical = 8.dp).verticalScroll(dockScroll)) {
-                    DockAppColumn(state.dock, previewLayout.dock, appsById, geometry.dockRowHeight,
+                Column(if (geometry.horizontalDock) Modifier.fillMaxSize().padding(horizontal = 8.dp) else Modifier.padding(vertical = 8.dp).verticalScroll(dockScroll)) {
+                    DockAppColumn(state.dock, previewLayout.dock, appsById, if (geometry.horizontalDock) dockPitch else geometry.dockRowHeight,
                         dockIconSize(geometry.iconSize), drag, insertionTarget,
                         onLaunch = onLaunchFrom, onChoose = { dockSlot = it; sheet = "dock" },
-                        magnify = FeatureScopes.on(state.featureScopes, "dockMagnify", state.dockMagnify, screenFor(geometry.expanded)) &&
-                            !LocalReduceMotion.current, leftHanded = state.leftHanded)
+                        magnify = FeatureScopes.on(state.featureScopes, "dockMagnify", state.dockMagnify, screenFor(wide)) &&
+                            !LocalReduceMotion.current, leftHanded = state.leftHanded, horizontal = geometry.horizontalDock)
                 }
             }
             Column(Modifier.align(if (state.leftHanded) Alignment.BottomEnd else Alignment.BottomStart).width(pagerWidth)
@@ -1779,8 +1783,13 @@ private fun DockAppColumn(
     onChoose: (Int) -> Unit,
     magnify: Boolean = false,
     leftHanded: Boolean = false,
+    /** Lay the dock out left to right (the bottom bar) instead of top to bottom (the side rail). */
+    horizontal: Boolean = false,
 ) {
     val draggedId = drag.source?.appId
+    // One slot along the dock's axis; rowHeight is the pitch either way.
+    fun Modifier.slot(index: Int) = if (horizontal) fillMaxHeight().width(rowHeight.dp).offset(x = (rowHeight * index).dp)
+        else fillMaxWidth().height(rowHeight.dp).offset(y = (rowHeight * index).dp)
     val edit = LocalHomeEdit.current
     val dockTarget = (target as? DropTarget.Dock)?.index
     val source = drag.source?.target as? DropTarget.Dock
@@ -1804,17 +1813,19 @@ private fun DockAppColumn(
     // Harbor-style magnification: icons swell under the finger as it slides along the dock (touches pass through).
     var touchY by remember { mutableStateOf<Float?>(null) }
     val haptic = LocalHapticFeedback.current
-    Box(Modifier.fillMaxWidth().height((rowHeight * savedDock.size).dp).then(if (!magnify) Modifier else Modifier.pointerInput(Unit) {
+    fun along(position: Offset) = if (horizontal) position.x else position.y
+    Box((if (horizontal) Modifier.fillMaxHeight().width((rowHeight * savedDock.size).dp) else Modifier.fillMaxWidth().height((rowHeight * savedDock.size).dp))
+        .then(if (!magnify) Modifier else Modifier.pointerInput(horizontal) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-            touchY = down.position.y
-            var lastRow = (down.position.y / rowHeightPx).toInt()
+            touchY = along(down.position)
+            var lastRow = (along(down.position) / rowHeightPx).toInt()
             while (true) {
                 val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 if (!change.pressed) break
-                touchY = change.position.y
-                val row = (change.position.y / rowHeightPx).toInt()
+                touchY = along(change.position)
+                val row = (along(change.position) / rowHeightPx).toInt()
                 if (row != lastRow) { lastRow = row; haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
             }
             touchY = null
@@ -1826,7 +1837,7 @@ private fun DockAppColumn(
             val previewId = previewDock.getOrNull(index)
             val highlighted = drag.active && target == cell
             val gap = hiddenIndex == index
-            Box(Modifier.fillMaxWidth().height(rowHeight.dp).offset(y = (rowHeight * index).dp)
+            Box(Modifier.slot(index)
                 .background(if (highlighted) Color.White.copy(alpha = .3f) else Color.Transparent, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center) {
                 when {
@@ -1836,7 +1847,7 @@ private fun DockAppColumn(
                     previewId == null -> Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             }
-            Box(Modifier.fillMaxWidth().height(rowHeight.dp).offset(y = (rowHeight * index).dp)
+            Box(Modifier.slot(index)
                 .testTag("dock-slot-$index").dropRegion(drag, cell, savedApp?.id)
                 .semantics(mergeDescendants = true) { contentDescription = savedApp?.label ?: "Choose dock app ${index + 1}" }
                 .combinedClickable(interactionSource = interactions[index], indication = LocalIndication.current, role = Role.Button, onClick = {
@@ -1853,7 +1864,7 @@ private fun DockAppColumn(
             val app = appsById[id] ?: return@forEach
             key(id) {
                 val animatedOffset by animateIntOffsetAsState(
-                    IntOffset(0, (renderIndex * rowHeightPx).roundToInt()),
+                    if (horizontal) IntOffset((renderIndex * rowHeightPx).roundToInt(), 0) else IntOffset(0, (renderIndex * rowHeightPx).roundToInt()),
                     animationSpec = if (drag.active) androidx.compose.animation.core.spring(visibilityThreshold = IntOffset(1, 1))
                         else androidx.compose.animation.core.snap(), label = "dock insertion $id")
                 val visible = previewIndex >= 0 && renderIndex != hiddenIndex
@@ -1861,7 +1872,7 @@ private fun DockAppColumn(
                     if (!visible) 0f else if (dimDragged && id == draggedId) .28f else 1f,
                     label = "dock insertion visibility $id",
                 )
-                Box(Modifier.offset { animatedOffset }.fillMaxWidth().height(rowHeight.dp).alpha(opacity)
+                Box(Modifier.offset { animatedOffset }.then(if (horizontal) Modifier.fillMaxHeight().width(rowHeight.dp) else Modifier.fillMaxWidth().height(rowHeight.dp)).alpha(opacity)
                     .testTag("dock-app-$id"), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(iconSize.dp).testTag("dock-icon-$id")
                         .onGloballyPositioned { if (savedIndex >= 0) { launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()); IconBounds.update(id, launchBounds[savedIndex]) } }
@@ -1873,7 +1884,8 @@ private fun DockAppColumn(
                         AppIcon(app, null, Modifier.fillMaxSize().graphicsLayer {
                             val s = slotScales[renderIndex] * magnification; scaleX = s; scaleY = s
                             // Grow toward the screen, away from the edge the dock sits on.
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (leftHanded) 0f else 1f, .5f)
+                            transformOrigin = if (horizontal) androidx.compose.ui.graphics.TransformOrigin(.5f, 1f)
+                                else androidx.compose.ui.graphics.TransformOrigin(if (leftHanded) 0f else 1f, .5f)
                         }, shape = RoundedCornerShape(11.dp))
                         if (edit.active && savedIndex >= 0) JiggleRemoveButton("Remove ${app.label} from dock") { edit.onRemove(DropTarget.Dock(savedIndex)) }
                     }

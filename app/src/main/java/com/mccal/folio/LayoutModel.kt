@@ -33,6 +33,9 @@ data class HomeGeometry(
     val splitColumns: Boolean = false,
     val cellWidth: Float = gridWidth / 4f,
     val zoneGap: Float = 0f,
+    /** Tall, roomy windows (the unfolded screen in portrait): one centered page with the dock as a bar along the bottom. */
+    val horizontalDock: Boolean = false,
+    val dockBarHeight: Float = 0f,
 )
 
 /**
@@ -84,9 +87,17 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
     railControls: Boolean = true): HomeGeometry {
     val p = preset.sanitized()
     // Unfolded Duo layout only with regular size both ways; the cover in landscape is still compact.
-    val expanded = width >= 650f && height >= REGULAR_MIN_HEIGHT_DP
+    // Two Duo panels side by side need a window wider than tall. Taller than wide (portrait), iPhone Duo keeps one
+    // centered Home page with the dock as a horizontal bar: the only pose where Apple keeps horizontal bars.
+    val horizontalDock = width >= 600f && height >= REGULAR_MIN_HEIGHT_DP && height > width
+    val expanded = width >= 650f && height >= REGULAR_MIN_HEIGHT_DP && !horizontalDock
     val homeWidth = if (expanded) minOf(460f, width * 0.56f) else width
-    var gridWidth = (homeWidth - p.dockWidth - 44f).coerceAtLeast(192f)
+    val dockBarHeight = if (horizontalDock) dockIconSize(p.iconSize) + 28f else 0f
+    val homeBottomSpace = homeBottomSpace + if (horizontalDock) dockBarHeight + 16f else 0f
+    // Columns about as wide as an icon and its breathing room, centered, instead of stretching across a big screen.
+    // Status sits in the top-right corner, so the same margin is kept on both sides and the grid stays centered.
+    var gridWidth = if (horizontalDock) minOf(width - 2f * (p.dockWidth + 56f), 4f * p.iconSize * 1.9f).coerceAtLeast(4f * (p.iconSize + 16f))
+        else (homeWidth - p.dockWidth - 44f).coerceAtLeast(192f)
     // Keep the same icon rhythm when labels are hidden; allow larger system text to fit.
     val labelSpace = if (labels) maxOf(20f, labelHeight) else 20f
     fun rowFor(iconSize: Float, gap: Float) = maxOf(48f, iconSize + labelSpace) + gap
@@ -139,7 +150,8 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
         .coerceIn(topLimit, maxOf(topLimit, height - homeDockHeight - homeReserve))
     val dockTop = homeDockTop.coerceIn(topLimit, maxOf(topLimit, height - dockHeight - bottomReserve))
     return HomeGeometry(expanded, homeWidth, gridWidth, icon, row, widget, contentTop, dockTop, dockHeight, dockRowHeight,
-        splitColumns = splitColumns, cellWidth = if (splitColumns) splitCell else gridWidth / 4f, zoneGap = if (splitColumns) zoneGap else 0f)
+        splitColumns = splitColumns, cellWidth = if (splitColumns) splitCell else gridWidth / 4f, zoneGap = if (splitColumns) zoneGap else 0f,
+        horizontalDock = horizontalDock, dockBarHeight = dockBarHeight)
 }
 
 /** Keep stored order stable across installs, removals and configuration changes. */
