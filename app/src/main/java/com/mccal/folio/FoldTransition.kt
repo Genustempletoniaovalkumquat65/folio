@@ -124,15 +124,11 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
         }
     } }
 
-    val useBlurEffect = enabled && !snapshotMorph
-    Box(Modifier.fillMaxSize()) {
-    Box(Modifier.fillMaxSize()
-        // Keep a live recording of Folio's screen so a snapshot can be taken instantly when folding starts.
-        .then(if (enabled && snapshotMorph) Modifier.drawWithContent {
-            contentLayer.record { this@drawWithContent.drawContent() }
-            drawLayer(contentLayer)
-        } else Modifier)
-        .then(
+    // The Duo shader always drives the rotating half; the iPhone Duo style adds the still right half on top.
+    val useBlurEffect = enabled
+    // The Duo effect wraps both the live screen and the still picture (so the cover's blur applies to both),
+    // while the recording below it captures the clean screen (a snapshot must never have blur baked in).
+    Box(Modifier.fillMaxSize().then(
         if (shader != null) Modifier.graphicsLayer {
             renderEffect = if (useBlurEffect && m > 0f && Build.VERSION.SDK_INT >= 33) shader.effect(size.width, size.height, (m * intensity).coerceIn(0f, 1.5f), cover = !fold.expanded) else null
         } else Modifier.drawWithContent {
@@ -142,63 +138,49 @@ fun FoldTransitionHost(enabled: Boolean = true, intensity: Float = 1f, stayAwake
                     .5f to Color.Transparent, startX = 0f, endX = size.width))
                 else drawRect(Color.Black.copy(alpha = .5f * m))
             }
-        })) { content() }
+        })) {
+        Box(Modifier.fillMaxSize()
+            // Keep a live recording of Folio's screen so a snapshot can be taken instantly when folding starts.
+            .then(if (enabled && snapshotMorph) Modifier.drawWithContent {
+                contentLayer.record { this@drawWithContent.drawContent() }
+                drawLayer(contentLayer)
+            } else Modifier)) { content() }
         if (snapshotMorph && morph < 1f) SnapshotMorph(fold.expanded, coverShot, innerShot) { morph }
+        // Whole screen dims as it folds, like the display powering down with the hinge.
+        if (enabled && fold.closing) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            drawRect(Color.Black.copy(alpha = (m * FOLD_DIM).coerceIn(0f, FOLD_DIM)))
+        }
     }
 }
 
 /**
- * Draws the snapshots over the live screen and melts them away:
- *  - unfold: last inner screen (blurred, dim) on the left half; the cover screen grows into the right half.
- *  - fold: the right half of the inner screen, scaled onto the cover, fades into the live cover.
+ * iPhone Duo's trick (per hands-on reviews and chuspeeism/iphone-duo): content doesn't move. The panel with the
+ * rear cameras stays put, so the cover screen's picture is shown on the inner screen's right half at the same
+ * physical size and position (hinge-side edge on the hinge, top-aligned) while the left half comes into focus
+ * (the Duo shader on the live screen). Folding does the reverse. The still picture then fades into the live UI.
+ * Both Fold screens share a density, so 1:1 pixels means the same physical size.
  */
 @Composable
 private fun SnapshotMorph(expanded: Boolean, coverShot: androidx.compose.ui.graphics.ImageBitmap?,
     innerShot: androidx.compose.ui.graphics.ImageBitmap?, progress: () -> Float) {
-    if (expanded) {
-        innerShot?.let { shot ->
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
-                val p = progress()
-                alpha = 1f - p
-                val r = 48f * (1f - p) + 8f
-                renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp)
-            }) {
-                val half = size.width / 2
-                clipRect(right = half) {
-                    drawImage(shot, dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()))
-                    drawRect(Color.Black.copy(alpha = .35f))
-                }
-            }
-        }
-        coverShot?.let { shot ->
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
-                val p = progress()
-                alpha = (1f - p * 1.15f).coerceIn(0f, 1f)
-            }) {
-                val p = progress()
-                val half = size.width / 2
-                // Cover content lands on the right half and grows slightly into place.
-                val scale = (half / shot.width) * (.94f + .06f * p)
-                val w = shot.width * scale; val h = shot.height * scale
-                val left = half + (half - w) / 2
-                drawImage(shot, dstOffset = androidx.compose.ui.unit.IntOffset(left.toInt(), 0),
-                    dstSize = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()))
+    // Hold the still picture while the rotating half clears, then hand over to the live UI.
+    fun stillAlpha(p: Float) = 1f - ((p - STILL_HOLD) / (1f - STILL_HOLD)).coerceIn(0f, 1f)
+    if (expanded) coverShot?.let { shot ->
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = stillAlpha(progress()) }) {
+            val hinge = size.width / 2
+            clipRect(left = hinge) {
+                drawImage(shot, dstOffset = androidx.compose.ui.unit.IntOffset(hinge.toInt(), 0),
+                    dstSize = androidx.compose.ui.unit.IntSize(shot.width, shot.height))
             }
         }
     } else innerShot?.let { shot ->
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer {
-            val p = progress()
-            alpha = 1f - p
-        }) {
-            // Right half of the inner screen shrinks onto the cover.
-            val p = progress()
-            val srcLeft = shot.width / 2
-            val scale = 1.06f - .06f * p
-            val w = size.width * scale; val h = size.height * scale
-            drawImage(shot, srcOffset = androidx.compose.ui.unit.IntOffset(srcLeft, 0),
-                srcSize = androidx.compose.ui.unit.IntSize(shot.width - srcLeft, shot.height),
-                dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()),
-                dstSize = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()))
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = stillAlpha(progress()) }) {
+            // The inner right half, 1:1, with the hinge on the cover's left edge.
+            val hinge = shot.width / 2
+            drawImage(shot, srcOffset = androidx.compose.ui.unit.IntOffset(hinge, 0),
+                srcSize = androidx.compose.ui.unit.IntSize(shot.width - hinge, shot.height),
+                dstOffset = androidx.compose.ui.unit.IntOffset.Zero,
+                dstSize = androidx.compose.ui.unit.IntSize(shot.width - hinge, shot.height))
         }
     }
 }
@@ -237,6 +219,8 @@ private class FoldTimeline(context: Context) : SensorEventListener {
     var onClosingStarted: (() -> Unit)? = null
     /** Uptime when the screenshot morph started on the new display, or -1. */
     var morphFrom = -1L
+    /** Folding from the open screen right now. */
+    val closing get() = closeStartAt >= 0 && expanded
     val busy get() = morphFrom >= 0 || waitingForPanel || litAt >= 0 || closeStartAt >= 0 || reopenedAt >= 0 || coverLitAt >= 0 || coverOpeningAt >= 0
 
     fun start() { hinge?.let { sensors?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) } }
@@ -303,17 +287,12 @@ private class FoldTimeline(context: Context) : SensorEventListener {
     fun targetM(now: Long): Float = when {
         waitingForPanel -> if (expanded) START_M_ON_UNFOLD else START_M_ON_COVER
 
-        // Unfold: predicted path from the lit moment to flat, bent by the real flat step.
+        // Unfold, like iPhone Duo: the rotating (left) half fades from dark and blurred to clear. Recording the
+        // Fold8 showed the panel lights only as the hinge is nearly flat, so a hinge-bound fade was over before it
+        // was visible. The fade is a steady, fixed-length ease from the moment the panel is lit instead.
         expanded && litAt >= 0 -> {
-            val sinceLit = (now - litAt).toFloat()
-            val predicted = 1f - easeInOutSine((sinceLit / predictedOpenMs).coerceIn(0f, 1f))
-            val path = START_M_ON_UNFOLD * predicted
-            val m = if (flatAt >= 0) {
-                // Flat is real: finish from wherever we are within FINISH_MS.
-                val finish = easeOutCubic(((now - flatAt) / FINISH_MS).coerceIn(0f, 1f))
-                minOf(path, START_M_ON_UNFOLD * (1f - finish))
-            } else maxOf(path, HOLD_M_BEFORE_FLAT) // not flat yet: don't clear fully early
-            if (m <= 0.001f && (flatAt >= 0 || sinceLit > predictedOpenMs + STALL_MS)) { litAt = -1L; flatAt = -1L; 0f } else m
+            val t = ((now - litAt) / UNFOLD_FADE_MS).coerceIn(0f, 1f)
+            if (t >= 1f) { litAt = -1L; flatAt = -1L; 0f } else START_M_ON_UNFOLD * (1f - easeInOutSine(t))
         }
 
         // Fold: blur builds at the learned speed and completes at the closed step.
@@ -420,17 +399,24 @@ private class DuoShader {
 }
 
 private const val EXPANDED_WIDTH_DP = 600
+/** Share of the morph during which the still picture stays fully visible. */
+private const val STILL_HOLD = .55f
 private const val MORPH_UNFOLD_MS = 650f
 private const val MORPH_FOLD_MS = 420f
 /** Inner panel lights around 120–135° on Z Fold: the cover half is still ~50° from flat. */
-private const val START_M_ON_UNFOLD = .78f
-private const val HOLD_M_BEFORE_FLAT = .08f
+private const val START_M_ON_UNFOLD = 1f
+/** Unfold fade length (the iPhone Duo reveal reads as ~half a second). */
+private const val UNFOLD_FADE_MS = 520f
+/** Strongest whole-screen dim while folding. */
+private const val FOLD_DIM = .6f
 private const val HOLD_M_BEFORE_CLOSED = .9f
-private const val FINISH_MS = 160f
+// Measured on a Galaxy Z Fold8: the hinge reports only 0/90/180° on a 200 ms grid, so "flat" can arrive up to
+// 200 ms after the panel is really flat. Finish faster once it does so the reveal doesn't trail the hand.
+private const val FINISH_MS = 120f
 private const val STALL_MS = 900f
-private const val COVER_MS = 450f
+private const val COVER_MS = 380f
 /** The cover lights right at closed, where the Duo outer screen is nearly clean: a light settle. */
-private const val START_M_ON_COVER = .45f
+private const val START_M_ON_COVER = .7f
 private const val COVER_OPEN_MS = 220f
 private const val COVER_OPEN_STALL_MS = 2_000L
 private const val FOLLOW_MS = 28f

@@ -410,10 +410,23 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                 }
                 CustomizationPage.FOLD -> {
+                    // What Folio has learned about how fast you fold (it adapts the animation to this).
+                    val foldPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("folio", 0)
+                    var learned by remember { mutableStateOf(foldPrefs.getFloat("fold_open_ms", 520f) to foldPrefs.getFloat("fold_close_ms", 650f)) }
+                    SettingsCard("Your fold timing") {
+                        Text("Unfold: about ${learned.first.toInt()} ms · Fold: about ${learned.second.toInt()} ms",
+                            style = MaterialTheme.typography.bodyLarge)
+                        Text("Learned from your last folds and used to pace the animation. Reset if someone else has been using the phone.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = {
+                            foldPrefs.edit().remove("fold_open_ms").remove("fold_close_ms").apply()
+                            learned = 520f to 650f
+                        }) { Text("Reset fold timing") }
+                    }
                     SettingsCard("Fold animation") {
                         SettingsSwitch("Fold animation", state.foldEffect, model::setFoldEffect, "fold-effect-switch")
                         if (state.foldEffect) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("Duo blur") })
+                            IosChip(selected = !state.foldSnapshot, onClick = { model.setFoldSnapshot(false) }, label = { Text("iPhone Duo fade") })
                             IosChip(selected = state.foldSnapshot, onClick = { model.setFoldSnapshot(true) }, label = { Text("Screenshot morph") })
                         }
                         if (state.foldEffect && state.foldSnapshot) Text("Takes a quick in-memory snapshot of Folio’s screen as the hinge starts moving and melts it into the other display. Nothing is saved.",

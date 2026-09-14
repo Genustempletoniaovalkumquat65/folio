@@ -1711,8 +1711,11 @@ private fun SharedHomeGrid(
             key(id) {
                 val localIndex = renderIndex - pageStart
                 val row = localIndex / GRID_COLUMNS
+                // Slide only while rearranging; a new screen size (folding) must place icons immediately.
                 val animatedOffset by animateIntOffsetAsState(
                     IntOffset(((localIndex % GRID_COLUMNS) * cellWidthPx).roundToInt(), with(density) { rowTop(row).dp.toPx() }.roundToInt()),
+                    animationSpec = if (drag.active || edit.active) androidx.compose.animation.core.spring(visibilityThreshold = IntOffset(1, 1))
+                        else androidx.compose.animation.core.snap(),
                     label = "home insertion $id",
                 )
                 val visible = previewIndex in pageRange && renderIndex != hiddenIndex
@@ -1850,7 +1853,9 @@ private fun DockAppColumn(
             val app = appsById[id] ?: return@forEach
             key(id) {
                 val animatedOffset by animateIntOffsetAsState(
-                    IntOffset(0, (renderIndex * rowHeightPx).roundToInt()), label = "dock insertion $id")
+                    IntOffset(0, (renderIndex * rowHeightPx).roundToInt()),
+                    animationSpec = if (drag.active) androidx.compose.animation.core.spring(visibilityThreshold = IntOffset(1, 1))
+                        else androidx.compose.animation.core.snap(), label = "dock insertion $id")
                 val visible = previewIndex >= 0 && renderIndex != hiddenIndex
                 val opacity by animateFloatAsState(
                     if (!visible) 0f else if (dimDragged && id == draggedId) .28f else 1f,
@@ -1915,7 +1920,8 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .88f else 1f,
         androidx.compose.animation.core.spring(dampingRatio = .55f, stiffness = androidx.compose.animation.core.Spring.StiffnessMedium), label = "app press")
-    val iconSize by animateDpAsState(size.dp, label = "icon size")
+    // No size animation: after folding, the cover's icons must appear at their own size on the first frame.
+    val iconSize = size.dp
     val bounds = remember { android.graphics.Rect() }
     val openPanel = LocalAppPanel.current
     Column(modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = app.label }

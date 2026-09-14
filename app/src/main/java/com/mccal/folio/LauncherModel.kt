@@ -67,7 +67,7 @@ data class LauncherState(
     val statusStyle: StatusStyle = StatusStyle(),
     val foldEffect: Boolean = true,
     val foldIntensity: Float = 1f,
-    /** Fold style: Duo blur (false) or screenshot morph (true). */
+    /** Fold style: blur only (false) or iPhone Duo — still 1:1 right half plus blur (true). */
     val foldSnapshot: Boolean = false,
     val stayAwakeOnFold: Boolean = true,
     /** Blur of Home behind panels and Spotlight, 0…1. */
