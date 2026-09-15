@@ -15,6 +15,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -124,10 +125,18 @@ internal fun TopPanels(panel: ShadePanel?, progress: () -> Float, status: Device
             .pointerInput(Unit) { detectTapGestures() }
             .graphicsLayer {
                 val p = progress()
-                alpha = p
-                translationY = -lift * (1f - p)
-                scaleX = .96f + .04f * p; scaleY = scaleX
-                transformOrigin = TransformOrigin(if (current == ShadePanel.NOTIFICATIONS) 0f else 1f, 0f)
+                if (current == ShadePanel.NOTIFICATIONS) {
+                    // iOS: Notification Center slides down from the top edge and doesn't zoom; it's fully opaque
+                    // early so the list reads as one sheet moving, not a fade.
+                    alpha = (p * 1.6f).coerceAtMost(1f)
+                    translationY = -lift * 3f * (1f - p)
+                } else {
+                    // Control Center grows out of the corner it was pulled from.
+                    alpha = p
+                    translationY = -lift * (1f - p)
+                    scaleX = .92f + .08f * p; scaleY = scaleX
+                    transformOrigin = TransformOrigin(1f, 0f)
+                }
             }
         if (split) {
             val clockLift = lift
@@ -218,11 +227,14 @@ private fun NotificationCenter(modifier: Modifier, showClock: Boolean, grouped: 
                                 PanelPill(stringResource(R.string.show_less)) { expandedGroup = null }
                             }
                         }
-                        items(group, key = { it.key }) { item -> NotificationCard(item, Modifier.animateItem()) {
+                        items(group, key = { it.key }) { item -> NotificationCard(item, Modifier.animateItem(fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            placementSpec = spring(dampingRatio = .86f, stiffness = Spring.StiffnessMediumLow))) {
                             onClose(); IslandListenerService.openNotification(context, item)
                         } }
-                    } else item("$pkg-stack") {
-                        StackedNotification(group, Modifier.animateItem()) { expandedGroup = pkg }
+                    } else item(group.first().key) {
+                        // Same key as the first card when expanded, so the stack slides apart instead of swapping.
+                        StackedNotification(group, Modifier.animateItem(fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            placementSpec = spring(dampingRatio = .86f, stiffness = Spring.StiffnessMediumLow))) { expandedGroup = pkg }
                     }
                 }
             }
@@ -253,7 +265,11 @@ private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCo
     fun settle(to: Float) = scope.launch { swipe.animateTo(to, spring(dampingRatio = .85f, stiffness = Spring.StiffnessMediumLow)) }
     BoxWithConstraints(modifier.clip(RoundedCornerShape(22.dp))) {
         val widthPx = constraints.maxWidth.toFloat()
-        if (swipe.value < -1f) Row(Modifier.matchParentSize().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        if (swipe.value < -1f) Row(Modifier.matchParentSize().padding(start = 12.dp).graphicsLayer {
+                // Buttons grow in as the card slides, like iOS, instead of popping in at full size.
+                val t = (-swipe.value / reveal).coerceIn(0f, 1f)
+                alpha = t; scaleX = .7f + .3f * t; scaleY = scaleX; transformOrigin = TransformOrigin(1f, .5f)
+            }, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically) {
             SwipeAction("Options") { settle(0f); options = true }
             if (item.clearable) SwipeAction("Clear") { scope.launch { swipe.animateTo(-widthPx); IslandListenerService.dismiss(item.key) } }
@@ -277,9 +293,14 @@ private fun NotificationCard(item: NotificationItem, modifier: Modifier, extraCo
         Box(Modifier.onGloballyPositioned { cardBounds = it.boundsInWindow().let { b -> android.graphics.Rect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt()) } }) {
         if (options) NotificationOptions(item, cardBounds) { options = false }
         val cardAccent = if (LocalTintOptions.current.notifications) rememberAccent(item.icon) else null
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(mixColor(NotifGlass, cardAccent, .32f))
+        val press = remember { MutableInteractionSource() }
+        val pressed by press.collectIsPressedAsState()
+        val pressScale by androidx.compose.animation.core.animateFloatAsState(if (pressed) .97f else 1f,
+            spring(dampingRatio = .7f, stiffness = Spring.StiffnessMedium), label = "notification press")
+        Row(Modifier.fillMaxWidth().graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+            .clip(RoundedCornerShape(22.dp)).background(mixColor(NotifGlass, cardAccent, .32f))
             .border(FolioGlass.edge, RoundedCornerShape(22.dp))
-            .combinedClickable(onClick = { if (swipe.value < -1f) settle(0f) else onOpen() }, onLongClick = {
+            .combinedClickable(interactionSource = press, indication = null, onClick = { if (swipe.value < -1f) settle(0f) else onOpen() }, onLongClick = {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); options = true
             }, onLongClickLabel = "Notification options")
             .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

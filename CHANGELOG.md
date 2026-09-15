@@ -20,6 +20,7 @@ Folio shows the newest section on the phone after an update, and every version u
 - Shorter, iPhone-style setup: Home app, notifications, pull-down gestures and a look. Optional permissions are asked where they're used.
 - Settings has one list of permissions (Privacy & Permissions) instead of a separate Setup Checklist, and no repeated Home app rows.
 - Live Clock and Calendar icons match the icons around them: light or dark to fit the app icons, the tint color for Tinted, and an icon pack's own Clock and Calendar when it has them.
+- Notification Center slides down like iOS instead of zooming, stacks slide apart when you expand them, swipe buttons grow in as you swipe, and cards press down when tapped.
 - Layouts are checked against real Android phone, foldable, tablet and desktop screen sizes from Android Studio's device list.
 
 ### Fixed
