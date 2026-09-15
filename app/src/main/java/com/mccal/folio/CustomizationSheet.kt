@@ -189,6 +189,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                 CustomizationPage.COMING_SOON -> ComingSoonPage()
                 CustomizationPage.WALLPAPER -> {
                     val wallpaperContext = androidx.compose.ui.platform.LocalContext.current
+                    AppIconCard(onChanged = { model.refresh() })
                     SettingsCard(stringResource(R.string.background)) {
                         IosSegmented(listOf(true to stringResource(R.string.android_wallpaper), false to stringResource(R.string.folio_background)),
                             state.systemWallpaper, { system -> model.setSystemWallpaper(system); (wallpaperContext as? android.app.Activity)?.recreate() },
@@ -332,7 +333,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             state.iconPack, { IconPacks.clear(); model.setIconPack(it) }, tag = "icon-pack")
                         if (packs.isEmpty()) Text(stringResource(R.string.install_any_icon_pack_made_for_nova_styl),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SettingsSwitch(stringResource(R.string.live_clock_and_calendar_icons), state.liveIcons, model::setLiveIcons, "live-icons-switch")
+                        // Live Clock and Calendar: the app's own icon, or live icons that match the others, or always light/dark.
+                        IosMenuRow("Clock & Calendar", listOf("OFF" to "App Icons", "AUTO" to "Live, Automatic", "LIGHT" to "Live, Light", "DARK" to "Live, Dark"),
+                            if (state.liveIcons) state.liveIconLook else "OFF",
+                            { if (it == "OFF") model.setLiveIcons(false) else model.setLiveIconLook(it) }, tag = "live-icons-menu")
                         IosMenuRow(stringResource(R.string.shape), IconShape.entries.map { it to it.label }, state.iconShape, model::setIconShape, tag = "icon-shape")
                         IosMenuRow(stringResource(R.string.notification_badges), BadgeStyle.entries.map { it to it.label }, state.badgeStyle, model::setBadgeStyle, tag = "badge-style")
                         if (state.badgeStyle != BadgeStyle.OFF) IosMenuRow(stringResource(R.string.badge_color), BadgeColor.entries.map { it to it.label }, state.badgeColor, model::setBadgeColor, tag = "badge-color")
@@ -1253,7 +1257,7 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
 
 /** Folio's icon from its adaptive layers, so it gets an iOS rounded square rather than the device's icon mask. */
 internal fun folioIconBitmap(context: android.content.Context, size: Int = 216): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
-    val adaptive = context.getDrawable(R.mipmap.ic_launcher) as android.graphics.drawable.AdaptiveIconDrawable
+    val adaptive = context.getDrawable(AppIconChoice.current(context).mipmap) as android.graphics.drawable.AdaptiveIconDrawable
     android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888).also { bitmap ->
         val canvas = android.graphics.Canvas(bitmap)
         listOfNotNull(adaptive.background, adaptive.foreground).forEach { layer ->
@@ -1305,5 +1309,36 @@ internal fun folioIconBitmap(context: android.content.Context, size: Int = 216):
             Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(detail, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .62f), fontSize = 14.sp, lineHeight = 19.sp)
         }
+    }
+}
+
+/** iOS-style alternate app icons: tap one to use it for Folio's app entry. */
+@Composable private fun AppIconCard(onChanged: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var current by remember { mutableStateOf(AppIconChoice.current(context)) }
+    SettingsCard("App Icon") {
+        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            AppIconChoice.entries.forEach { choice ->
+                val bitmap = remember(choice) { runCatching {
+                    val adaptive = context.getDrawable(choice.mipmap) as android.graphics.drawable.AdaptiveIconDrawable
+                    android.graphics.Bitmap.createBitmap(180, 180, android.graphics.Bitmap.Config.ARGB_8888).also { b ->
+                        val canvas = android.graphics.Canvas(b)
+                        listOfNotNull(adaptive.background, adaptive.foreground).forEach { it.setBounds(-45, -45, 225, 225); it.draw(canvas) }
+                    }.asImageBitmap()
+                }.getOrNull() }
+                val selected = choice == current
+                Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    if (!selected) { AppIconChoice.set(context, choice); current = choice; onChanged() }
+                }.padding(6.dp).semantics { this.selected = selected; contentDescription = "${choice.label} app icon" }.testTag("app-icon-${choice.name.lowercase()}"),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(64.dp).then(if (selected) Modifier.border(2.5.dp, IosBlue, RoundedCornerShape(18.dp)).padding(4.dp) else Modifier.padding(4.dp))) {
+                        bitmap?.let { androidx.compose.foundation.Image(it, null, Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp))) }
+                    }
+                    Text(choice.label, color = if (selected) IosBlue else androidx.compose.ui.graphics.Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        }
+        Text("Changes Folio's icon in the App Library and other launchers.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

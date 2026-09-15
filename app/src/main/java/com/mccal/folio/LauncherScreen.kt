@@ -329,7 +329,8 @@ fun LauncherScreen(
         }
     }
     BackHandler(enabled = sheet == "widgets") { widgetPickerBack() }
-    BackHandler(enabled = sheet.isEmpty()) { if (resizeSlot != null) resizeSlot = null else if (drag.active) {
+    // Off while Spotlight or a top panel is open, so Back always closes those first, whatever order the handlers registered in.
+    BackHandler(enabled = sheet.isEmpty() && !launcherActivity.spotlightVisible.value && launcherActivity.topPanel.value == null) { if (resizeSlot != null) resizeSlot = null else if (drag.active) {
         val destination = if (drag.source?.target is DropTarget.Library) homePages else drag.originPage.coerceAtMost(homePages - 1)
         drag.clear(); scope.launch { pager.scrollToPage(destination) }
     } else if (selectedId != null) selectedId = null else if (homeEdit.active) homeEdit.stop() else { focus.clearFocus(); scope.launch { pager.animateScrollToPage(0) } } }

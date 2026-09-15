@@ -156,7 +156,14 @@ class MainActivity : ComponentActivity() {
                 if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", true)
                 onDispose { if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", false) }
             }
-            val badgeCounts = androidx.compose.runtime.remember(notificationItems) { notificationItems.groupingBy { it.packageName }.eachCount() }
+            val clearedBadges = BadgeClears.cleared.collectAsStateWithLifecycle().value
+            val iconsAreDark by androidx.compose.runtime.produceState<Boolean?>(null, state.apps) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    iconsMostlyDark(state.apps.filter { LiveIcons.kind(this@MainActivity, it.packageName) == null && it.shortcutId == null }.map { it.icon })
+                }
+            }
+            val badgeCounts = androidx.compose.runtime.remember(notificationItems, clearedBadges) { BadgeClears.counts(notificationItems, clearedBadges) }
+            androidx.compose.runtime.SideEffect { latestNotifications = notificationItems }
             val wallpaperTone = rememberWallpaperTone(state.systemWallpaper)
             // Re-read on every resume so turning Remove animations on/off applies without restarting.
             val reduceMotionState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(reduceMotionEnabled(this@MainActivity)) }
@@ -181,8 +188,9 @@ class MainActivity : ComponentActivity() {
                         FeatureScopes.on(state.featureScopes, "notificationAppRow", state.notificationAppRow, screen))
                 },
                 androidx.compose.ui.platform.LocalHapticFeedback provides (if (state.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics),
-                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons),
+                LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons, state.liveIconLook),
                 LocalFocusLock provides FocusPages.lockingFocus(savedState)?.let { FocusLock(it, savedState.layout.pageCount) },
+                LocalIconsAreDark provides iconsAreDark,
                 LocalBadgeCounts provides badgeCounts, LocalInstallProgress provides installProgress, LocalNewApps provides newApps, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {
@@ -295,6 +303,8 @@ class MainActivity : ComponentActivity() {
 
     /** Folio's own iOS-style panels on Home; the Android shade when that setting is off. */
     internal val topPanel = androidx.compose.runtime.mutableStateOf<ShadePanel?>(null)
+    /** The notifications on screen now, for Clear Badge. */
+    internal var latestNotifications: List<NotificationItem> = emptyList()
     internal val spotlightVisible = androidx.compose.runtime.mutableStateOf(false)
     /** Lock Cover: shown when the phone is unlocked straight to Home. */
     private val lockCoverVisible = androidx.compose.runtime.mutableStateOf(false)
@@ -380,7 +390,7 @@ class MainActivity : ComponentActivity() {
     }
     /** Android's "Home app settings" gear, or Folio's own app icon (the FolioSettingsApp alias). */
     private fun opensSettings(intent: Intent) = intent.action == Intent.ACTION_APPLICATION_PREFERENCES ||
-        intent.component?.className == "$packageName.FolioSettingsApp"
+        intent.component?.className?.startsWith("$packageName.${AppIconChoice.ALIAS_PREFIX}") == true
 
     /** Any app can start Home with this extra, so it's parsed again and only ever applied after the user taps Apply. */
     private fun takeSharedTheme(intent: Intent?) {

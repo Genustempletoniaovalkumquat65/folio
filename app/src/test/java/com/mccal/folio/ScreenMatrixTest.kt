@@ -9,19 +9,30 @@ import org.junit.Test
 class ScreenMatrixTest {
     private data class Screen(val name: String, val width: Float, val height: Float)
 
-    private val screens = listOf(
-        Screen("small phone", 320f, 568f), Screen("phone", 360f, 640f), Screen("Pixel", 412f, 915f),
-        Screen("phone landscape", 915f, 412f), Screen("small landscape", 640f, 360f),
-        Screen("flip cover", 388f, 384f), Screen("split-screen phone half", 412f, 450f),
-        Screen("Fold cover", 390f, 910f), Screen("Fold cover landscape", 910f, 390f),
-        Screen("Fold inner", 932f, 704f), Screen("Fold inner portrait", 704f, 932f), Screen("Fold split half", 460f, 704f),
-        Screen("small tablet portrait", 600f, 960f), Screen("tablet portrait", 800f, 1280f), Screen("tablet landscape", 1280f, 800f),
-        Screen("big tablet", 1366f, 1024f), Screen("tablet split half", 640f, 800f), Screen("desktop window", 1920f, 1080f),
-        Screen("big desktop", 2560f, 1440f), Screen("freeform window", 500f, 700f),
+    /**
+     * Real screen sizes in dp, not guesses. Most come from the device definitions Android Studio ships in the SDK
+     * (sdklib devices.xml / nexus.xml / desktop.xml: pixels × 160 / density); the Galaxy Z Fold8 screens were measured
+     * with adb (2448×1848 and 1248×1972 px at 420 dpi). Split-screen entries are half of a listed screen.
+     */
+    private val devices = listOf(
+        Screen("Small Phone (Android Studio)", 360f, 640f), Screen("Nexus 4", 384f, 640f), Screen("Pixel 5", 393f, 851f),
+        Screen("Medium Phone / Pixel 9", 411f, 923f), Screen("Pixel 9 Pro", 427f, 952f), Screen("Pixel 9 Pro XL", 448f, 997f),
+        Screen("6.7\" Horizontal Fold-in (flip, open)", 360f, 879f), Screen("7.4\" Rollable", 610f, 925f),
+        Screen("Galaxy Z Fold8 cover", 475f, 751f), Screen("Galaxy Z Fold8 inner", 932f, 704f),
+        Screen("Pixel Fold inner", 841f, 701f), Screen("Pixel 9 Pro Fold inner", 852f, 883f), Screen("8\" Fold-out", 838f, 945f),
+        Screen("7\" WSVGA tablet", 1024f, 600f), Screen("Nexus 7", 600f, 960f), Screen("Nexus 9", 1024f, 768f),
+        Screen("Medium Tablet / Pixel Tablet", 1280f, 800f), Screen("Pixel C", 1280f, 900f),
+        Screen("Small Desktop", 1366f, 768f), Screen("13.5\" Freeform", 1707f, 960f), Screen("Large Desktop", 1920f, 1080f),
     )
 
+    /** Each device in both orientations, plus split-screen halves of the bigger ones. */
+    private val screens = devices.flatMap { d ->
+        listOf(d, Screen("${d.name} rotated", d.height, d.width)) +
+            (if (maxOf(d.width, d.height) >= 800f) listOf(Screen("${d.name} split half", maxOf(d.width, d.height) / 2f, minOf(d.width, d.height))) else emptyList())
+    }
+
     @Test fun `phones and foldables draw at the system density`() {
-        for (s in listOf(screens[0], screens[1], screens[2], screens[3], screens[5], screens[7], screens[9], screens[10])) {
+        for (s in devices.filter { maxOf(it.width, it.height) < 1000f }) {
             assertEquals(s.name, 1f, uiScale(s.width, s.height))
         }
     }
@@ -30,7 +41,7 @@ class ScreenMatrixTest {
         val tablet = uiScale(1280f, 800f)
         assertTrue(tablet > 1.05f)
         assertEquals(tablet, uiScale(800f, 1280f))
-        assertEquals(1.45f, uiScale(2560f, 1440f))
+        assertEquals(1.45f, uiScale(1920f, 1080f))
         for (s in screens) {
             val scale = uiScale(s.width, s.height)
             assertTrue(s.name, scale in 1f..1.45f)

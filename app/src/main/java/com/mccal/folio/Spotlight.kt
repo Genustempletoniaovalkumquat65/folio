@@ -151,7 +151,8 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
         // picker, a panel or a menu closes), so wait for it first.
         snapshotFlow { windowInfo.isWindowFocused }.first { it }
         withFrameNanos { }
-        repeat(8) { attempt ->
+        // Up to about 1.5 s: a busy first frame (just after Home starts) can leave the field unattached for a while.
+        repeat(20) { attempt ->
             kotlinx.coroutines.delay(if (attempt == 0) 90 else 70)
             runCatching { focus.requestFocus() }
             if (fieldFocused) {
@@ -173,7 +174,25 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
     }
     // Coming back to Spotlight (permission prompt, shade, app switch) brings the keyboard back.
     LaunchedEffect(active, windowInfo.isWindowFocused) {
-        if (active && windowInfo.isWindowFocused && !imeVisible && fieldFocused) { kotlinx.coroutines.delay(150); keyboard?.show() }
+        if (active && windowInfo.isWindowFocused && !imeVisible) {
+            kotlinx.coroutines.delay(150)
+            // If focus never landed (the window lost focus while Spotlight opened), try again from the start.
+            if (fieldFocused) keyboard?.show() else raiseKeyboard()
+        }
+    }
+    // Hiding the keyboard (Back, or the keyboard's own hide button) dismisses Spotlight too, like iOS: the keyboard is
+    // Spotlight's input, so once it's gone the search is over. Only while Folio has window focus, so a permission
+    // prompt or the notification shade doesn't close it.
+    // isImeVisible alone can lag on some keyboards; the keyboard's target height is updated as soon as it starts moving.
+    val imeTarget = WindowInsets.imeAnimationTarget.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+    val imeState = androidx.compose.runtime.rememberUpdatedState(imeVisible || imeTarget)
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
+        var wasUp = false
+        snapshotFlow { imeState.value }.collect { up ->
+            if (up) wasUp = true
+            else if (wasUp && windowInfo.isWindowFocused) { wasUp = false; focusManager.clearFocus(force = true); onClose() }
+        }
     }
     var frecency by remember { mutableStateOf(emptyMap<String, Double>()) }
     LaunchedEffect(active) { if (active) frecency = withContext(Dispatchers.IO) { RecentApps.frecency(context) } }

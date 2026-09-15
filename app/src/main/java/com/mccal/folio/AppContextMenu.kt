@@ -172,6 +172,13 @@ internal fun AppContextMenu(
                 } else {
                 MenuRow("Edit Home Screen", Icons.Rounded.AppRegistration) { onMove() }
                 MenuDivider()
+                if ((LocalBadgeCounts.current[app.packageName] ?: 0) > 0) {
+                    val activity = androidx.activity.compose.LocalActivity.current as? MainActivity
+                    MenuRow("Clear Badge", Icons.Rounded.NotificationsOff) {
+                        activity?.let { BadgeClears.clear(app.packageName, it.latestNotifications) }; onDismiss()
+                    }
+                    MenuDivider()
+                }
                 // A shortcut exists only as this icon, so removing it deletes it (like iOS's "Delete Bookmark").
                 MenuRow(when { app.isShortcut -> "Delete Shortcut"; onHome -> "Remove from Home"; else -> "Add to Home" },
                     if (onHome || app.isShortcut) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.AddCircleOutline,

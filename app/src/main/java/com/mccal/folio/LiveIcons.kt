@@ -82,7 +82,7 @@ enum class BadgeColor(val label: String) { RED("Red"), APP("Match icon"), SOFT("
 /** Icon look for the whole launcher, provided from the saved settings. */
 internal data class IconLook(val style: IconStyle = IconStyle.DEFAULT, val tint: Color = Color(0xFFFFB340),
     val shape: IconShape = IconShape.DEFAULT, val pack: String? = null, val badges: BadgeStyle = BadgeStyle.DOT,
-    val badgeColor: BadgeColor = BadgeColor.RED, val liveIcons: Boolean = true)
+    val badgeColor: BadgeColor = BadgeColor.RED, val liveIcons: Boolean = true, val liveLook: String = "AUTO")
 
 /** Unread notification counts per package, for icon badges. */
 internal val LocalBadgeCounts = androidx.compose.runtime.compositionLocalOf { emptyMap<String, Int>() }
@@ -108,6 +108,8 @@ private fun IconShape.toShape(): androidx.compose.ui.graphics.Shape? = when (thi
     IconShape.ROUNDED -> RoundedCornerShape(22)
 }
 internal val LocalIconLook = androidx.compose.runtime.staticCompositionLocalOf { IconLook() }
+/** Whether most app icons are dark (null until measured), for Automatic live Clock and Calendar icons. */
+internal val LocalIconsAreDark = androidx.compose.runtime.staticCompositionLocalOf<Boolean?> { null }
 
 private fun filterFor(look: IconLook): androidx.compose.ui.graphics.ColorFilter? = when (look.style) {
     IconStyle.DEFAULT -> null
@@ -152,7 +154,18 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
     }
     val packIcon = packLookup?.icon
     val liveKind = kind.takeIf { packLookup != null && packIcon == null }
-    val palette = LivePalette.of(look.style, accent)
+    // Default style follows the app's real icon: a dark system icon theme (like iDark through Theme Park) gets the dark
+    // live icon, so Clock and Calendar match the icons around them.
+    // Automatic follows the other icons on Home (an icon theme often leaves Calendar and Clock alone), falling back
+    // to this app's own icon before those have been measured.
+    val iconsAreDark = LocalIconsAreDark.current
+    val darkSource = iconsAreDark ?: remember(app.icon) { kind != null && isDarkIcon(app.icon) }
+    val palette = when {
+        look.style == IconStyle.TINTED -> LivePalette.of(IconStyle.TINTED, accent)
+        look.liveLook == "LIGHT" -> LivePalette.of(IconStyle.DEFAULT, null)
+        look.liveLook == "DARK" -> LivePalette.of(IconStyle.DARK, null)
+        else -> LivePalette.of(if (look.style == IconStyle.DEFAULT && darkSource) IconStyle.DARK else look.style, accent)
+    }
     val badgeCount = if (!badge || look.badges == BadgeStyle.OFF) 0 else LocalBadgeCounts.current[app.component.packageName] ?: 0
     Box(modifier.semantics { contentDescription?.let { this.contentDescription = it } }) {
         val fill = Modifier.fillMaxSize().then(if (clipShape != null) Modifier.clip(clipShape) else Modifier)
@@ -252,6 +265,19 @@ private fun ClockIcon(modifier: Modifier, palette: LivePalette) {
 }
 
 private class PackLookup(val icon: android.graphics.Bitmap?)
+
+/** Whether an icon is mostly dark: average luminance of its visible pixels, sampled on a coarse grid. */
+internal fun isDarkIcon(bitmap: android.graphics.Bitmap): Boolean = runCatching {
+    val step = maxOf(1, bitmap.width / 24)
+    var sum = 0.0; var count = 0
+    for (y in 0 until bitmap.height step step) for (x in 0 until bitmap.width step step) {
+        val c = bitmap.getPixel(x, y)
+        if (android.graphics.Color.alpha(c) < 200) continue
+        sum += (.2126 * android.graphics.Color.red(c) + .7152 * android.graphics.Color.green(c) + .0722 * android.graphics.Color.blue(c)) / 255.0
+        count++
+    }
+    count > 0 && sum / count < .4
+}.getOrDefault(false)
 
 /**
  * Live Clock and Calendar colors for each icon style, like iOS 18: Default is the classic light Calendar and Clock,
@@ -425,3 +451,27 @@ internal fun rememberAccent(bitmap: android.graphics.Bitmap?): Color? {
 internal fun mixColor(base: Color, accent: Color?, amount: Float): Color = if (accent == null) base else
     Color(base.red + (accent.red - base.red) * amount, base.green + (accent.green - base.green) * amount,
         base.blue + (accent.blue - base.blue) * amount, base.alpha)
+
+/**
+ * Clear Badge (in an app's long-press menu): hides the badge for the notifications showing now, without dismissing
+ * them. A notification posted later brings the badge back, like iOS. Kept in memory only.
+ */
+internal object BadgeClears {
+    /** Package → newest postTime that was cleared. */
+    val cleared = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    fun clear(packageName: String, items: List<NotificationItem>) {
+        val newest = items.filter { it.packageName == packageName }.maxOfOrNull { it.postTime } ?: return
+        cleared.value = cleared.value + (packageName to newest)
+    }
+
+    fun counts(items: List<NotificationItem>, cleared: Map<String, Long>): Map<String, Int> =
+        items.filter { item -> cleared[item.packageName]?.let { item.postTime > it } ?: true }.groupingBy { it.packageName }.eachCount()
+}
+
+/** Most icons dark? Samples up to 40 app icons (skipping Clock and Calendar themselves); null if there aren't enough. */
+internal fun iconsMostlyDark(icons: List<android.graphics.Bitmap>): Boolean? {
+    val sample = icons.take(40)
+    if (sample.size < 4) return null
+    return sample.count(::isDarkIcon) * 2 > sample.size
+}

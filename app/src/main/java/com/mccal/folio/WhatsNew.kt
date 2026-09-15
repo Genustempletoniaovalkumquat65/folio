@@ -1,6 +1,10 @@
 package com.mccal.folio
 
 import android.content.Context
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -75,6 +79,8 @@ internal fun WhatsNewSheet(onDismiss: () -> Unit) {
     val version = androidx.compose.runtime.remember { WhatsNew.currentVersion(context) }
     val notes = androidx.compose.runtime.remember { WhatsNew.notes(context) }
     val release = notes.firstOrNull { it.version == version } ?: notes.firstOrNull()
+    val older = notes.filter { it != release }
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().fillMaxHeight(.9f).padding(horizontal = 24.dp).testTag("whats-new")) {
             androidx.compose.foundation.lazy.LazyColumn(androidx.compose.ui.Modifier.weight(1f), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
@@ -98,6 +104,33 @@ internal fun WhatsNewSheet(onDismiss: () -> Unit) {
                                 if (index > 0) MenuDivider()
                                 androidx.compose.material3.Text(text, color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp,
                                     modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+                            }
+                        }
+                    }
+                }
+                // Version History: every earlier release, collapsed like iOS disclosure rows.
+                if (older.isNotEmpty()) item { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(top = 12.dp)) { SheetGroupLabel("Version History") } }
+                older.forEach { notes ->
+                    item(key = "history-${notes.version}") {
+                        val open = notes.version in expanded
+                        SheetGroup {
+                            androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                .clickable { expanded = if (open) expanded - notes.version else expanded + notes.version }
+                                .padding(horizontal = 16.dp).testTag("history-${notes.version}"), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                androidx.compose.material3.Text("Version ${notes.version}", color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp,
+                                    modifier = androidx.compose.ui.Modifier.weight(1f))
+                                notes.date?.let { androidx.compose.material3.Text(it, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .55f), fontSize = 15.sp) }
+                                androidx.compose.material3.Icon(if (open) androidx.compose.material.icons.Icons.Rounded.ExpandLess else androidx.compose.material.icons.Icons.Rounded.ExpandMore,
+                                    null, tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .4f), modifier = androidx.compose.ui.Modifier.padding(start = 8.dp).size(20.dp))
+                            }
+                            if (open) notes.sections.forEach { (heading, items) ->
+                                MenuDivider()
+                                if (heading.isNotEmpty()) androidx.compose.material3.Text(heading.uppercase(), color = androidx.compose.ui.graphics.Color.White.copy(alpha = .5f),
+                                    fontSize = 12.sp, modifier = androidx.compose.ui.Modifier.padding(start = 16.dp, top = 10.dp))
+                                items.forEach { text ->
+                                    androidx.compose.material3.Text("• $text", color = androidx.compose.ui.graphics.Color.White.copy(alpha = .85f), fontSize = 15.sp,
+                                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
+                                }
                             }
                         }
                     }

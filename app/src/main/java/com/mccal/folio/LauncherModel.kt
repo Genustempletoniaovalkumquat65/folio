@@ -159,6 +159,8 @@ data class LauncherState(
     val wallpaperMotion: Boolean = true,
     /** Live Clock and Calendar icons. */
     val liveIcons: Boolean = true,
+    /** Live Clock and Calendar look: AUTO (match the icons around them), LIGHT or DARK. */
+    val liveIconLook: String = "AUTO",
     /** Optional tint per folder id (ARGB). */
     val folderColors: Map<String, Long> = emptyMap(),
     /** Icon Stacks: anchor app id → the apps that fan out when you swipe down on it. */
@@ -310,7 +312,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                         val activityList = if (descriptor.available) runCatching { launcherApps.getActivityList(null, profile) }.getOrNull() else null
                         if (activityList == null) emptyList() else activityList.also { authoritativeProfiles += serial }.mapNotNull { info ->
                             // Folio lists itself only as its Settings app, like iOS Settings in the App Library.
-                            if (info.componentName.packageName == application.packageName && info.componentName.className != "${application.packageName}.FolioSettingsApp") return@mapNotNull null
+                            if (info.componentName.packageName == application.packageName && !info.componentName.className.startsWith("${application.packageName}.${AppIconChoice.ALIAS_PREFIX}")) return@mapNotNull null
                             val component = info.componentName
                             val id = profileAppId(component.flattenToString(), serial, personalSerial)
                             val label = info.label.toString()
@@ -661,6 +663,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun setPageScrub(value: Boolean) = updateSettings(soon = false) { it.copy(pageScrub = value) }
     fun setWallpaperMotion(value: Boolean) = updateSettings(soon = false) { it.copy(wallpaperMotion = value) }
     fun setLiveIcons(value: Boolean) = updateSettings(soon = false) { it.copy(liveIcons = value) }
+    fun setLiveIconLook(value: String) = updateSettings(soon = false) { it.copy(liveIcons = true, liveIconLook = value) }
     fun setTriggerAction(trigger: FolioTrigger, action: FolioAction) = updateSettings(soon = false) {
         it.copy(triggerActions = if (action == FolioAction.NONE) it.triggerActions - trigger.name else it.triggerActions + (trigger.name to action.name))
     }
@@ -860,7 +863,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("dimWallpaperDark", s.dimWallpaperDark).put("iconTintFromWallpaper", s.iconTintFromWallpaper)
             .put("tintNotifications", s.tintNotifications).put("tintMedia", s.tintMedia).put("dockMagnify", s.dockMagnify).put("appPanels", s.appPanels).put("haptics", s.haptics).put("lockCover", s.lockCover)
             .put("featureScopes", JSONObject().apply { s.featureScopes.forEach { (id, m) -> put(id, JSONObject(m as Map<*, *>)) } }).put("notificationAppRow", s.notificationAppRow)
-            .put("pageScrub", s.pageScrub).put("wallpaperMotion", s.wallpaperMotion).put("liveIcons", s.liveIcons)
+            .put("pageScrub", s.pageScrub).put("wallpaperMotion", s.wallpaperMotion).put("liveIcons", s.liveIcons).put("liveIconLook", s.liveIconLook)
             .put("triggerActions", JSONObject().apply { s.triggerActions.forEach { (k, v) -> put(k, v) } })
             .put("todayWidgets", JSONArray().apply { s.todayWidgets.forEach { put(JSONObject().put("id", it.id).put("size", it.size.name)) } })
             .put("folderColors", JSONObject().apply { s.folderColors.forEach { (id, c) -> put(id, c) } })
@@ -1056,6 +1059,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             } } ?: emptyMap(),
             notificationAppRow = j.optBoolean("notificationAppRow", true), pageScrub = j.optBoolean("pageScrub", true),
             wallpaperMotion = j.optBoolean("wallpaperMotion", true), liveIcons = j.optBoolean("liveIcons", true),
+            liveIconLook = j.optString("liveIconLook", "AUTO").takeIf { it in setOf("AUTO", "LIGHT", "DARK") } ?: "AUTO",
             triggerActions = j.optJSONObject("triggerActions")?.let { o -> o.keys().asSequence().associateWith { o.getString(it) } } ?: emptyMap(),
             todayWidgets = j.optJSONArray("todayWidgets")?.let { a -> (0 until a.length()).mapNotNull { i ->
                 a.optJSONObject(i)?.let { o -> runCatching { TodayWidget(o.getInt("id"), TodaySize.valueOf(o.getString("size"))) }.getOrNull() }
