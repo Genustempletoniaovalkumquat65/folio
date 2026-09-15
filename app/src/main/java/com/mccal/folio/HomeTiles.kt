@@ -213,6 +213,11 @@ internal fun DockAppColumn(
                         }, shape = RoundedCornerShape(11.dp))
                         if (edit.active && savedIndex >= 0) JiggleRemoveButton("Remove ${app.label} from dock") { edit.onRemove(DropTarget.Dock(savedIndex)) }
                     }
+                    // Recent-app dot (Beta): below the icon in a horizontal dock, on the screen side of a side dock.
+                    if (!edit.active && app.packageName in LocalRecentPackages.current) Box(Modifier
+                        .align(if (horizontal) Alignment.BottomCenter else if (leftHanded) Alignment.CenterEnd else Alignment.CenterStart)
+                        .size(5.dp).background(Color.White.copy(alpha = .8f), CircleShape)
+                        .semantics { contentDescription = "Used recently" })
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.mccal.folio
 
+import androidx.lifecycle.repeatOnLifecycle
 import android.app.role.RoleManager
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imeAnimationTarget
@@ -157,6 +158,16 @@ class MainActivity : ComponentActivity() {
                 onDispose { if (typing) LiveDiscover.setExternalResultPending(this@MainActivity, "main", "keyboard", false) }
             }
             val clearedBadges = BadgeClears.cleared.collectAsStateWithLifecycle().value
+            // Recent-app dots (Beta): refreshed every minute while Home is showing.
+            val recentPackages by androidx.compose.runtime.produceState(emptySet<String>(), state.dockRecentDots) {
+                if (!state.dockRecentDots) { value = emptySet(); return@produceState }
+                lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                    while (true) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { RecentUse.packages(this@MainActivity) }
+                        kotlinx.coroutines.delay(60_000)
+                    }
+                }
+            }
             val iconsAreDark by androidx.compose.runtime.produceState<Boolean?>(null, state.apps) {
                 value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     iconsMostlyDark(state.apps.filter { LiveIcons.kind(this@MainActivity, it.packageName) == null && it.shortcutId == null }.map { it.icon })
@@ -191,6 +202,7 @@ class MainActivity : ComponentActivity() {
                 LocalIconLook provides IconLook(state.iconStyle, androidx.compose.ui.graphics.Color(iconTint), state.iconShape, state.iconPack, state.badgeStyle, state.badgeColor, state.liveIcons, state.liveIconLook),
                 LocalFocusLock provides FocusPages.lockingFocus(savedState)?.let { FocusLock(it, savedState.layout.pageCount) },
                 LocalIconsAreDark provides iconsAreDark,
+                LocalRecentPackages provides recentPackages,
                 LocalBadgeCounts provides badgeCounts, LocalInstallProgress provides installProgress, LocalNewApps provides newApps, LocalFolderColors provides state.folderColors) { FoldTransitionHost(state.foldEffect && !reduceMotion, state.foldIntensity, state.stayAwakeOnFold, state.foldSnapshot) {
                 // The launcher blurs behind every overlay with the same spring the overlay uses.
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().graphicsLayer {

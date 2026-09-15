@@ -118,6 +118,10 @@ data class LauncherState(
     val railActivities: Boolean = false,
     /** iOS "Newly Downloaded Apps": false = App Library only (Android's way), true = also add to Home. */
     val addNewAppsToHome: Boolean = false,
+    /** Beta: save Home before big changes so they can be restored (Settings › Backup › Layout History). */
+    val layoutHistory: Boolean = false,
+    /** Beta: a dot under dock apps used in the last hour (needs Usage Access). */
+    val dockRecentDots: Boolean = false,
     val focusModes: List<FocusMode> = DEFAULT_FOCUS_MODES,
     /** The Focus that's on, by id; null when none. */
     val activeFocus: String? = null,
@@ -550,6 +554,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val old = mutable.value
         if (old.layout == preview.layout && old.compact == preview.compact && old.expanded == preview.expanded &&
             old.labels == preview.labels && old.googleSearch == preview.googleSearch && old.verticalStatus == preview.verticalStatus) return false
+        saveLayoutSnapshot("Before restoring a backup")
         undoLayout = old.layout to preview.layout
         undoImportSettings = UndoImportSettings(old.compact, old.expanded, old.labels, old.googleSearch, old.verticalStatus)
         mutable.value = old.copy(homeSlots = preview.layout.slots, leadingSlots = preview.layout.leadingSlots, dock = preview.layout.dock,
@@ -623,6 +628,40 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
     fun toggleStackApp(anchor: String, app: String) = updateSettings(soon = false) { it.copy(iconStacks = IconStacks.toggle(it.iconStacks, anchor, app)) }
     fun setAddNewAppsToHome(value: Boolean) = updateSettings(soon = false) { it.copy(addNewAppsToHome = value) }
+    fun setLayoutHistory(value: Boolean) = updateSettings(soon = false) { it.copy(layoutHistory = value) }
+    fun setDockRecentDots(value: Boolean) = updateSettings(soon = false) { it.copy(dockRecentDots = value) }
+
+    /** Saves the current Home to Layout History when it's on (or always, when [force] is set). */
+    fun saveLayoutSnapshot(reason: String, force: Boolean = false) {
+        val s = mutable.value
+        if ((s.layoutHistory || force) && !s.loading && !statePayloadInvalid) LayoutHistory.add(getApplication(), reason, s.layout)
+    }
+
+    /**
+     * Restores a Layout History snapshot: the current Home is saved first, apps that are no longer installed and
+     * widgets Android no longer has are left out, and Undo is offered like any other layout change.
+     */
+    fun restoreLayoutSnapshot(snapshot: LayoutSnapshot): Boolean {
+        if (statePayloadInvalid || FocusPages.lockingFocus(mutable.value) != null) return false
+        saveLayoutSnapshot("Before restoring", force = true)
+        val old = mutable.value
+        val before = snapshot.layout
+        val installed = (old.apps.map { it.id } + before.folders.map { it.id }).toSet()
+        val manager = android.appwidget.AppWidgetManager.getInstance(getApplication())
+        val widgets = before.widgetPlacements.filter { it.id < 0 || runCatching { manager.getAppWidgetInfo(it.id) != null }.getOrDefault(false) }
+        val next = HomeLayout(reconcileHomeSlots(before.slots, installed), before.dock.map { it?.takeIf(installed::contains) }, widgets,
+            before.folders.map { f -> f.copy(appIds = f.appIds.filter(installed::contains)) },
+            before.widgetRestores, before.leadingSlots.map { it?.takeIf(installed::contains) }, before.minPages)
+        if (old.layout == next) return false
+        undoLayout = old.layout to next
+        undoImportSettings = null
+        mutable.value = old.copy(homeSlots = next.slots, leadingSlots = next.leadingSlots, dock = next.dock,
+            widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores, minPages = next.minPages,
+            widgetStacks = WidgetStacks.prune(old.widgetStacks, (next.widgetPlacements + old.widgetPlacements).map { it.slot }.toSet()),
+            editRevision = old.editRevision + 1, canUndoEdit = true)
+        persist()
+        return true
+    }
     /** Turns a Focus on (or all off with null) and applies it to Android. */
     fun setFocus(id: String?) {
         updateSettings(soon = false) { it.copy(activeFocus = id?.takeIf { f -> it.focusModes.any { m -> m.id == f } }) }
@@ -677,6 +716,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun removePlacement(source: DropTarget) = commitLayout(removePlacement(mutable.value.layout, source))
     /** Arranges Home's first page and dock like iPhone's with the matching installed apps (undoable). */
     fun arrangeLikeIPhone(): Boolean {
+        saveLayoutSnapshot("Before Arrange Like iPhone")
         val state = mutable.value
         return commitLayout(arrangeLikeIPhone(state.layout, resolveIPhoneApps(getApplication(), state.apps, state.messagesApp)))
     }
@@ -858,6 +898,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .put("ccSize", s.ccSize.name).put("ccCentered", s.ccCentered).put("ncSplit", s.ncSplit)
             .put("widgetStacks", JSONObject().apply { s.widgetStacks.forEach { (slot, ids) -> put(slot.toString(), JSONArray(ids)) } })
             .put("stackRotate", s.stackRotate).put("railActivitiesUnderStatus", s.railActivities).put("addNewAppsToHome", s.addNewAppsToHome)
+            .put("layoutHistory", s.layoutHistory).put("dockRecentDots", s.dockRecentDots)
             .put("focusModes", focusModesToJson(s.focusModes))
             .put("activeFocus", s.activeFocus ?: "").put("leftPage", s.leftPage).put("todayUnfolded", s.todayUnfolded).put("systemWallpaper", s.systemWallpaper).put("homeInk", s.homeInk).put("tintedGlass", s.tintedGlass)
             .put("dimWallpaperDark", s.dimWallpaperDark).put("iconTintFromWallpaper", s.iconTintFromWallpaper)
@@ -1044,6 +1085,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             stackRotate = j.optBoolean("stackRotate", true),
             railActivities = j.optBoolean("railActivitiesUnderStatus", false),
             addNewAppsToHome = j.optBoolean("addNewAppsToHome", false),
+            layoutHistory = j.optBoolean("layoutHistory", false), dockRecentDots = j.optBoolean("dockRecentDots", false),
             focusModes = focusModesFromJson(j.optJSONArray("focusModes")),
             activeFocus = j.optString("activeFocus").takeIf { it.isNotEmpty() },
             leftPage = j.optString("leftPage", "TODAY").takeIf { it == "TODAY" || it == "DISCOVER" } ?: "TODAY",

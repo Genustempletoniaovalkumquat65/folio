@@ -238,8 +238,10 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
                 }
-                CustomizationPage.HOME -> HomeLayoutSettings(state, wide, { wide = it }, model, homePage,
-                    onEditPins, onWidget, onAddWidget, onRemoveWidget)
+                CustomizationPage.HOME -> {
+                    HomeLayoutSettings(state, wide, { wide = it }, model, homePage, onEditPins, onWidget, onAddWidget, onRemoveWidget)
+                    RecentDotsCard(state, model)
+                }
                 CustomizationPage.GESTURES, CustomizationPage.NOTIFICATIONS, CustomizationPage.SEARCH, CustomizationPage.TODAY -> {
                     if (page == CustomizationPage.GESTURES) SettingsCard(stringResource(R.string.gestures)) {
                         Text(stringResource(R.string.pull_down_from_the_top_left_for_notifica),
@@ -458,6 +460,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     Text(stringResource(R.string.save_the_current_home_layout_folders_wid) + " " + stringResource(R.string.restore_shows_a_review_before_changing_h),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+                    LayoutHistoryCard(state, model, onClose)
                 }
                 CustomizationPage.SIDE_KEY -> SideKeyPage()
                 CustomizationPage.LOCK -> {
@@ -1040,6 +1043,11 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         "Velvet" to "NoisyFlake & HiMyNameisUbik · tinted notifications idea",
         "ColorFlow" to "David Goldman · album art colors idea",
         "Harbor" to "Evan Swick · dock magnification idea",
+        "SnowBoard" to "SparkDev · themes idea (no code)",
+        "Apex" to "Sticktron · Icon Stacks idea (no code)",
+        "Icon Restore" to "Layout History idea (no code)",
+        "Lynx 2" to "recent-app dots idea (no code)",
+        "Contributor Covenant 3.0" to "Organization for Ethical Source · CC BY-SA 4.0 · the project's code of conduct",
     )
     SettingsCard(stringResource(R.string.thanks_to)) {
         credits.forEach { (name, detail) ->
@@ -1339,6 +1347,68 @@ internal fun folioIconBitmap(context: android.content.Context, size: Int = 216):
             }
         }
         Text("Changes Folio's icon in the App Library and other launchers.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Beta label beside a title, like TestFlight features. */
+@Composable private fun BetaTag() {
+    Text("BETA", color = androidx.compose.ui.graphics.Color(0xFFFF9F0A), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(start = 8.dp).border(1.dp, androidx.compose.ui.graphics.Color(0xFFFF9F0A), RoundedCornerShape(5.dp))
+            .padding(horizontal = 5.dp, vertical = 1.dp))
+}
+
+/** Layout History (Beta): automatic snapshots of Home before big changes, each restorable. */
+@Composable private fun LayoutHistoryCard(state: LauncherState, model: LauncherModel, onClose: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { LayoutHistory.load(context) }
+    val snapshots by LayoutHistory.snapshots.collectAsState()
+    var confirm by remember { mutableStateOf<LayoutSnapshot?>(null) }
+    SettingsCard("Layout History") {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Text("Save Home Before Big Changes"); BetaTag() }
+            IosSwitch(state.layoutHistory, model::setLayoutHistory, Modifier.testTag("layout-history-switch"))
+        }
+        Text("Before restoring a backup, Arrange Like iPhone or an older layout, Folio saves your Home here so you can go back. The last ${LayoutHistory.MAX} are kept on this phone.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.layoutHistory) {
+            TextButton(onClick = { model.saveLayoutSnapshot("Saved by you", force = true) }, modifier = Modifier.testTag("layout-history-save")) { Text("Save Current Layout") }
+            snapshots.forEach { snapshot ->
+                MenuDivider()
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(snapshot.reason, fontSize = 16.sp)
+                        Text(java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(snapshot.time)),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { confirm = snapshot }) { Text("Restore") }
+                }
+            }
+        }
+    }
+    confirm?.let { snapshot ->
+        AlertDialog(onDismissRequest = { confirm = null },
+            title = { Text("Restore This Layout?") },
+            text = { Text("Home goes back to how it was (${snapshot.reason.lowercase()}). Your current layout is saved first, and apps you've since removed stay removed.") },
+            confirmButton = { TextButton(onClick = { model.restoreLayoutSnapshot(snapshot); confirm = null; onClose() }) { Text("Restore") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } })
+    }
+}
+
+/** Recent-app dots (Beta): needs Usage Access, asked for right here when it's turned on. */
+@Composable private fun RecentDotsCard(state: LauncherState, model: LauncherModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    SettingsCard("Dock") {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) { Text("Recent App Dots"); BetaTag() }
+            IosSwitch(state.dockRecentDots, { on ->
+                model.setDockRecentDots(on)
+                if (on && !Suggestions.hasUsageAccess(context)) runCatching {
+                    context.startActivity(Suggestions.usageAccessIntent(context).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }, Modifier.testTag("dock-recent-dots-switch"))
+        }
+        Text("A small dot beside dock apps you've used in the last hour. Android doesn't tell launchers which apps are running, so this uses Usage Access.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

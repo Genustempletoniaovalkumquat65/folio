@@ -14,6 +14,9 @@ Folio shows the newest section on the phone after an update, and every version u
 - Clock & Calendar setting: the apps' own icons, or live icons that are Automatic, Light or Dark.
 - Coming Soon in Settings: what's planned next, with a Suggest a Feature link.
 - Version History in What's New, with every earlier version.
+- Beta: Layout History saves Home before big changes (restoring a backup, Arrange Like iPhone, restoring an older layout) so you can go back. Settings › Backup.
+- Beta: Recent App Dots mark dock apps you used in the last hour, using Usage Access. Settings › Home Screen & Dock.
+- Credits for SnowBoard, Apex, Icon Restore, Lynx 2 and Contributor Covenant.
 
 ### Changed
 - New olive green app icon.
