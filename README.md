@@ -2,12 +2,22 @@
 
 A clean, iPhone-style Home Screen for Android, with the jailbreak tweaks I always wanted, and none of the lockdown.
 
+[![CI](https://github.com/McCal-Codes/folio/actions/workflows/ci.yml/badge.svg)](https://github.com/McCal-Codes/folio/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Android 12+](https://img.shields.io/badge/Android-12%2B-3DDC84)](#what-you-need)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B)](https://ko-fi.com/mccal)
+
 <p align="center">
   <img src="docs/images/folio-inner-today.webp" width="720" alt="Folio on the unfolded Galaxy Z Fold8: the Today View with search, Suggestions and widgets on the left, Home with widgets and apps on the right, and the Side Bar with the time, battery and dock along the edge">
 </p>
 
 > **Status:** very early. I just wanted to get something out. It's a bit rusty in places, and things will settle down
-> as more people use it: more feedback means I can work on performance and fine-tuning. I plan to keep maintaining it. Developed and tested on a Galaxy Z Fold8. See what's changed in [CHANGELOG.md](CHANGELOG.md).
+> as more people use it: more feedback means I can work on performance and fine-tuning. I plan to keep maintaining it.
+> Developed and tested on a Galaxy Z Fold8. See what's changed in [CHANGELOG.md](CHANGELOG.md).
+
+**Contents:** [Why I made this](#why-i-made-this) · [Screenshots](#screenshots) · [What it does](#what-it-does) ·
+[What you need](#what-you-need) · [Install](#install) · [FAQ](#faq) · [Get involved](#get-involved) ·
+[Contact](#contact) · [Credits](#credits) · [License](#license)
 
 ## Why I made this
 
@@ -110,14 +120,32 @@ There's a lot to this launcher, and it's fun. I hope you have as much fun with i
 
 ## What you need
 
-- Android 12 or newer.
-- Made on a Galaxy Z Fold, but it's meant to work on any Android phone, flip, tablet or Chromebook. I haven't tried a
-  real tablet yet, so let me know how it goes.
+- Android 12 or newer. No root.
+- Made on a Galaxy Z Fold, but it's meant to work on any Android phone, flip, tablet or Chromebook.
+
+| Device | Android | Status |
+| --- | --- | --- |
+| Samsung Galaxy Z Fold8 (SM-F971U), cover and inner screens | 17 (One UI 9) | Used for development and testing |
+| Other phones, flips, tablets, Chromebooks | 12+ | Layout unit-tested on Android Studio's device sizes, not yet on real hardware. [Tell me how it goes!](https://github.com/McCal-Codes/folio/issues/new/choose) |
+
+### Known limitations
+
+Android doesn't allow everything iOS does, so a few things work differently:
+
+- **Lock screen:** Folio can't replace Android's lock screen. The Lock Cover shows after you unlock.
+- **Status Bar in other apps:** Android doesn't let an app reserve space inside other apps, so the Side Bar status stays on Home. The Dynamic Island and dock can float over other apps with the gestures service.
+- **Pull-down panels:** opening Notification Center and Control Center from the top corners needs Folio's accessibility (gestures) service.
+- **Folding from Home on Samsung:** set Settings › Display › Continue apps on cover screen to Always, or the phone locks when you fold.
+- **Google Discover** needs the Google app and depends on your phone supporting it.
 
 ## Install
 
 Download the APK from [Releases](https://github.com/McCal-Codes/folio/releases), open it on your phone and allow the
-install. Then press Home and pick Folio, or open Folio and tap **Set as home app**.
+install. Then press Home and pick Folio, or open Folio and tap **Set as home app**. There's no release yet, so for now
+[build it yourself](#build-it); the first APK is coming soon.
+
+To get updates automatically, add this repo to [Obtainium](https://github.com/ImranR98/Obtainium), which installs and
+updates apps from GitHub Releases.
 
 Each release lists the APK's SHA-256 and the signing certificate, so you can check an update comes from the same key.
 A release APK can't install over a build you made yourself (different signing keys); see
@@ -135,6 +163,28 @@ adb install -r app/build/outputs/apk/fast/app-fast.apk
 **Set as home app**.
 
 Tests: `./gradlew :app:testFastUnitTest`
+
+## FAQ
+
+**Does it need root?** No. Folio is a normal Android launcher.
+
+**Why does it ask for so many permissions?** It doesn't need most of them. Only being your Home app is required. The
+rest are optional and asked for where they're used, like notification access for the Dynamic Island, or the gestures
+service for pull-down panels. Every permission is listed with what it's for in Settings › Privacy & Permissions, and in
+[PRIVACY.md](PRIVACY.md).
+
+**Does Folio send my data anywhere?** No. No accounts, no ads, no analytics. Crash reports stay on your phone unless you
+share one.
+
+**How do I go back to my old launcher?** Settings › Apps › Default apps › Home app on your phone (the exact path can
+vary by phone). Your Folio layout stays saved if you switch back later.
+
+**Something broke. What do I do?** Settings › Report a Bug in Folio opens the bug form with your details filled
+in. If Folio crashes a few times in a row, it opens in Safe Mode with tweaks paused. More in
+[troubleshooting](docs/troubleshooting.md).
+
+**What's coming next?** See Settings › Coming Soon in the app, or suggest something with the
+[feature form](https://github.com/McCal-Codes/folio/issues/new/choose).
 
 ## Where things are
 
@@ -186,3 +236,8 @@ Third-party dependency licenses are listed in `THIRD_PARTY_NOTICES.md`.
 Apple, iPhone and iPad are trademarks of Apple Inc., registered in the U.S. and other countries and regions.
 Google and Android are trademarks of Google LLC. Samsung and Galaxy are trademarks of Samsung Electronics Co., Ltd.
 Folio is an independent project and is not affiliated with or endorsed by Apple, Google or Samsung.
+
+## License
+
+Folio is released under the [MIT License](LICENSE). It started from DuoLauncher, which is also MIT; that notice is kept
+in `LICENSE`. Third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
