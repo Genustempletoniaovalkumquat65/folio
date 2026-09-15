@@ -28,6 +28,6 @@ Discover and Google search use the installed Google app. Apps, search results, a
 
 A layout export is created only when you choose Save in Backup and select a destination. It can reveal installed apps, folder names, profile metadata, and layout preferences. Photos are excluded. Review it before sharing.
 
-There is no automatic diagnostic upload. Screenshots and logs you manually attach to issues may contain personal information, widget content, account names, or work data. Review them first.
+There is no automatic diagnostic upload. Settings › Report a Bug opens GitHub's bug form in your browser with the Folio version, phone model and Android version in the link; nothing is sent unless you submit the form, and GitHub's privacy policy applies to what you post there. Screenshots and logs you manually attach to issues may contain personal information, widget content, account names, or work data. Review them first.
 
 Uninstalling or clearing storage removes Folio's local settings, photos, and widget bindings. Exported files remain where you saved them. Android and device vendors may provide their own diagnostics independently of Folio.

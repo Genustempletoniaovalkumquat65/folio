@@ -139,10 +139,17 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         MenuDivider()
                         TweakRow(Icons.Rounded.NewReleases, 0xFF30D158, "What's New", "customization-whats-new", "v" + WhatsNew.currentVersion(androidx.compose.ui.platform.LocalContext.current), chevron = !sidebar) { onClose(); onShowWhatsNew() }
                         MenuDivider()
+                        val bugContext = androidx.compose.ui.platform.LocalContext.current
+                        TweakRow(Icons.Rounded.BugReport, 0xFFFF453A, "Report a Bug", "customization-report-bug", chevron = !sidebar) {
+                            runCatching { bugContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(BugReport.url(bugContext)))) }
+                        }
+                        MenuDivider()
                         TweakRow(Icons.Rounded.WavingHand, 0xFFFF9F0A, "Show Welcome Again", "customization-onboarding", chevron = !sidebar) { onClose(); onShowWelcome() }
                         MenuDivider()
                         TweakRow(Icons.Rounded.Favorite, 0xFFFF453A, "Credits", "customization-credits", selected = selected == CustomizationPage.CREDITS, chevron = !sidebar) { onPage(CustomizationPage.CREDITS) }
                     }
+                    Text("Report a Bug opens GitHub in your browser with your Folio version and phone filled in. Nothing is sent until you submit it.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
     }
     // Home-app actions and the setup reminder: above the list on the phone, on Folio's own page in the split view.
     val overviewActions: @Composable ColumnScope.() -> Unit = {

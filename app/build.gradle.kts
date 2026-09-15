@@ -5,10 +5,10 @@ plugins {
 }
 
 val releaseSigningVariables = listOf(
-    "DUO_RELEASE_STORE_FILE",
-    "DUO_RELEASE_STORE_PASSWORD",
-    "DUO_RELEASE_KEY_ALIAS",
-    "DUO_RELEASE_KEY_PASSWORD",
+    "FOLIO_RELEASE_STORE_FILE",
+    "FOLIO_RELEASE_STORE_PASSWORD",
+    "FOLIO_RELEASE_KEY_ALIAS",
+    "FOLIO_RELEASE_KEY_PASSWORD",
 )
 val releaseSigningValues = releaseSigningVariables.associateWith { name ->
     System.getenv(name)?.takeIf { it.isNotBlank() }
@@ -16,17 +16,17 @@ val releaseSigningValues = releaseSigningVariables.associateWith { name ->
 val suppliedReleaseSigningVariables = releaseSigningValues.filterValues { it != null }.keys
 check(suppliedReleaseSigningVariables.isEmpty() || suppliedReleaseSigningVariables.size == releaseSigningVariables.size) {
     val missing = releaseSigningVariables.filterNot(suppliedReleaseSigningVariables::contains)
-    "Release signing is only configured when all four DUO_RELEASE_* variables are set. Missing: ${missing.joinToString()}"
+    "Release signing is only configured when all four FOLIO_RELEASE_* variables are set. Missing: ${missing.joinToString()}"
 }
 
-val releaseStoreFile = releaseSigningValues["DUO_RELEASE_STORE_FILE"]?.let { configuredPath ->
+val releaseStoreFile = releaseSigningValues["FOLIO_RELEASE_STORE_FILE"]?.let { configuredPath ->
     rootProject.file(configuredPath).canonicalFile.also { storeFile ->
         val repositoryRoot = rootProject.projectDir.canonicalFile.toPath()
         check(!storeFile.toPath().startsWith(repositoryRoot)) {
-            "DUO_RELEASE_STORE_FILE must point outside the repository."
+            "FOLIO_RELEASE_STORE_FILE must point outside the repository."
         }
         check(storeFile.isFile && storeFile.canRead()) {
-            "DUO_RELEASE_STORE_FILE does not point to a readable file."
+            "FOLIO_RELEASE_STORE_FILE does not point to a readable file."
         }
     }
 }
@@ -56,9 +56,9 @@ android {
         if (releaseStoreFile != null) {
             create("release") {
                 storeFile = releaseStoreFile
-                storePassword = releaseSigningValues.getValue("DUO_RELEASE_STORE_PASSWORD")
-                keyAlias = releaseSigningValues.getValue("DUO_RELEASE_KEY_ALIAS")
-                keyPassword = releaseSigningValues.getValue("DUO_RELEASE_KEY_PASSWORD")
+                storePassword = releaseSigningValues.getValue("FOLIO_RELEASE_STORE_PASSWORD")
+                keyAlias = releaseSigningValues.getValue("FOLIO_RELEASE_KEY_ALIAS")
+                keyPassword = releaseSigningValues.getValue("FOLIO_RELEASE_KEY_PASSWORD")
             }
         }
     }

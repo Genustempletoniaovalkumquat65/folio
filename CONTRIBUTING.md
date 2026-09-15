@@ -1,17 +1,39 @@
 # Contributing
 
-Keep changes focused. Describe the user-visible problem, resulting behavior, and validation. Start with an issue before substantial features or changes to dock geometry, fold layout, or Google integration.
+Thanks for helping with Folio! Bug reports, ideas, fixes and themes are all welcome.
 
-Read the [code map](docs/architecture.md) for ownership, persistence and gesture constraints. The [user guide](docs/user-guide.md) and [troubleshooting guide](docs/troubleshooting.md) describe the behavior changes should preserve.
+## Before you start
 
-Run `./scripts/gradle.sh :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Use disposable emulators for instrumentation. Fixtures that alter Home selection, profiles, widgets, or settings must restore them; never use a personal phone as an instrumentation fixture.
+- **Bugs:** use Settings › **Report a Bug** in Folio or the [bug form](https://github.com/McCal-Codes/folio/issues/new/choose).
+  Include the Folio version, phone, Android version, folded or unfolded, and the steps.
+- **Bigger changes:** open an issue first for new features or changes to dock geometry, fold layout or Google integration.
+- **Security problems:** report privately, see [SECURITY.md](SECURITY.md).
+- **Themes:** see [themes/README.md](themes/README.md).
+- Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Preserve one-page-per-swipe behavior, native widget scrolling and long-press pickup, placements, widget bindings, and Home-page retention. Keep access optional and explain it at the point of use. Tests should reproduce failures or protect meaningful behavior.
+## Making changes
 
-Do not commit signing keys, passwords, SDK paths, user layouts, device captures, account information, research media, or copied application code. Use sample data in screenshots and keep private implementation notebooks outside the public source set.
+Keep changes focused. In the PR, describe what's different for someone using Folio, and how you checked it.
 
-`PUBLIC-FILES` explicitly defines what ships in source archives and what CI builds. When adding a new public document or root file, update that allowlist and `.gitignore` as needed, then export to a new temporary directory with `scripts/export-public-source.sh`. Existing public application source trees are already included. The exporter validates a pristine tree, excludes private material and strips macOS metadata. See [release preparation](docs/public-release.md).
+Read the [code map](docs/architecture.md) for ownership, persistence and gesture constraints. The [user guide](docs/user-guide.md)
+and [troubleshooting guide](docs/troubleshooting.md) describe the behavior changes should preserve.
 
-Bug reports should include app version, phone/Android version, folded/unfolded state, navigation mode, relevant widget/provider, and reproduction steps. Redact personal/work attachments. Do not post credentials or sensitive exploit details publicly; use the repository's private vulnerability reporting channel if available.
+Folio builds with Java 17:
 
-Contributions use the project's MIT license. Retain notices for third-party material and identify its source.
+```bash
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
+
+CI runs the same command on every pull request. Use disposable emulators for instrumentation tests. Fixtures that change
+Home selection, profiles, widgets or settings must restore them; never use a personal phone as a fixture.
+
+Preserve one-page-per-swipe behavior, native widget scrolling and long-press pickup, placements, widget bindings and
+Home-page retention. Keep access optional and explain it where it's used. Layouts follow screen size, not device
+checks. Tests should reproduce failures or protect meaningful behavior.
+
+## What not to commit
+
+Signing keys, passwords, SDK paths, personal layouts, account information, or copied application code. No GPL code and
+nothing that needs root. Check screenshots for notifications, contacts and account names.
+
+Contributions use the project's MIT license. Keep notices for third-party material and say where it came from.

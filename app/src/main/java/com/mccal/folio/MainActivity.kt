@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
     private val showFirstRun = mutableStateOf(false)
     private val showWhatsNew = mutableStateOf(false)
     private val whatsNewRequested = mutableStateOf(false)
+    /** A theme shared to Folio, waiting for Apply or Cancel. */
+    private val sharedTheme = mutableStateOf<FolioTheme?>(null)
     private lateinit var setupExperience: SetupExperience
     private lateinit var status: DeviceStatusMonitor
     private lateinit var appearance: AppearanceStore
@@ -108,6 +110,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
         if (savedInstanceState == null && intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
         intent.removeExtra("duo_destination")
+        // A recreated activity (rotation, fold, process restart) keeps the pending alert; the launch intent is used once.
+        if (savedInstanceState == null) takeSharedTheme(intent)
+        else sharedTheme.value = savedInstanceState.getString(PENDING_THEME)?.let(FolioTheme::fromJson)
         setContent {
             val savedState = model.state.collectAsStateWithLifecycle().value
             val safeMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(SafeMode.active) }
@@ -203,6 +208,15 @@ class MainActivity : ComponentActivity() {
                 }
                 StandByOverlay(rememberHalfOpenPose(this@MainActivity), state.standBy, blocked = overlayOpen, status = deviceStatus)
                 LockCover(lockCoverVisible.value && state.lockCover) { lockCoverVisible.value = false }
+                sharedTheme.value?.let { theme ->
+                    AlertDialog(onDismissRequest = { sharedTheme.value = null },
+                        title = { androidx.compose.material3.Text("Apply \u201c${theme.name}\u201d?") },
+                        text = { androidx.compose.material3.Text("This changes icons, badges, glass, text on Home and the status bar. Your apps, pages and widgets stay as they are. You can undo it in Settings \u203a Themes.") },
+                        confirmButton = { androidx.compose.material3.TextButton(onClick = { model.applyTheme(theme); sharedTheme.value = null }) {
+                            androidx.compose.material3.Text("Apply") } },
+                        dismissButton = { androidx.compose.material3.TextButton(onClick = { sharedTheme.value = null }) {
+                            androidx.compose.material3.Text("Cancel") } })
+                }
                 if (showWhatsNew.value || whatsNewRequested.value) WhatsNewSheet { showWhatsNew.value = false; whatsNewRequested.value = false; WhatsNew.markSeen(this@MainActivity) }
                 // With live activities in the side rail, the camera island on Home keeps only its brief events.
                 if (state.island) CutoutIsland(IslandListenerService.activity.collectAsStateWithLifecycle().value
@@ -361,12 +375,21 @@ class MainActivity : ComponentActivity() {
         widgets.save(outState)
         outState.putBoolean(SHADE_DIALOG_VISIBLE, shadeSetupDialog?.isShowing == true && !returningFromShadeSettings)
         outState.putBoolean(SHADE_SETTINGS_PENDING, returningFromShadeSettings)
+        sharedTheme.value?.let { outState.putString(PENDING_THEME, it.toJson().toString()) }
         super.onSaveInstanceState(outState)
     }
+    /** Any app can start Home with this extra, so it's parsed again and only ever applied after the user taps Apply. */
+    private fun takeSharedTheme(intent: Intent?) {
+        val raw = intent?.getStringExtra(ThemeImportActivity.EXTRA_THEME) ?: return
+        intent.removeExtra(ThemeImportActivity.EXTRA_THEME)
+        sharedTheme.value = raw.takeIf { it.length <= ThemeImportActivity.MAX_BYTES }?.let(FolioTheme::fromJson)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
 
         setIntent(intent)
+        takeSharedTheme(intent)
         FoldRenderExperiment.onNewIntent(this, intent)
         if (intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
         if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
@@ -547,5 +570,6 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val SHADE_DIALOG_VISIBLE = "duo.shade.dialog_visible"
         const val SHADE_SETTINGS_PENDING = "duo.shade.settings_pending"
+        const val PENDING_THEME = "folio.theme.pending"
     }
 }

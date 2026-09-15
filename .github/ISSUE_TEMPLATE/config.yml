@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setups
+    url: https://github.com/McCal-Codes/folio/discussions
+    about: Ask a question or show off your Home screen and themes.
+  - name: Security issue
+    url: https://github.com/McCal-Codes/folio/security/advisories/new
+    about: Report a vulnerability privately instead of opening a public issue.

@@ -17,6 +17,8 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Themes: Classic, Dark, Tinted and Clear, plus saving and importing theme files.
 - Half folded with the phone upright, Home rows that would sit in the fold move below it.
 - What's New after an update.
+- Report a Bug in Settings opens GitHub's bug form with your Folio version and phone filled in.
+- Share a theme file to Folio from Files or Chrome to apply it, and community themes in the repo's themes/ folder.
 - Big screens: on tablets, Chromebooks and desktop windows Folio scales up like iPad instead of looking like a phone layout in a big window. Phones and foldables are unchanged.
 
 ### Changed

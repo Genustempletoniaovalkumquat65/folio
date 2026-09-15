@@ -95,6 +95,17 @@
             </intent-filter>
         </activity>
         <receiver android:name=".FocusScheduleReceiver" android:exported="false" />
+        <!-- Share a theme file to Folio: it's validated here, then Home asks before applying it. SEND only, so Folio
+             doesn't show up under "Open with" for every JSON file. -->
+        <activity android:name=".ThemeImportActivity" android:exported="true" android:excludeFromRecents="true"
+            android:theme="@style/Theme.Folio.FoldBridge" android:taskAffinity="com.mccal.folio.theme" android:noHistory="true"
+            android:label="Folio Theme">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+        </activity>
         <!-- "Add to Home Screen" for widgets an app asks to pin (only delivered to the default Home app). -->
         <activity android:name=".PinWidgetActivity" android:exported="true" android:excludeFromRecents="true"
             android:theme="@style/Theme.Folio.FoldBridge" android:taskAffinity="com.mccal.folio.pin" android:noHistory="true">
