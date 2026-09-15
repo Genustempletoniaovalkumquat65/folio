@@ -636,6 +636,14 @@ private fun LauncherHelp(
     SheetGroup {
         IosActionRow("Add Widget to This Page", "help-add-widget", onClick = onAddWidget)
     }
+    // The person behind Folio, for anything a bug report doesn't cover.
+    val helpContext = androidx.compose.ui.platform.LocalContext.current
+    SheetGroup {
+        IosActionRow("Email the Developer", "help-contact-email") {
+            runCatching { helpContext.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:contact@mcc-cal.com"))
+                .putExtra(android.content.Intent.EXTRA_SUBJECT, "Folio").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
 }
 
 @Composable
@@ -1047,6 +1055,8 @@ internal fun settingsMatches(query: String, title: String, keywords: String): Bo
         "Apex" to "Sticktron · Icon Stacks idea (no code)",
         "Icon Restore" to "Layout History idea (no code)",
         "Lynx 2" to "recent-app dots idea (no code)",
+        "ColorBadges" to "badges that match the app idea (no code)",
+        "Barrel" to "Page Effects idea, coming soon (no code)",
         "Contributor Covenant 3.0" to "Organization for Ethical Source · CC BY-SA 4.0 · the project's code of conduct",
     )
     SettingsCard(stringResource(R.string.thanks_to)) {
