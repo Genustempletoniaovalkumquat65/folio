@@ -1291,6 +1291,8 @@ internal fun folioIconBitmap(context: android.content.Context, size: Int = 216):
         ComingSoonRow(Icons.Rounded.DarkMode, 0xFF5E5CE6, "Deeper Focus", "Hide badges and suggestions while a Focus is on.")
         MenuDivider()
         ComingSoonRow(Icons.Rounded.Schedule, 0xFFFF9F0A, "Complications", "A second time zone, sunset and your next alarm on the Lock Cover and StandBy.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.ViewCarousel, 0xFF32ADE6, "Page Effects", "3D effects when you swipe between Home pages, like a cube or a wheel. Inspired by Barrel.")
     }
     SettingsCard("Further Out") {
         ComingSoonRow(Icons.Rounded.Brush, 0xFFFF375F, "Lock Designer", "Design your own Lock Cover and StandBy, with layouts for folded, unfolded and half folded.")

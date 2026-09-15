@@ -12,7 +12,7 @@ Folio shows the newest section on the phone after an update, and every version u
 - Folio shows up as an app: its icon (in the App Library or another launcher) opens Settings, like iOS Settings.
 - Clear Badge in an app's long-press menu hides its badge until a new notification arrives.
 - Clock & Calendar setting: the apps' own icons, or live icons that are Automatic, Light or Dark.
-- Coming Soon in Settings: what's planned next, with a Suggest a Feature link.
+- Coming Soon in Settings: what's planned next (including Page Effects, inspired by Barrel), with a Suggest a Feature link.
 - Version History in What's New, with every earlier version.
 - Beta: Layout History saves Home before big changes (restoring a backup, Arrange Like iPhone, restoring an older layout) so you can go back. Settings › Backup.
 - Beta: Recent App Dots mark dock apps you used in the last hour, using Usage Access. Settings › Home Screen & Dock.
@@ -29,6 +29,7 @@ Folio shows the newest section on the phone after an update, and every version u
 ### Fixed
 - Back always closes Spotlight first, instead of sometimes changing the Home page behind it.
 - Spotlight's keyboard comes back if it didn't appear when Spotlight opened.
+- An app's long-press menu no longer cuts off its last row when Clear Badge is showing.
 - Spotlight's Cancel hides the keyboard and has a bigger touch target.
 
 ## [0.4.0] - 2026-09-14

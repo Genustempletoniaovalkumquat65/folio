@@ -128,14 +128,16 @@ internal fun AppContextMenu(
             val safeBottom = with(density) { 32.dp.toPx() }
             val spaceBelow = screenH - (iconTop + iconSize * 1.1f + gap) - safeBottom
             val spaceAbove = iconTop - gap - safeTop
-            val estimatedH = with(density) { (49.dp * (actions.size + 3) + 8.dp).toPx() }
+            // Folio's own rows: Edit Home Screen, Remove/Add, More, plus Clear Badge when the app has one.
+            val folioRows = 3 + if ((LocalBadgeCounts.current[app.packageName] ?: 0) > 0 && lockedBy == null) 1 else 0
+            val estimatedH = with(density) { (49.dp * (actions.size + folioRows) + 8.dp).toPx() }
             // Prefer below (like iOS) when it fits; otherwise whichever side has more room, scrolling if needed.
             val below = estimatedH <= spaceBelow || spaceBelow >= spaceAbove
             val maxMenuH = with(density) { (if (below) spaceBelow else spaceAbove).coerceAtLeast(120f).toDp() }
             // Keep Folio's own rows (Edit, Remove, More) visible without scrolling: drop app quick actions that don't fit.
             val rowPx = with(density) { 49.dp.toPx() }
             // Opening More swaps the app's quick actions for Folio's extra rows, so the menu doesn't need to scroll.
-            val shownActions = if (more) emptyList() else actions.take((((if (below) spaceBelow else spaceAbove) - with(density) { 8.dp.toPx() }) / rowPx - 3).toInt().coerceAtLeast(0))
+            val shownActions = if (more) emptyList() else actions.take((((if (below) spaceBelow else spaceAbove) - with(density) { 8.dp.toPx() }) / rowPx - folioRows).toInt().coerceAtLeast(0))
             val menuLeft = (iconLeft + iconSize / 2 - menuW / 2).coerceIn(gap, screenW - menuW - gap)
             val origX = ((iconLeft + iconSize / 2 - menuLeft) / menuW).coerceIn(0f, 1f)
             // Positioned from the measured menu height: the dialog can be shorter than the screen (navigation bar),
