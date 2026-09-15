@@ -16,9 +16,9 @@ and got excited by how much Android lets you customize. At the same time I felt 
 least for the jailbreak features I loved. I've been in the iOS jailbreak world since iOS 7 or 8, so this was me getting
 back into it.
 
-The hardest part was learning Android: how permissions work and how launchers work. I got the hang of it. Right now
-I'm the only one using Folio, so I use AI to help bug test it. With more people trying it, that'll change. Anything
-that came from someone else, or that inspired me, is credited [below](#credits).
+The hardest part was learning Android: how permissions work and how launchers work. I got the hang of it. Anything
+that came from someone else, or that inspired me, is credited [below](#credits). (Since I'm the only tester for now,
+AI helps with bug testing.)
 
 I want to give back to the open-source community, so Folio is free and open source.
 
