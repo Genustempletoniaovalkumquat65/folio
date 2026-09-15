@@ -30,6 +30,7 @@ Folio shows the newest section on the phone after an update, and every version u
 ### Fixed
 - Back always closes Spotlight first, instead of sometimes changing the Home page behind it.
 - Spotlight's keyboard comes back if it didn't appear when Spotlight opened.
+- Unfolded, Settings › Icons & Side Bar no longer shows its Home preview twice.
 - An app's long-press menu no longer cuts off its last row when Clear Badge is showing.
 - Spotlight's Cancel hides the keyboard and has a bigger touch target.
 

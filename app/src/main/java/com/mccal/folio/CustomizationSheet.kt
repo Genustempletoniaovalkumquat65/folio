@@ -326,7 +326,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                 }
                 CustomizationPage.STATUS, CustomizationPage.ISLAND -> {
-                    if (page == CustomizationPage.STATUS) MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
+                    if (page == CustomizationPage.STATUS && !split) MiniHomePreview(backgrounds.previewBitmap, state, 210.dp)
                     val st = state.statusStyle
                     if (page == CustomizationPage.STATUS) SettingsCard(stringResource(R.string.app_icons)) {
                         val iconContext = androidx.compose.ui.platform.LocalContext.current
