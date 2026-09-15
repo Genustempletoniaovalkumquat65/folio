@@ -309,7 +309,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                         val descriptor = profiles.first { it.userSerial == serial }
                         val activityList = if (descriptor.available) runCatching { launcherApps.getActivityList(null, profile) }.getOrNull() else null
                         if (activityList == null) emptyList() else activityList.also { authoritativeProfiles += serial }.mapNotNull { info ->
-                            if (info.componentName.packageName == application.packageName) return@mapNotNull null
+                            // Folio lists itself only as its Settings app, like iOS Settings in the App Library.
+                            if (info.componentName.packageName == application.packageName && info.componentName.className != "${application.packageName}.FolioSettingsApp") return@mapNotNull null
                             val component = info.componentName
                             val id = profileAppId(component.flattenToString(), serial, personalSerial)
                             val label = info.label.toString()

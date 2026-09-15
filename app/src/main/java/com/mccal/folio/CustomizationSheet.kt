@@ -35,7 +35,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS, FOCUS, FOCUS_MODE, THEMES }
+internal enum class CustomizationPage { OVERVIEW, SETUP, WALLPAPER, HOME, STATUS, GESTURES, FOLD, BACKUP, HELP, SIDE_KEY, LOCK, CREDITS, TWEAKS, TWEAK, ADVANCED, NOTIFICATIONS, SEARCH, TODAY, ISLAND, PERMISSIONS, FOCUS, FOCUS_MODE, THEMES, COMING_SOON }
 
 @Composable
 internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, model: LauncherModel,
@@ -78,6 +78,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
         CustomizationPage.TODAY -> "Today View"
         CustomizationPage.ISLAND -> "Dynamic Island"
         CustomizationPage.PERMISSIONS -> "Privacy & Permissions"
+        CustomizationPage.COMING_SOON -> "Coming Soon"
     }
     val bodyScroll = rememberScrollState()
     LaunchedEffect(page) { bodyScroll.scrollTo(0) }
@@ -125,9 +126,6 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                             "${TweakFeatures.count { it.get(state) }} on", selected = selected == CustomizationPage.TWEAKS, chevron = !sidebar) { onPage(CustomizationPage.TWEAKS) }
                     }
                     SheetGroup {
-                        TweakRow(Icons.Rounded.Checklist, 0xFF30D158, "Setup Checklist", if (setupLeft == 0) "customization-setup-all" else "customization-setup",
-                            if (setupLeft > 0) "$setupLeft left" else null, selected = selected == CustomizationPage.SETUP, chevron = !sidebar) { onPage(CustomizationPage.SETUP) }
-                        MenuDivider()
                         TweakRow(Icons.Rounded.Save, 0xFF8E8E93, "Backup", "customization-backup", selected = selected == CustomizationPage.BACKUP, chevron = !sidebar) { onPage(CustomizationPage.BACKUP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.PanTool, 0xFF0A84FF, "Privacy & Permissions", "customization-permissions", selected = selected == CustomizationPage.PERMISSIONS, chevron = !sidebar) { onPage(CustomizationPage.PERMISSIONS) }
@@ -138,6 +136,8 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         TweakRow(Icons.Rounded.HelpOutline, 0xFF0A84FF, "Help", "customization-help", selected = selected == CustomizationPage.HELP, chevron = !sidebar) { onPage(CustomizationPage.HELP) }
                         MenuDivider()
                         TweakRow(Icons.Rounded.NewReleases, 0xFF30D158, "What's New", "customization-whats-new", "v" + WhatsNew.currentVersion(androidx.compose.ui.platform.LocalContext.current), chevron = !sidebar) { onClose(); onShowWhatsNew() }
+                        MenuDivider()
+                        TweakRow(Icons.Rounded.Upcoming, 0xFF5E5CE6, "Coming Soon", "customization-coming-soon", selected = selected == CustomizationPage.COMING_SOON, chevron = !sidebar) { onPage(CustomizationPage.COMING_SOON) }
                         MenuDivider()
                         val bugContext = androidx.compose.ui.platform.LocalContext.current
                         TweakRow(Icons.Rounded.BugReport, 0xFFFF453A, "Report a Bug", "customization-report-bug", chevron = !sidebar) {
@@ -159,7 +159,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         if (state.canUndoEdit) IosActionRow(stringResource(R.string.undo_last_layout_change), onClick = { model.undoEdit(); onClose() })
                     }
                     if (setupLeft > 0) CustomizationDestination(Icons.Rounded.Checklist, "Finish setting up Folio",
-                        "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.SETUP) }
+                        "$setupLeft step${if (setupLeft > 1) "s" else ""} left for the full experience", "customization-setup") { onPage(CustomizationPage.PERMISSIONS) }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -173,7 +173,6 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     TweakBanner()
                     overviewActions()
                     MiniHomePreview(backgrounds.previewBitmap, state, 260.dp)
-                    if (isDefaultHome) SheetGroup { IosActionRow(stringResource(R.string.change_home_app), "default-home-settings", onClick = onMakeDefault) }
                 } else {
                     // Like iOS Settings: the header gets out of the way while searching.
                     if (settingsQuery.isBlank()) TweakBanner()
@@ -183,10 +182,11 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         overviewActions()
                         MiniHomePreview(backgrounds.previewBitmap, state, 176.dp)
                         overviewRows(null, false)
-                        if (isDefaultHome) SheetGroup { IosActionRow(stringResource(R.string.change_home_app), "default-home-settings", onClick = onMakeDefault) }
-                    }
+                        }
                 }
-                CustomizationPage.SETUP -> SetupChecklist(rememberSetupSteps(isDefaultHome, onMakeDefault, onShadeSetup, state.messagesApp, model::setMessagesApp, state.systemWallpaper, model::setSystemWallpaper))
+                // The old Setup Checklist lives on in Privacy & Permissions (one list of everything Folio can use).
+                CustomizationPage.SETUP -> PermissionsPage(isDefaultHome, onMakeDefault, onShadeSetup)
+                CustomizationPage.COMING_SOON -> ComingSoonPage()
                 CustomizationPage.WALLPAPER -> {
                     val wallpaperContext = androidx.compose.ui.platform.LocalContext.current
                     SettingsCard(stringResource(R.string.background)) {
@@ -627,11 +627,7 @@ private fun LauncherHelp(
         HelpTip(Icons.Rounded.Devices, 0xFFFF375F, "Folding", "Folio fades between screens and keeps the cover awake when you fold from Home.")
     }
     SheetGroup {
-        IosActionRow(if (isDefaultHome) "Change Home App" else "Set Folio as Home", "help-home-settings", onClick = onHomeSettings)
-        MenuDivider()
         IosActionRow("Add Widget to This Page", "help-add-widget", onClick = onAddWidget)
-        MenuDivider()
-        IosActionRow("Set Up Pull-Down Gestures", "help-shade-setup", onClick = onShadeSetup)
     }
 }
 
@@ -752,10 +748,10 @@ private val SettingsIndex: List<Triple<String, String, CustomizationPage>> = lis
     Triple("Themes", "theme look snowboard icon style tint shape badges glass import export", CustomizationPage.THEMES),
     Triple("Focus", "focus do not disturb dnd sleep work personal silence quiet grayscale", CustomizationPage.FOCUS),
     Triple("Tweaks", "tweak jailbreak velox harbor axon velvet colorflow panels magnification tint album", CustomizationPage.TWEAKS),
-    Triple("Privacy & Permissions", "privacy permissions notification access accessibility contacts bluetooth", CustomizationPage.PERMISSIONS),
+    Triple("Privacy & Permissions", "privacy permissions setup checklist home app notification access accessibility gestures contacts bluetooth", CustomizationPage.PERMISSIONS),
     Triple("Safe Mode & crash reports", "safe mode crash report bug", CustomizationPage.ADVANCED),
     Triple("Backup & restore", "backup restore export import layout", CustomizationPage.BACKUP),
-    Triple("Setup checklist", "setup checklist onboarding welcome", CustomizationPage.SETUP),
+    Triple("Coming Soon", "coming soon roadmap planned future features lock designer keyboard", CustomizationPage.COMING_SOON),
     Triple("Credits", "credits thanks duolauncher jakesgoodapps license", CustomizationPage.CREDITS),
 )
 
@@ -1265,3 +1261,49 @@ internal fun folioIconBitmap(context: android.content.Context, size: Int = 216):
         }
     }.asImageBitmap()
 }.getOrNull()
+
+/** What's planned, from Folio's roadmap: a short, honest list (no dates), plus a way to suggest something. */
+@Composable private fun ComingSoonPage() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Text("Features being worked on for future updates. Plans can change, and Android doesn't allow everything iOS does.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    SettingsCard("Coming Soon") {
+        ComingSoonRow(Icons.Rounded.History, 0xFF8E8E93, "Layout History", "Go back to how Home looked before a big change, like a theme or Arrange Like iPhone.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.NotificationsActive, 0xFFFF3B30, "Notification Rules", "Choose per app where notifications show: Notification Center, the island or badges.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.Folder, 0xFF0A84FF, "Folder Options", "Bigger folder grids and different ways to open a folder.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.Dock, 0xFF30D158, "Dock Drawer", "Swipe in on the dock for recent apps and Now Playing.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.DarkMode, 0xFF5E5CE6, "Deeper Focus", "Hide badges and suggestions while a Focus is on.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.Schedule, 0xFFFF9F0A, "Complications", "A second time zone, sunset and your next alarm on the Lock Cover and StandBy.")
+    }
+    SettingsCard("Further Out") {
+        ComingSoonRow(Icons.Rounded.Brush, 0xFFFF375F, "Lock Designer", "Design your own Lock Cover and StandBy, with layouts for folded, unfolded and half folded.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.Keyboard, 0xFF8E8E93, "Folio Keyboard", "An iOS-style keyboard, with ideas from jailbreak keyboard tweaks.")
+        MenuDivider()
+        ComingSoonRow(Icons.Rounded.Extension, 0xFFBF5AF2, "Folio Tweaks", "Install tweaks made by the community, if it can be done safely.")
+    }
+    SheetGroup {
+        IosActionRow("Suggest a Feature", "coming-soon-suggest") {
+            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(BugReport.NEW_ISSUE + "?template=feature_request.yml"))) }
+        }
+    }
+}
+
+@Composable private fun ComingSoonRow(icon: ImageVector, color: Long, title: String, detail: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(androidx.compose.ui.graphics.Color(color)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = androidx.compose.ui.graphics.Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = androidx.compose.ui.graphics.Color.White.copy(alpha = .62f), fontSize = 14.sp, lineHeight = 19.sp)
+        }
+    }
+}

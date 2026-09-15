@@ -242,8 +242,9 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                 }
             }
             Text(stringResource(R.string.cancel), color = Color.White, fontSize = 17.sp,
-                modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)
-                    .padding(horizontal = 8.dp, vertical = 12.dp).testTag("spotlight-cancel"))
+                modifier = Modifier.padding(start = 2.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
+                    .clickable { focusManager.clearFocus(force = true); keyboard?.hide(); onClose() }
+                    .padding(horizontal = 12.dp, vertical = 14.dp).testTag("spotlight-cancel"))
             }
 
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(14.dp),

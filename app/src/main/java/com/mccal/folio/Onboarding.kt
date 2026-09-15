@@ -3,7 +3,6 @@ package com.mccal.folio
 import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -58,76 +57,40 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
     systemWallpaper: Boolean, onWallpaper: (Boolean) -> Unit, onFinish: () -> Unit,
     state: LauncherState? = null, model: LauncherModel? = null) {
     val context = LocalContext.current
-    val contactsPermission = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
-    val bluetoothPermission = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
-    fun granted(permission: String) = context.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
     val prefs = remember { context.getSharedPreferences("setup_experience", Context.MODE_PRIVATE) }
     var tick by remember { mutableIntStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { tick++ } }
     fun open(intent: Intent?) { intent?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }
 
+    // Like iPhone's Setup Assistant: only what makes Folio work, one question per screen. Everything optional
+    // (contacts, Bluetooth, Do Not Disturb, brightness, the side key) is asked where it's used, and all of it is
+    // listed in Settings › Privacy & Permissions.
     val all = remember {
         listOf(
-            OnboardingPage("welcome", Icons.Rounded.Home, 0xFF5E5CE6, "Welcome to Something New",
-                "Folio isn’t a copy of Apple’s work. It takes inspiration from iOS and the iOS jailbreak community, then builds on it for your Fold. If you’re coming from iPhone but want to customize everything, this is your canvas. Have fun, and reach out if you run into any issues.",
+            OnboardingPage("welcome", Icons.Rounded.WavingHand, 0xFF56603F, "Welcome to Folio",
+                "An iPhone-style Home Screen for Android, made for foldables. Unfold and it just gives you more room.",
                 action = "Continue", optional = false),
-            OnboardingPage("home", Icons.Rounded.Home, 0xFF0A84FF, "Make Folio your Home",
-                "So the Home gesture, folding and the side key always come back to Folio. You can switch back anytime.",
+            OnboardingPage("home", Icons.Rounded.Home, 0xFF0A84FF, "Make Folio Your Home",
+                "So the Home gesture and folding always come back to Folio. You can switch back anytime.",
                 action = "Choose Home App", done = { isDefaultHome }, onAction = onMakeDefault),
             OnboardingPage("notifications", Icons.Rounded.Notifications, 0xFFFF3B30, "Notifications",
-                "Folio reads notifications only to show them in its own UI.",
-                uses = listOf("Dynamic Island: music, calls, timers, messages", "Notification Center and quick reply", "App icon badges"),
+                "Folio reads notifications only to show them on your phone. Nothing is sent anywhere.",
+                uses = listOf("Dynamic Island: music, calls, timers", "Notification Center and quick reply", "App icon badges"),
                 action = "Allow Access", done = { IslandListenerService.hasAccess(context) },
                 onAction = { open(IslandListenerService.accessSettingsIntent(context)) }),
-            OnboardingPage("gestures", Icons.Rounded.Accessibility, 0xFF30D158, "Gestures",
-                "Folio’s gestures service lets pull-downs open panels and puts the island and dock over other apps. It can’t read your screen.",
-                uses = listOf("Pull down for Notification and Control Center", "Island and dock in every app", "Lock Screen and Screenshot actions"),
+            OnboardingPage("gestures", Icons.Rounded.SwipeDown, 0xFF30D158, "Pull Down for More",
+                "Folio's gestures service opens Notification Center and Control Center from the top corners. It can't read your screen.",
+                uses = listOf("Notification Center and Control Center", "Dynamic Island and dock in other apps"),
                 action = "Turn On", done = { SystemShadeAccessibilityService.isConnected() }, onAction = onShadeSetup),
-            OnboardingPage("fold", Icons.Rounded.Devices, 0xFFFF375F, "Folding from Home",
-                "Samsung locks the phone when you fold from Home. Set Continue apps on cover screen to Always so the cover picks up where you were.",
-                action = "Open Display Settings", done = { foldStaysAwake(context) },
-                onAction = { open(Intent(Settings.ACTION_DISPLAY_SETTINGS)) }),
-            OnboardingPage("system", Icons.Rounded.LightMode, 0xFFFFCC00, "Brightness & Rotation",
-                "Lets Control Center change screen brightness and rotation lock directly.",
-                action = "Allow", done = { Settings.System.canWrite(context) },
-                onAction = { open(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) }),
-            OnboardingPage("dnd", Icons.Rounded.DarkMode, 0xFF5E5CE6, "Do Not Disturb",
-                "Lets Control Center, Actions and (soon) Focus modes turn Do Not Disturb on and off.",
-                action = "Allow", done = { context.getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted },
-                onAction = { open(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }),
-            OnboardingPage("sidekey", Icons.Rounded.TouchApp, 0xFFFF9F0A, "Side Key",
-                "Hold the side key for Folio’s picker: ChatGPT, Claude, Perplexity, Gemini or Google without AI. Settings › Side Key walks through it.",
-                action = "Choose Folio as Assistant", done = { AssistPickerActivity.isDefaultAssistant(context) },
-                onAction = { open(AssistPickerActivity.settingsIntent()) }),
-            OnboardingPage("hold", Icons.Rounded.TouchApp, 0xFFFF9F0A, "Hold the Side Key",
-                "In Samsung’s Side button settings, set Press and hold to Digital assistant so holding it opens Folio’s picker.",
-                action = "Open Side Button Settings", done = { sideKeyHoldIsAssistant(context) || sideKeySettings(context) == null },
-                onAction = { open(sideKeySettings(context)) }),
-            OnboardingPage("wallet", Icons.Rounded.Wallet, 0xFF30D158, "Double Press for Wallet",
-                "Like double-clicking for Apple Pay: set Double press › Open app › Wallet.",
-                action = "Open Side Button Settings", done = { sideKeyDoublePressIsWallet(context) || (sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) == null },
-                onAction = { open(sideKeyDoublePressSettings(context) ?: sideKeySettings(context)) }),
-            OnboardingPage("contacts", Icons.Rounded.Contacts, 0xFF8E8E93, "Contacts in Spotlight",
-                "Search people in Spotlight and message or call them in one tap. Contacts stay on your phone.",
-                action = "Allow", done = { granted(android.Manifest.permission.READ_CONTACTS) },
-                onAction = { contactsPermission.launch(android.Manifest.permission.READ_CONTACTS) }),
-            OnboardingPage("bluetooth", Icons.Rounded.Headphones, 0xFF0A84FF, "Bluetooth Names",
-                "Shows “Connected to Galaxy Buds” in the Dynamic Island.",
-                action = "Allow", done = { granted(android.Manifest.permission.BLUETOOTH_CONNECT) },
-                onAction = { bluetoothPermission.launch(android.Manifest.permission.BLUETOOTH_CONNECT) }),
-            OnboardingPage("features", Icons.Rounded.Tune, 0xFFFF375F, "Choose Your Features",
-                "Turn on what you’d like now. Everything can be changed later in Settings.", optional = false),
-            OnboardingPage("look", Icons.Rounded.Wallpaper, 0xFF32ADE6, "Your Wallpaper",
-                "Keep the wallpaper you already use, or use Folio’s dunes. Text on Home adjusts for light and dark wallpapers.",
+            OnboardingPage("look", Icons.Rounded.Wallpaper, 0xFF32ADE6, "Choose a Look",
+                "Keep the wallpaper you already use, or try Folio's dunes. Text on Home adjusts to light and dark wallpapers.",
                 optional = false),
-            OnboardingPage("done", Icons.Rounded.CheckCircle, 0xFF30D158, "You’re All Set",
-                "Hold an app for its menu, swipe down on Home for Spotlight, and pull down from the top corners for notifications and Control Center. Everything else is in Settings.",
+            OnboardingPage("done", Icons.Rounded.CheckCircle, 0xFF30D158, "You're All Set",
+                "Hold an app for its menu, swipe down on Home for Spotlight, and pull down from the top corners. " +
+                    "Everything else, including optional permissions, is in Folio Settings.",
                 action = "Get Started", optional = false),
-        ).filter { page -> page.key in setOf("welcome", "features", "look", "done") || !page.done() }
-            .filter { it.key != "features" || model != null }
+        ).filter { page -> page.key in setOf("welcome", "look", "done") || !page.done() }
     }
     var index by rememberSaveable { mutableIntStateOf(prefs.getInt(STEP, 0).coerceIn(0, all.lastIndex)) }
     fun go(to: Int) { index = to.coerceIn(0, all.lastIndex); prefs.edit().putInt(STEP, index).apply() }
@@ -147,8 +110,6 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                     Text(stringResource(R.string.back), color = IosBlue, fontSize = 17.sp)
                 }
                 Spacer(Modifier.weight(1f))
-                if (page.key != "done") Text(stringResource(R.string.skip_setup), color = IosBlue, fontSize = 17.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { finish() }.padding(8.dp).testTag("onboarding-skip"))
             }
             AnimatedContent(index, Modifier.weight(1f), label = "onboarding page",
                 transitionSpec = {
@@ -174,22 +135,6 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                                 Icon(Icons.Rounded.Check, null, tint = Color(p.color), modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Text(use, color = Color.White, fontSize = 15.sp)
-                            }
-                        }
-                    }
-                    if (p.key == "features" && state != null && model != null) SheetGroup(Modifier.padding(top = 24.dp)) {
-                        listOf(
-                            Triple("Dynamic Island in every app", state.islandEverywhere) { v: Boolean -> model.setIslandEverywhere(v); if (v && !SystemShadeAccessibilityService.isConnected()) onShadeSetup() },
-                            Triple("Pull-out dock in every app", state.dockEverywhere) { v: Boolean -> model.setDockEverywhere(v); if (v && !SystemShadeAccessibilityService.isConnected()) onShadeSetup() },
-                            Triple("Lock Cover after unlocking", state.lockCover, model::setLockCover),
-                            Triple("Swipe up on apps for quick panels", state.appPanels, model::setAppPanels),
-                            Triple("Haptic feedback", state.haptics, model::setHaptics),
-                        ).forEachIndexed { n, (label, on, set) ->
-                            if (n > 0) MenuDivider()
-                            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp).heightIn(min = 52.dp)
-                                .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
-                                Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                IosSwitch(on, set)
                             }
                         }
                     }
@@ -221,7 +166,7 @@ internal fun Onboarding(isDefaultHome: Boolean, onMakeDefault: () -> Unit, onSha
                 Text(primary, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
-                if (page.optional && !done) Text(stringResource(R.string.not_now), color = IosBlue, fontSize = 17.sp,
+                if (page.optional && !done) Text("Set Up Later in Settings", color = IosBlue, fontSize = 17.sp,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { go(index + 1) }.padding(10.dp).testTag("onboarding-not-now"))
             }
             Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {

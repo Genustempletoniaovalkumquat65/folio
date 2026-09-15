@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
         lifecycle.addObserver(IslandEvents.Observer(this))
         updateDefaultHome()
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
-        if (savedInstanceState == null && intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
+        if (savedInstanceState == null && opensSettings(intent)) settingsRequests.intValue++
         intent.removeExtra("duo_destination")
         // A recreated activity (rotation, fold, process restart) keeps the pending alert; the launch intent is used once.
         if (savedInstanceState == null) takeSharedTheme(intent)
@@ -378,6 +378,10 @@ class MainActivity : ComponentActivity() {
         sharedTheme.value?.let { outState.putString(PENDING_THEME, it.toJson().toString()) }
         super.onSaveInstanceState(outState)
     }
+    /** Android's "Home app settings" gear, or Folio's own app icon (the FolioSettingsApp alias). */
+    private fun opensSettings(intent: Intent) = intent.action == Intent.ACTION_APPLICATION_PREFERENCES ||
+        intent.component?.className == "$packageName.FolioSettingsApp"
+
     /** Any app can start Home with this extra, so it's parsed again and only ever applied after the user taps Apply. */
     private fun takeSharedTheme(intent: Intent?) {
         val raw = intent?.getStringExtra(ThemeImportActivity.EXTRA_THEME) ?: return
@@ -392,7 +396,7 @@ class MainActivity : ComponentActivity() {
         takeSharedTheme(intent)
         FoldRenderExperiment.onNewIntent(this, intent)
         if (intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
-        if (intent.action == Intent.ACTION_APPLICATION_PREFERENCES) settingsRequests.intValue++
+        if (opensSettings(intent)) settingsRequests.intValue++
         else if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.getStringExtra("duo_destination") == "home") {
             closeOverlays(); homeRequests.intValue++
         }

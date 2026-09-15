@@ -143,18 +143,23 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
     val accent = if (look.style == IconStyle.TINTED) look.tint else null
     val lookShape = remember(look.shape) { look.shape.toShape() }
     val clipShape = lookShape ?: shape
-    val packIcon by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, look.pack, app.id) {
-        value = look.pack?.let { pack ->
+    // Pack lookup: null until it finishes, then the pack's icon or none. An icon pack's own Clock or Calendar icon wins
+    // over the live one, so a pack keeps one consistent look; live icons fill in where the pack has nothing.
+    val packLookup by androidx.compose.runtime.produceState<PackLookup?>(if (look.pack == null) PackLookup(null) else null, look.pack, app.id) {
+        value = PackLookup(look.pack?.let { pack ->
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { IconPacks.icon(context, pack, app.component, 192) }
-        }
+        })
     }
+    val packIcon = packLookup?.icon
+    val liveKind = kind.takeIf { packLookup != null && packIcon == null }
+    val palette = LivePalette.of(look.style, accent)
     val badgeCount = if (!badge || look.badges == BadgeStyle.OFF) 0 else LocalBadgeCounts.current[app.component.packageName] ?: 0
     Box(modifier.semantics { contentDescription?.let { this.contentDescription = it } }) {
         val fill = Modifier.fillMaxSize().then(if (clipShape != null) Modifier.clip(clipShape) else Modifier)
         // App icon bitmaps carry a small transparent margin; inset the drawn live icons to the same visual size.
         when {
-            kind == LiveIcons.Kind.CALENDAR -> BoxWithConstraints(Modifier.fillMaxSize()) { CalendarIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), accent) }
-            kind == LiveIcons.Kind.CLOCK -> BoxWithConstraints(Modifier.fillMaxSize()) { ClockIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), accent) }
+            liveKind == LiveIcons.Kind.CALENDAR -> BoxWithConstraints(Modifier.fillMaxSize()) { CalendarIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), palette) }
+            liveKind == LiveIcons.Kind.CLOCK -> BoxWithConstraints(Modifier.fillMaxSize()) { ClockIcon(Modifier.fillMaxSize().padding(maxWidth * .035f).then(if (clipShape != null) Modifier.clip(clipShape) else Modifier), palette) }
             else -> {
                 val source = packIcon ?: app.icon
                 val bitmap = remember(source) { source.asImageBitmap() }
@@ -166,8 +171,8 @@ internal fun AppIcon(app: AppEntry, contentDescription: String?, modifier: Modif
             val color = when {
                 look.badgeColor == BadgeColor.RED -> BadgeRed
                 look.style == IconStyle.TINTED -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(look.tint.toArgb())) else look.tint
-                kind == LiveIcons.Kind.CALENDAR -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconRed.toArgb())) else IconRed
-                kind == LiveIcons.Kind.CLOCK -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconOrange.toArgb())) else IconOrange
+                liveKind == LiveIcons.Kind.CALENDAR -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconRed.toArgb())) else IconRed
+                liveKind == LiveIcons.Kind.CLOCK -> if (look.badgeColor == BadgeColor.SOFT) Color(softened(IconOrange.toArgb())) else IconOrange
                 else -> {
                     val source = packIcon ?: app.icon
                     val soft = look.badgeColor == BadgeColor.SOFT
@@ -198,35 +203,35 @@ internal fun InstallRing(progress: Float, modifier: Modifier) {
 }
 
 @Composable
-private fun CalendarIcon(modifier: Modifier, accent: Color?) {
+private fun CalendarIcon(modifier: Modifier, palette: LivePalette) {
     val tick by rememberMinuteTick()
     val today = remember(tick) { LocalDate.now() }
-    BoxWithConstraints(modifier.clip(RoundedCornerShape(22)).background(IconDark), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(22)).background(palette.calendarBackground), contentAlignment = Alignment.Center) {
         val density = androidx.compose.ui.platform.LocalDensity.current
         val small = with(density) { (maxWidth * .17f).toSp() }
         val big = with(density) { (maxWidth * .46f).toSp() }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(today.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(),
-                color = accent ?: IconRed, fontSize = small, fontWeight = FontWeight.SemiBold, lineHeight = small * 1.15f)
-            Text(today.dayOfMonth.toString(), color = accent ?: Color.White, fontSize = big,
+                color = palette.accent, fontSize = small, fontWeight = FontWeight.SemiBold, lineHeight = small * 1.15f)
+            Text(today.dayOfMonth.toString(), color = palette.calendarNumber, fontSize = big,
                 fontWeight = FontWeight.Light, lineHeight = big * 1.08f)
         }
     }
 }
 
 @Composable
-private fun ClockIcon(modifier: Modifier, accent: Color?) {
+private fun ClockIcon(modifier: Modifier, palette: LivePalette) {
     val tick by rememberSecondTick()
     val now = remember(tick) { LocalTime.now() }
-    Box(modifier.clip(RoundedCornerShape(22)).background(IconDark)) {
+    Box(modifier.clip(RoundedCornerShape(22)).background(palette.clockBackground)) {
         Canvas(Modifier.fillMaxSize()) {
             val c = Offset(size.width / 2, size.height / 2)
             val r = size.minDimension * .42f
-            drawCircle(IconFace, r, c)
+            drawCircle(palette.clockFace, r, c)
             for (i in 0 until 12) {
                 val a = Math.toRadians(i * 30.0 - 90).toFloat()
                 val inner = if (i % 3 == 0) r * .78f else r * .84f
-                drawLine(Color.White.copy(alpha = if (i % 3 == 0) 1f else .6f),
+                drawLine(palette.clockHands.copy(alpha = if (i % 3 == 0) 1f else .6f),
                     Offset(c.x + inner * cos(a), c.y + inner * sin(a)), Offset(c.x + r * .93f * cos(a), c.y + r * .93f * sin(a)),
                     strokeWidth = r * (if (i % 3 == 0) .05f else .03f), cap = StrokeCap.Round)
             }
@@ -238,14 +243,32 @@ private fun ClockIcon(modifier: Modifier, accent: Color?) {
             val seconds = now.second.toFloat()
             val minutes = now.minute + seconds / 60f
             val hours = (now.hour % 12) + minutes / 60f
-            hand(hours / 12f, .5f, .085f, accent ?: Color.White)
-            hand(minutes / 60f, .74f, .06f, accent ?: Color.White)
-            hand(seconds / 60f, .82f, .025f, accent?.copy(alpha = .7f) ?: IconOrange, tail = .2f)
-            drawCircle(accent ?: IconOrange, r * .06f, c)
+            hand(hours / 12f, .5f, .085f, palette.clockHands)
+            hand(minutes / 60f, .74f, .06f, palette.clockHands)
+            hand(seconds / 60f, .82f, .025f, palette.secondHand, tail = .2f)
+            drawCircle(palette.secondHand, r * .06f, c)
         }
     }
 }
 
+private class PackLookup(val icon: android.graphics.Bitmap?)
+
+/**
+ * Live Clock and Calendar colors for each icon style, like iOS 18: Default is the classic light Calendar and Clock,
+ * Dark is the dark-mode versions, Tinted draws the details in the tint color on dark.
+ */
+internal data class LivePalette(val calendarBackground: Color, val calendarNumber: Color, val accent: Color,
+    val clockBackground: Color, val clockFace: Color, val clockHands: Color, val secondHand: Color) {
+    companion object {
+        fun of(style: IconStyle, tint: Color?): LivePalette = when {
+            style == IconStyle.TINTED && tint != null -> LivePalette(IconDark, tint, tint, IconDark, IconFace, tint, tint.copy(alpha = .7f))
+            style == IconStyle.DARK -> LivePalette(IconDark, Color.White, IconRed, IconDark, IconFace, Color.White, IconOrange)
+            else -> LivePalette(Color.White, Color.Black, IconRedLight, Color.Black, Color.White, Color.Black, IconOrange)
+        }
+    }
+}
+
+private val IconRedLight = Color(0xFFFF3B30)
 private val IconDark = Color(0xFF1C1C1E)
 private val IconFace = Color(0xFF2C2C2E)
 private val IconRed = Color(0xFFFF453A)

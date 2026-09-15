@@ -17,12 +17,17 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Themes: Classic, Dark, Tinted and Clear, plus saving and importing theme files.
 - Half folded with the phone upright, Home rows that would sit in the fold move below it.
 - What's New after an update.
+- Coming Soon in Settings: what's planned next, with a Suggest a Feature link.
 - Report a Bug in Settings opens GitHub's bug form with your Folio version and phone filled in.
 - Icon packs made for Lawnchair or Apex show up in Icon Pack, along with ADW and Nova packs.
 - Share a theme file to Folio from Files or Chrome to apply it, and community themes in the repo's themes/ folder.
 - Big screens: on tablets, Chromebooks and desktop windows Folio scales up like iPad instead of looking like a phone layout in a big window. Phones and foldables are unchanged.
 
 ### Changed
+- New app icon in olive green, and Folio shows up as an app: its icon (in the App Library or another launcher) opens Settings.
+- Shorter, iPhone-style setup: Home app, notifications, pull-down gestures and a look. Optional permissions are asked where they're used.
+- Settings has one list of permissions (Privacy & Permissions) instead of a separate Setup Checklist, and no repeated Home app rows.
+- Live Clock and Calendar icons follow the icon style (light for Default, dark for Dark, tint color for Tinted), and an icon pack's own Clock and Calendar icons are used when it has them.
 - Everything says Folio now: the README, user guide, troubleshooting, privacy notes, backup file name (folio-layout.json) and release files.
 - Settings choices use iOS controls: a menu row with the current value that opens a checkmark menu, and segmented controls for two or three options.
 - The Status Bar picks its text color from its frosted background, and uses stronger colors on light wallpapers.
@@ -33,6 +38,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - The status bar shows cellular bars, an airplane, or a searching fan when there's no Wi-Fi, instead of a line.
 
 ### Fixed
+- Spotlight's Cancel hides the keyboard and has a bigger touch target.
 - Spotlight's and Settings' search fields no longer grow and jump when you start typing.
 - Edit mode no longer pushes Home down or cuts off the bottom row: unfolded, + / Edit / Done sit beside the page dots and the Edit menu opens upward; folded, the bar clears the Dynamic Island.
 - Apps and shortcuts added while a Focus hides pages go to a page that's showing.
