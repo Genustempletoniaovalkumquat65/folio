@@ -17,7 +17,7 @@ Folio shows the newest section on the phone after an update, and every version u
 - Beta: Layout History saves Home before big changes (restoring a backup, Arrange Like iPhone, restoring an older layout) so you can go back. Settings › Backup.
 - Beta: Recent App Dots mark dock apps you used in the last hour, using Usage Access. Settings › Home Screen & Dock.
 - Credits for SnowBoard, Apex, Icon Restore, Lynx 2, ColorBadges, Barrel and Contributor Covenant.
-- Email the Developer in Settings › Help.
+- Email the Developer and Buy Me a Coffee (Ko-fi) in Settings › Help.
 
 ### Changed
 - New olive green app icon.

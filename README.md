@@ -3,7 +3,7 @@
 A clean, iPhone-style Home Screen for Android, with the jailbreak tweaks I always wanted, and none of the lockdown.
 
 <p align="center">
-  <img src="docs/images/folio-settings.png" width="360" alt="Folio's Icons &amp; Side Bar settings on a Galaxy Z Fold cover screen: iOS-style menu rows, a switch and a segmented control">
+  <img src="docs/images/folio-inner-today.webp" width="720" alt="Folio on the unfolded Galaxy Z Fold8: the Today View with search, Suggestions and widgets on the left, Home with widgets and apps on the right, and the Side Bar with the time, battery and dock along the edge">
 </p>
 
 > **Status:** very early. I just wanted to get something out. It's a bit rusty in places, and things will settle down
@@ -48,6 +48,30 @@ way of bringing that back:
 - **Coming soon: Page Effects,** inspired by Barrel. See Settings › Coming Soon for what else is planned.
 
 There's a lot to this launcher, and it's fun. I hope you have as much fun with it as I've had making it.
+
+## Screenshots
+
+<table>
+  <tr>
+    <th colspan="3">Cover screen</th>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><img src="docs/images/folio-cover-home.webp" width="220" alt="Home on the cover screen: clock and date widgets, a four-column app grid, and the Side Bar with the status capsule and dock"><br><sub>Home and the Side Bar</sub></td>
+    <td align="center" width="33%"><img src="docs/images/folio-cover-spotlight.webp" width="220" alt="Spotlight on the cover screen: a search field with Cancel, app suggestions, and the keyboard"><br><sub>Spotlight</sub></td>
+    <td align="center" width="33%"><img src="docs/images/folio-cover-settings.webp" width="220" alt="Icons &amp; Side Bar settings: menu rows for icon pack, shape and badges, a switch, and a segmented control for icon style"><br><sub>iOS-style Settings</sub></td>
+  </tr>
+  <tr>
+    <th colspan="3">Unfolded</th>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><img src="docs/images/folio-inner-cc.webp" width="640" alt="Control Center on the unfolded screen: connectivity toggles, a music player, Focus, brightness and volume sliders, and quick controls"><br><sub>Control Center</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3"><img src="docs/images/folio-inner-settings.webp" width="640" alt="Settings in split view on the unfolded screen: the sidebar on the left and the Icons &amp; Side Bar page with a live Home preview on the right"><br><sub>Settings in split view, like iPad</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use the Minimal O icon pack. Song details and album art are hidden.</sub>
 
 ## What it does
 
@@ -134,7 +158,8 @@ interested is welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. No GPL cod
 - Security problem? Report it privately, see [SECURITY.md](SECURITY.md).
 - Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-If you want to support the project, I'll add a Ko-fi link in time.
+If you want to support the project, you can [buy me a coffee on Ko-fi](https://ko-fi.com/mccal). It's never
+expected, but it's always appreciated.
 
 ## Contact
 
