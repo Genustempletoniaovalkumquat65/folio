@@ -18,6 +18,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - Half folded with the phone upright, Home rows that would sit in the fold move below it.
 - What's New after an update.
 - Report a Bug in Settings opens GitHub's bug form with your Folio version and phone filled in.
+- Icon packs made for Lawnchair or Apex show up in Icon Pack, along with ADW and Nova packs.
 - Share a theme file to Folio from Files or Chrome to apply it, and community themes in the repo's themes/ folder.
 - Big screens: on tablets, Chromebooks and desktop windows Folio scales up like iPad instead of looking like a phone layout in a big window. Phones and foldables are unchanged.
 
@@ -32,6 +33,7 @@ Folio shows the newest section on the phone after an update (Settings â€º Help â
 - The status bar shows cellular bars, an airplane, or a searching fan when there's no Wi-Fi, instead of a line.
 
 ### Fixed
+- Spotlight's and Settings' search fields no longer grow and jump when you start typing.
 - Edit mode no longer pushes Home down or cuts off the bottom row: unfolded, + / Edit / Done sit beside the page dots and the Edit menu opens upward; folded, the bar clears the Dynamic Island.
 - Apps and shortcuts added while a Focus hides pages go to a page that's showing.
 - Selected rows in the Settings sidebar use a rounded, inset highlight; the widget resize hint is rounded.

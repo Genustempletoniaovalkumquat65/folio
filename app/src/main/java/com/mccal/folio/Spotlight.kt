@@ -41,7 +41,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -220,7 +219,8 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                 .border(FolioGlass.edge, RoundedCornerShape(18.dp))
                 // The whole capsule is the tap target, not just the text line.
                 .clickable(remember { MutableInteractionSource() }, null) { fieldScope.launch { raiseKeyboard() } }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                // Fixed height: the capsule doesn't grow or jump when the clear button appears.
+                .height(52.dp).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Search, null, tint = Color.White.copy(alpha = .75f), modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
@@ -237,8 +237,9 @@ private fun SpotlightContent(state: LauncherState, active: Boolean, onClose: () 
                             }
                         }))
                 }
-                if (query.isNotEmpty()) Icon(Icons.Rounded.Cancel, "Clear", tint = Color.White.copy(alpha = .6f),
-                    modifier = Modifier.minimumInteractiveComponentSize().clip(CircleShape).clickable { query = "" }.padding(12.dp).size(20.dp))
+                if (query.isNotEmpty()) Box(Modifier.size(44.dp).clip(CircleShape).clickable { query = "" }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Cancel, "Clear", tint = Color.White.copy(alpha = .6f), modifier = Modifier.size(20.dp))
+                }
             }
             Text(stringResource(R.string.cancel), color = Color.White, fontSize = 17.sp,
                 modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClose)

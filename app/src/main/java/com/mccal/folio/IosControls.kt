@@ -89,8 +89,9 @@ internal fun IosSlider(value: Float, onValueChange: (Float) -> Unit, valueRange:
 @Composable
 internal fun IosSearchField(query: String, onQuery: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier,
     fieldModifier: Modifier = Modifier, ink: Color = Color.White, onSearch: (() -> Unit)? = null) {
+    // Fixed height, so the field doesn't grow when the clear button appears.
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ink.copy(alpha = .12f))
-        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        .height(40.dp).padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Search, null, tint = ink.copy(alpha = .55f), modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
@@ -100,8 +101,10 @@ internal fun IosSearchField(query: String, onQuery: (String) -> Unit, placeholde
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
-        if (query.isNotEmpty()) androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Cancel, "Clear search", tint = ink.copy(alpha = .5f),
-            modifier = Modifier.minimumInteractiveComponentSize().size(20.dp).clickable { onQuery("") })
+        if (query.isNotEmpty()) Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable { onQuery("") },
+            contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Cancel, "Clear search", tint = ink.copy(alpha = .5f), modifier = Modifier.size(20.dp))
+        }
     }
 }
 

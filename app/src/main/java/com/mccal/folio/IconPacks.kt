@@ -17,13 +17,17 @@ import org.xmlpull.v1.XmlPullParser
 internal object IconPacks {
     data class Pack(val packageName: String, val label: String)
 
-    private val PACK_INTENTS = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME")
+    // The actions and categories icon packs declare for other launchers (ADW, Nova, Lawnchair, Apex); a pack made for
+    // any of them lists here. Each needs a matching <queries> entry in the manifest (Android 11 package visibility).
+    private val PACK_INTENTS = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME",
+        "ch.deletescape.lawnchair.ICONPACK").map(::Intent) +
+        listOf("com.anddoes.launcher.THEME", "com.fede.launcher.THEME_ICONPACK").map { Intent(Intent.ACTION_MAIN).addCategory(it) }
     private val mappings = HashMap<String, Map<String, String>>()
     private val icons = LruCache<String, Bitmap>(160)
 
     fun installed(context: Context): List<Pack> {
         val pm = context.packageManager
-        return PACK_INTENTS.flatMap { action -> runCatching { pm.queryIntentActivities(Intent(action), 0) }.getOrDefault(emptyList()) }
+        return PACK_INTENTS.flatMap { intent -> runCatching { pm.queryIntentActivities(intent, 0) }.getOrDefault(emptyList()) }
             .map { it.activityInfo.applicationInfo }.distinctBy { it.packageName }
             .map { Pack(it.packageName, pm.getApplicationLabel(it).toString()) }.sortedBy { it.label.lowercase() }
     }
