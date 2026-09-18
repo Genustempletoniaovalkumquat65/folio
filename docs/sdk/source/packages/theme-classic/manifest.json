@@ -1,20 +1,21 @@
 {
   "$schema": "https://folio.mccal.dev/schema/v1/manifest.schema.json",
   "format": 1,
-  "id": "com.mccal.folio.cabinet",
-  "name": "Cabinet",
+  "id": "com.mccal.folio.theme.classic",
+  "name": "Classic theme",
   "version": "1.0.0",
   "author": {
     "name": "Folio",
     "url": "https://github.com/McCal-Codes/folio"
   },
   "minFolio": "0.7.0",
-  "section": "tweaks",
+  "section": "themes",
   "kind": [
-    "tweakBundle"
+    "theme"
   ],
   "permissions": [
-    "tweaks"
+    "home.appearance",
+    "icons"
   ],
   "screens": [
     "cover",
@@ -22,10 +23,10 @@
   ],
   "depiction": "depiction.json",
   "license": "MIT",
-  "description": "Swipe up on an app icon for a small panel with its shortcuts, latest notifications and music controls.",
+  "description": "Folio’s standard look: rounded icons, iOS badges and tinted glass.",
   "requires": {
     "features": [
-      "tweaks.appPanels"
+      "theme"
     ]
   }
 }

@@ -1,18 +1,24 @@
 {
   "$schema": "https://folio.mccal.dev/schema/v1/depiction.schema.json",
   "format": 1,
-  "tint": "#0A84FF",
   "blocks": [
     {
       "type": "markdown",
-      "text": "Swipe up on an app icon for a small panel with its shortcuts, latest notifications and music controls.\n\nInspired by Velox by Phillip Tennen. Re-created from scratch for Folio; no tweak code is included."
+      "text": "Squircle icons, number badges, clear glass and a minimal status area without the date.\n\nA built-in Folio theme. Applying it changes how Folio draws your Home screen; it never changes other apps."
+    },
+    {
+      "type": "screenshots",
+      "images": [
+        "assets/home-clear.webp"
+      ]
     },
     {
       "type": "featureList",
       "items": [
-        "App shortcuts",
-        "Latest notifications",
-        "Music controls"
+        "Squircle icons",
+        "Number badges",
+        "Clear glass",
+        "Minimal status area, no date"
       ]
     },
     {
@@ -28,7 +34,7 @@
         {
           "version": "1.0.0",
           "date": "2026-09-17",
-          "notes": "Cabinet becomes a package in the Folio Market. The tweak itself has shipped with Folio since 0.6.0."
+          "notes": "The Clear theme becomes a package in the Folio Market. It has shipped with Folio since 0.4.0."
         }
       ]
     },
@@ -36,10 +42,6 @@
       "type": "link",
       "title": "Folio on GitHub",
       "url": "https://github.com/McCal-Codes/folio"
-    },
-    {
-      "type": "donation",
-      "url": "https://ko-fi.com/mccal"
     }
   ]
 }

@@ -1,18 +1,17 @@
 {
   "$schema": "https://folio.mccal.dev/schema/v1/depiction.schema.json",
   "format": 1,
-  "tint": "#0A84FF",
+  "tint": "#FF375F",
   "blocks": [
     {
       "type": "markdown",
-      "text": "Swipe up on an app icon for a small panel with its shortcuts, latest notifications and music controls.\n\nInspired by Velox by Phillip Tennen. Re-created from scratch for Folio; no tweak code is included."
+      "text": "The music card and the island’s sound bars take on the album art’s color.\n\nInspired by ColorFlow by David Goldman. Re-created from scratch for Folio; no tweak code is included."
     },
     {
       "type": "featureList",
       "items": [
-        "App shortcuts",
-        "Latest notifications",
-        "Music controls"
+        "The music card follows the album art",
+        "The island’s sound bars match it"
       ]
     },
     {
@@ -28,7 +27,7 @@
         {
           "version": "1.0.0",
           "date": "2026-09-17",
-          "notes": "Cabinet becomes a package in the Folio Market. The tweak itself has shipped with Folio since 0.6.0."
+          "notes": "Colored Albums becomes a package in the Folio Market. The tweak itself has shipped with Folio since 0.6.0."
         }
       ]
     },
